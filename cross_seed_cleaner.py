@@ -812,8 +812,8 @@ def format_duration(seconds, fmt="d:hh"):
         return {"d:hh": "0:00", "d:hh:mm": "0:00:00", "days": "0.0 days"}[fmt]
     if fmt == "days":
         return f"{seconds / 86400:.1f} days"
-    _, sec = divmod(int(seconds), 60)
-    h, m = divmod(_, 60)
+    total_minutes, _sec = divmod(int(seconds), 60)
+    h, m = divmod(total_minutes, 60)
     d, h = divmod(h, 24)
     if fmt == "d:hh":
         return f"{d}:{h:02d}"
