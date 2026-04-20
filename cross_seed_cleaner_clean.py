@@ -803,21 +803,15 @@ def print_header():
     print(f"{Colors.BOLD}{Colors.CYAN}║{' ' * ((w-50)//2)}CROSS-SEED CLEANER v33 - Simplified Seeder Count{' ' * ((w-50)//2)}║{Colors.END}")
     print(f"{Colors.BOLD}{Colors.CYAN}{'═' * w}{Colors.END}\n")
 
-def print_config():
+
+def _mode_label_and_color():
     if MANUAL_MODE:
-        if DRY_RUN:
-            mode_text = "MANUAL MODE (DRY RUN)"
-            mode_color = Colors.BLUE
-        else:
-            mode_text = "MANUAL MODE (LIVE - WILL DELETE)"
-            mode_color = Colors.RED
-    else:
-        if DRY_RUN:
-            mode_text = "DRY RUN (SAFE)"
-            mode_color = Colors.GREEN
-        else:
-            mode_text = "LIVE MODE - WILL DELETE!"
-            mode_color = Colors.RED
+        return ("MANUAL MODE (DRY RUN)", Colors.BLUE) if DRY_RUN else ("MANUAL MODE (LIVE - WILL DELETE)", Colors.RED)
+    return ("DRY RUN (SAFE)", Colors.GREEN) if DRY_RUN else ("LIVE MODE - WILL DELETE!", Colors.RED)
+
+
+def print_config():
+    mode_text, mode_color = _mode_label_and_color()
 
     unreliable_str = ', '.join(UNRELIABLE_TRACKERS) if UNRELIABLE_TRACKERS else 'None'
     no_hard_links_cat = ', '.join(NO_HARD_LINKS_CATEGORIES) if NO_HARD_LINKS_CATEGORIES else 'None'
@@ -1033,20 +1027,7 @@ def calculate_stats(all_groups, eligible_map):
     return s
 
 def print_summary(s):
-    if MANUAL_MODE:
-        if DRY_RUN:
-            mode_text = "MANUAL MODE (DRY RUN)"
-            mode_color = Colors.BLUE
-        else:
-            mode_text = "MANUAL MODE (LIVE - WILL DELETE)"
-            mode_color = Colors.RED
-    else:
-        if DRY_RUN:
-            mode_text = "DRY RUN (SAFE)"
-            mode_color = Colors.GREEN
-        else:
-            mode_text = "LIVE MODE - WILL DELETE!"
-            mode_color = Colors.RED
+    mode_text, mode_color = _mode_label_and_color()
 
     p_del = (s['size_del'] / s['size_total'] * 100) if s['size_total'] > 0 else 0
     p_keep = 100 - p_del
