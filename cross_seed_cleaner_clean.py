@@ -1,0 +1,2302 @@
+#!/usr/bin/env python3
+"""
+Cross-Seed Cleaner v2025.12.24 - Simple Tracker-Based Seeder Counting
+For unreliable trackers, count seeders as num_complete + num_incomplete.
+"""
+
+import urllib.request
+import urllib.parse
+import json
+import sys
+import re
+import os
+import argparse
+import csv
+import glob
+from collections import defaultdict
+from datetime import datetime
+
+# ============================================================================
+# 1. DEFAULTS (Lowest Priority)
+# ============================================================================
+# Connection details for qBittorrent WebUI
+DEFAULT_QBITTORRENT_HOST = "http://localhost:8080"
+DEFAULT_QBITTORRENT_USER = "admin"
+DEFAULT_QBITTORRENT_PASS = "password"
+
+# Global Safety: Group is skipped/kept if ANY torrent (Original or Cross-Seed) has fewer than X seeders
+DEFAULT_MIN_SEEDERS = 4
+
+# Group Safety: Group is skipped/kept if total count (Original + Cross-Seeds) exceeds X items
+DEFAULT_MAX_TORRENTS_IN_GROUP = 6
+
+# Original Criteria: The ORIGINAL torrent must be seeding > X days to allow deletion of its cross-seeds
+DEFAULT_MIN_DAYS = 365
+
+# Original Criteria: The ORIGINAL torrent must be > X GiB to allow deletion of its cross-seeds (0 = disable)
+DEFAULT_MIN_SIZE_GIB = 15  # 0 = no minimum size filter
+
+# Helper flags
+DEFAULT_DEBUG = False                   # Enable verbose logging
+DEFAULT_DRY_RUN = True                  # True = simulate only (no deletions), False = actually delete torrents
+DEFAULT_ELIGIBLE_ONLY = True            # True = only show groups containing deletable candidates in reports
+
+# Report filenames
+DEFAULT_HTML_EXPORT = "output.html"     # None means disabled
+DEFAULT_CSV_EXPORT = "output.csv"       # None means disabled
+
+# Remap internal container paths to host paths for file checking
+# Format: {"Internal Container Path": "Host Path"}
+PATH_MAPPINGS = {
+    "/media/downloads/torrents": "/mnt/hdd-pool/userdata/media/downloads/torrents",
+    "/media/downloads/freeleech": "/mnt/hdd-pool/appdata/qbittorrent/freeleech",
+}
+
+
+# Scope: Applies to the ORIGINAL torrent's category only.
+# Modes:
+#   "allow" = Only process groups where Original matches ALLOWLIST
+#   "block" = Skip groups where Original matches BLOCKLIST
+#   "both"  = Must match ALLOWLIST *and* NOT match BLOCKLIST
+#   "none"  = Disable category filtering (process everything)
+CATEGORY_FILTER_MODE = os.environ.get("CATEGORY_FILTER_MODE", "block")
+
+# Filter Lists. Support exact match or Regex (prefix with 'r:').
+# Examples:
+#   "Movies"       -> Exact match for category "Movies"
+#   "r:.*-4k$"     -> Regex match (e.g. matches "Movies-4k", "TV-4k") , "r:autobrr-.*"
+CATEGORY_ALLOWLIST = ["sonarr-imported", "radarr-imported", "lidarr-imported", "r:.*-allowsuffix$"]
+CATEGORY_BLOCKLIST = ["freeleech-orpheus", "r:.*-blocksuffix$"]
+
+# Sorting for CLI output (CLI Table & Group processing order)
+# Options:
+#   "seeders"  = Number of active seeders
+#   "ratio"    = Share ratio
+#   "size"     = Torrent size
+#   "uploaded" = Total uploaded amount
+#   "added"    = Date added (useful to see oldest first)
+#   "name"     = Name of torrent
+SORT_BY = os.environ.get("SORT_BY", "name")
+
+# Sorting Order
+# Options:
+#   "asc"  = Ascending (Smallest/Oldest first)
+#   "desc" = Descending (Largest/Newest first)
+SORT_ORDER = os.environ.get("SORT_ORDER", "asc")
+
+
+# Trackers that report incorrect seeder counts (fallback to peer list counting)
+# Comma-separated domains or regex patterns (e.g., "tracker.bad.com,r:.*\.bad\.net")
+UNRELIABLE_TRACKER_ENV = os.environ.get("UNRELIABLE_TRACKERS", "hdts-announce.ru,hd-space.pw,tfa.tf")
+if UNRELIABLE_TRACKER_ENV:
+    UNRELIABLE_TRACKERS = [t.strip() for t in UNRELIABLE_TRACKER_ENV.split(",") if t.strip()]
+else:
+    UNRELIABLE_TRACKERS = []
+
+# No Hard Links Mode
+# When enabled, the script finds torrents in selected qBittorrent categories that have NO hard-links.
+# Category selection supports:
+# - Exact match: "cross-seed-links"
+# - Regex match:  prefix with "r:" (Python regex), e.g. "r:autobrr-.*"
+# - Combined  "cross-seed-category,r:autobrr-.*"
+DEFAULT_NO_HARD_LINKS_MODE = False
+DEFAULT_NO_HARD_LINKS_CATEGORIES = "cross-seed-category,r:autobrr-.*"
+
+# Path(s) to external media libraries to scan for hardlinks.
+# Supports:
+# 1. Comma-separated: "/mnt/movies, /mnt/tv"
+# 2. Wildcards (*):   "/mnt/users/*" (scans all subfolders)
+# 3. Brace Expansion: "/mnt/media/{movies,tv,anime}" (scans specific folders)
+# 4. Mixed:           "/mnt/local/{movies,tv}, /mnt/remote/user_*"
+DEFAULT_EXTERNAL_MEDIA_PATHS = "/mnt/hdd-pool/userdata/media/{user_1,user_2,user_3}"
+
+# ============================================================================
+# 2. CONFIGURATION LOADER (CLI > ENV > DEFAULTS)
+# ============================================================================
+def str2bool(v):
+    if isinstance(v, bool): return v
+    return v.lower() in ('yes', 'true', 't', 'y', '1')
+
+def get_config():
+    env_host = os.environ.get("QBITTORRENT_HOST", DEFAULT_QBITTORRENT_HOST)
+    env_user = os.environ.get("QBITTORRENT_USER", DEFAULT_QBITTORRENT_USER)
+    env_pass = os.environ.get("QBITTORRENT_PASS", DEFAULT_QBITTORRENT_PASS)
+    env_min_seeders = int(os.environ.get("MIN_SEEDERS", DEFAULT_MIN_SEEDERS))
+    env_max_group = int(os.environ.get("MAX_TORRENTS_IN_GROUP", DEFAULT_MAX_TORRENTS_IN_GROUP))
+    env_min_days = float(os.environ.get("MIN_ORIGINAL_SEED_TIME_DAYS", DEFAULT_MIN_DAYS))
+    env_min_size_gib = float(os.environ.get("MIN_SIZE_GIB", DEFAULT_MIN_SIZE_GIB))
+    env_debug = str2bool(os.environ.get("DEBUG_MODE", str(DEFAULT_DEBUG)))
+    env_dry_run = str2bool(os.environ.get("DRY_RUN", str(DEFAULT_DRY_RUN)))
+    env_eligible_only = str2bool(os.environ.get("ELIGIBLE_ONLY", str(DEFAULT_ELIGIBLE_ONLY)))
+    env_html_export = os.environ.get("HTML_EXPORT", DEFAULT_HTML_EXPORT)
+    env_csv_export = os.environ.get("CSV_EXPORT", DEFAULT_CSV_EXPORT)
+    env_no_hard_links_mode = str2bool(os.environ.get("NO_HARD_LINKS_MODE", str(DEFAULT_NO_HARD_LINKS_MODE)))
+    env_no_hard_links_cats = os.environ.get("NO_HARD_LINKS_CATEGORIES", DEFAULT_NO_HARD_LINKS_CATEGORIES)
+    env_ext_media_paths = os.environ.get("EXTERNAL_MEDIA_PATHS", DEFAULT_EXTERNAL_MEDIA_PATHS)
+
+    parser = argparse.ArgumentParser(description='Cross-Seed Cleaner: Deduplicate and cleanup torrents.')
+    parser.add_argument('--host', default=env_host, help='qBittorrent Host')
+    parser.add_argument('--user', default=env_user, help='qBittorrent User')
+    parser.add_argument('--password', default=env_pass, help='qBittorrent Password')
+    parser.add_argument('--min-seeders', type=int, default=env_min_seeders, help='Minimum seeders required')
+    parser.add_argument('--max-group-size', type=int, default=env_max_group, help='Max torrents in group')
+    parser.add_argument('--min-days', type=float, default=env_min_days, help='Min seed time in DAYS')
+    parser.add_argument('--min-size-gib', type=float, default=env_min_size_gib, help='Min torrent size in GiB (0=no limit)')
+    parser.add_argument('--debug', action='store_true', default=env_debug, help='Enable debug logging')
+    parser.add_argument('--manual', action='store_true', help='Enable Interactive Manual Deletion Mode')
+    parser.add_argument('--eligible-only', action='store_true', default=env_eligible_only, help='Only show eligible groups')
+    parser.add_argument('--html', type=str, default=env_html_export, help='Path to save HTML report')
+    parser.add_argument('--csv', type=str, default=env_csv_export, help='Path to save CSV report')
+
+    parser.add_argument('--no-hard-links-mode', action='store_true', default=env_no_hard_links_mode, help='Enable mode to check for torrents without hard links')
+    parser.add_argument('--no-hard-links-categories', type=str, default=env_no_hard_links_cats, help='Comma-separated categories for no-hard-links mode')
+    parser.add_argument('--external-media-paths', type=str, default=env_ext_media_paths,
+                        help='Paths to scan for hardlinks. Supports commas, wildcards (*), and braces ({a,b}). E.g., "/mnt/{movies,tv},/mnt/users/*"')
+
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument('--dry-run', action='store_true', help='Force Dry Run')
+    group.add_argument('--delete', action='store_true', help='Force Live Mode')
+
+    args = parser.parse_args()
+
+    final_dry_run = env_dry_run
+    if args.dry_run:
+        final_dry_run = True
+    elif args.delete:
+        final_dry_run = False
+
+    return args, final_dry_run
+
+
+def smart_split_paths(raw_str):
+    """
+    Splits paths by comma, but respects braces {a,b} to avoid splitting inside them.
+    Input:  "/path/{a,b}, /path2"
+    Output: ["/path/{a,b}", "/path2"]
+    """
+    if not raw_str: return []
+    paths = []
+    current = []
+    depth = 0
+    for char in raw_str:
+        if char == '{':
+            depth += 1
+            current.append(char)
+        elif char == '}':
+            depth -= 1
+            current.append(char)
+        elif char == ',' and depth == 0:
+            paths.append("".join(current).strip())
+            current = []
+        else:
+            current.append(char)
+    if current:
+        paths.append("".join(current).strip())
+    return [p for p in paths if p]
+
+def expand_braces(text):
+    """
+    Expands bash-style braces into a list of paths.
+    Input:  "/data/{a,b}/media"
+    Output: ["/data/a/media", "/data/b/media"]
+    """
+    # Match innermost {a,b,c}
+    pattern = re.compile(r'\{([^{}]+)\}')
+    if not pattern.search(text):
+        return [text]
+
+    match = pattern.search(text)
+    prefix = text[:match.start()]
+    suffix = text[match.end():]
+    options = match.group(1).split(',')
+
+    results = []
+    for option in options:
+        results.extend(expand_braces(prefix + option.strip() + suffix))
+    return results
+
+# ============================================================================
+# 3. GLOBAL CONFIGURATION
+# ============================================================================
+class Colors:
+    HEADER = '\033[95m'
+    BLUE = '\033[94m'
+    CYAN = '\033[96m'
+    GREEN = '\033[92m'
+    ORANGE = '\033[38;5;208m'
+    YELLOW = '\033[93m'
+    RED = '\033[91m'
+    BOLD = '\033[1m'
+    END = '\033[0m'
+    DIM = '\033[2m'
+
+def debug_log(message):
+    if DEBUG_MODE:
+        print(f"{Colors.DIM}  [DEBUG] {message}{Colors.END}")
+
+def strip_colors(text):
+    return re.sub(r'\033\[[0-9;]+m', '', text)
+
+ARGS, DRY_RUN = get_config()
+
+QBITTORRENT_HOST = ARGS.host
+QBITTORRENT_USER = ARGS.user
+QBITTORRENT_PASS = ARGS.password
+MIN_SEEDERS = ARGS.min_seeders
+MAX_TORRENTS_IN_GROUP = ARGS.max_group_size
+MIN_ORIGINAL_SEED_TIME_DAYS = ARGS.min_days
+MIN_ORIGINAL_SEED_TIME_HOURS = MIN_ORIGINAL_SEED_TIME_DAYS * 24
+MIN_SIZE_GIB = ARGS.min_size_gib
+MIN_SIZE_BYTES = MIN_SIZE_GIB * 1024 * 1024 * 1024
+DEBUG_MODE = ARGS.debug
+MANUAL_MODE = ARGS.manual
+ELIGIBLE_ONLY = ARGS.eligible_only
+HTML_EXPORT = ARGS.html
+CSV_EXPORT = ARGS.csv
+
+
+NO_HARD_LINKS_MODE = ARGS.no_hard_links_mode
+NO_HARD_LINKS_CATEGORIES = [c.strip().lower() for c in ARGS.no_hard_links_categories.split(',') if c.strip()] if ARGS.no_hard_links_categories else []
+EXTERNAL_MEDIA_PATHS = smart_split_paths(ARGS.external_media_paths) if ARGS.external_media_paths else []
+
+SCAN_STATS = {'files_scanned': 0, 'unique_inodes': 0, 'scan_duration': 0.0, 'fetch_duration': 0.0, 'group_duration': 0.0, 'analyze_duration': 0.0}
+
+
+SCAN_STATS = {
+    'files_scanned': 0,
+    'unique_inodes': 0,
+    'scan_duration': 0.0,
+    'fetch_duration': 0.0,
+    'group_duration': 0.0,
+    'analyze_duration': 0.0
+}
+
+
+if not DRY_RUN and not MANUAL_MODE:
+    print("\n" + "!"*80)
+    print("WARNING: LIVE MODE ACTIVATED (Automatic Deletion)")
+    print("!"*80)
+
+
+class Table:
+    @staticmethod
+    def render(headers, rows, col_widths):
+        top = "┌" + "┬".join("─" * (w + 2) for w in col_widths) + "┐"
+        print(top)
+
+        header_parts = ["│"]
+        for i, (header, width) in enumerate(zip(headers, col_widths)):
+            clean_header = strip_colors(header)
+            # Alignment logic: Only columns 2-5 are right-aligned (numeric data in main table)
+            # Column 1 ("Value" in config, "Type" in main) is now LEFT aligned.
+            if i in [2, 3, 4, 5]:
+                padding = width - len(clean_header)
+                header_parts.append(f" {' ' * padding}{header} │")
+            else:
+                padding = width - len(clean_header)
+                header_parts.append(f" {header}{' ' * padding} │")
+        print("".join(header_parts))
+
+        sep = "├" + "┼".join("─" * (w + 2) for w in col_widths) + "┤"
+        print(sep)
+
+        for idx, row in enumerate(rows):
+            row_parts = ["│"]
+            for i, (cell, width) in enumerate(zip(row, col_widths)):
+                cell_str = str(cell)
+                clean_str = strip_colors(cell_str)
+                # Same alignment logic for rows
+                if i in [2, 3, 4, 5]:
+                    padding = width - len(clean_str)
+                    row_parts.append(f" {' ' * padding}{cell_str} │")
+                else:
+                    padding = width - len(clean_str)
+                    row_parts.append(f" {cell_str}{' ' * padding} │")
+            print("".join(row_parts))
+
+            if idx < len(rows) - 1:
+                print(sep)
+
+        bottom = "└" + "┴".join("─" * (w + 2) for w in col_widths) + "┘"
+        print(bottom)
+
+
+class QBittorrentClient:
+    def __init__(self, host, username, password):
+        self.host = host.rstrip('/')
+        self.cookie = None
+        self.login(username, password)
+
+    def login(self, username, password):
+        url = f"{self.host}/api/v2/auth/login"
+        data = urllib.parse.urlencode({'username': username, 'password': password}).encode()
+        request = urllib.request.Request(url, data=data)
+        try:
+            response = urllib.request.urlopen(request)
+            cookie_header = response.headers.get('Set-Cookie')
+            if cookie_header:
+                self.cookie = cookie_header.split(';')[0]
+            else:
+                raise Exception("Failed to login")
+        except Exception as e:
+            raise Exception(f"Connection failed: {e}")
+
+    def _request(self, endpoint, params=None, data=None):
+        url = f"{self.host}/api/v2/{endpoint}"
+        if params:
+            url += '?' + urllib.parse.urlencode(params)
+        request = urllib.request.Request(url)
+        if self.cookie:
+            request.add_header('Cookie', self.cookie)
+        if data:
+            data = urllib.parse.urlencode(data).encode()
+            request.data = data
+        try:
+            response = urllib.request.urlopen(request)
+            content = response.read().decode('utf-8')
+            try:
+                return json.loads(content)
+            except json.JSONDecodeError:
+                return content
+        except:
+            return None
+
+    def get_torrents(self):
+        return self._request('torrents/info') or []
+
+    def get_torrent_trackers(self, torrent_hash):
+        return self._request('torrents/trackers', params={'hash': torrent_hash}) or []
+
+    def delete_torrents(self, hashes, delete_files=True):
+        if DRY_RUN:
+            return "dry_run"
+        return self._request('torrents/delete', data={'hashes': '|'.join(hashes), 'deleteFiles': 'true' if delete_files else 'false'})
+
+def apply_path_mapping(remote_path):
+    """Apply path mappings from qBittorrent remote paths to local paths"""
+    if not remote_path:
+        return ""
+
+    sorted_prefixes = sorted(PATH_MAPPINGS.keys(), key=len, reverse=True)
+    for remote_prefix in sorted_prefixes:
+        if remote_path.startswith(remote_prefix):
+            local_prefix = PATH_MAPPINGS[remote_prefix]
+            local_path = os.path.normpath(remote_path.replace(remote_prefix, local_prefix, 1))
+            debug_log(f"[GROUP]   > Mapping: '{remote_path}' -> '{local_path}'")
+            return local_path
+
+    debug_log(f"[GROUP]   > Mapping: No match. Using '{remote_path}'")
+    return os.path.normpath(remote_path)
+
+
+def get_representative_inode(path):
+    """
+    Recursively find the largest non-metadata file.
+    """
+    if not os.path.exists(path):
+        debug_log(f"[GROUP]   > Inode: Path not found: {path}")
+        return None
+
+    if os.path.isfile(path):
+        try:
+            stat = os.stat(path)
+            inode = (stat.st_dev, stat.st_ino)
+            debug_log(f"[GROUP]   > Inode: File found ({stat.st_size} bytes) -> {inode}")
+            return inode
+        except Exception as e:
+            debug_log(f"[GROUP]   > Inode: Error stating file: {e}")
+            return None
+
+    largest_file = None
+    max_size = -1
+
+
+    try:
+        for root, dirs, files in os.walk(path):
+            dirs[:] = [d for d in dirs if d.lower() not in ('sample', 'proof', 'screens')]
+            for f in files:
+                if 'sample' in f.lower() and f.lower().endswith(('.mkv', '.mp4', '.avi')): continue
+                if f.lower().endswith(('.nfo', '.txt', '.jpg', '.png', '.jpeg', '.sfv', '.srr')): continue
+
+                f_path = os.path.join(root, f)
+                try:
+                    if os.path.islink(f_path):
+                        real_path = os.path.realpath(f_path)
+                        if os.path.exists(real_path): size = os.path.getsize(real_path)
+                        else: continue
+                    else:
+                        size = os.path.getsize(f_path)
+
+                    if size > max_size:
+                        max_size = size
+                        largest_file = f_path
+                    elif size == max_size and largest_file:
+                        if os.path.basename(f_path) < os.path.basename(largest_file):
+                            largest_file = f_path
+                except OSError: continue
+    except Exception as e:
+        debug_log(f"  > Inode: Error walking dir: {e}")
+
+    if largest_file:
+        try:
+            real_path = os.path.realpath(largest_file)
+            stat = os.stat(real_path)
+            inode = (stat.st_dev, stat.st_ino)
+            debug_log(f"[GROUP]   > Inode: Winner '{os.path.basename(largest_file)}' ({max_size} bytes) -> {inode}")
+            return inode
+        except Exception as e:
+            debug_log(f"[GROUP]   > Inode: Error stating winner: {e}")
+            return None
+
+    # Fallback
+    try:
+        stat = os.stat(path)
+        inode = (stat.st_dev, stat.st_ino)
+        return inode
+    except Exception as e:
+        return None
+
+
+
+def get_path_identity(torrent):
+    """Generate identity string for grouping torrents by inode match"""
+    remote_content_path = torrent.get('content_path', '')
+    name = torrent.get('name', 'unknown')
+    size = torrent.get('size', 0)
+
+
+    local_content_path = apply_path_mapping(remote_content_path)
+
+    inode_tuple = get_representative_inode(local_content_path)
+
+    if inode_tuple:
+        identity = f"inode:{inode_tuple[0]}:{inode_tuple[1]}"
+        debug_log(f"[GROUP] '{name}' -> {identity} (Inode Found)")
+        return identity
+
+    # Fallback to heuristic
+    identity = f"heuristic:{size}:{name}"
+    debug_log(f"[GROUP] '{name}' -> {identity} (Heuristic/No File)")
+    return identity
+
+
+def matches_pattern(text, pattern):
+    if pattern.startswith("r:"):
+        try:
+            return bool(re.match(pattern[2:], text))
+        except:
+            return False
+    return text == pattern
+
+def get_tracker_domain(client, torrent_hash):
+    """Get the primary tracker domain for a torrent"""
+    try:
+        trackers = client.get_torrent_trackers(torrent_hash)
+        for tracker in trackers:
+            url = tracker.get('url', '')
+            if '://' in url and not url.startswith('**'):
+                domain = url.split('://')[1].split('/')[0].split(':')[0]
+                domain = domain.replace('tracker.', '').replace('www.', '')
+                return domain
+    except:
+        pass
+    return None
+
+def is_unreliable_tracker(tracker_domain):
+    """Check if tracker is unreliable (misreports seeders as peers)"""
+    if not tracker_domain or not UNRELIABLE_TRACKERS:
+        return False
+
+    for pattern in UNRELIABLE_TRACKERS:
+        if matches_pattern(tracker_domain, pattern):
+            debug_log(f"[FETCH] Tracker '{tracker_domain}' matches unreliable pattern '{pattern}'")
+            return True
+    return False
+
+def get_seeder_count(client, torrent):
+
+    tracker_domain = get_tracker_domain(client, torrent['hash'])
+    num_complete = torrent.get('num_complete', 0)
+    num_incomplete = torrent.get('num_incomplete', 0)
+    name = torrent.get('name', 'Unknown')
+
+    if is_unreliable_tracker(tracker_domain):
+        total = num_complete + num_incomplete
+        debug_log(f"[FETCH] '{name}' on {tracker_domain}: Unreliable -> {num_complete} + {num_incomplete} = {total} Seeders")
+        return total
+    else:
+        debug_log(f"[FETCH] '{name}' on {tracker_domain}: Reliable -> {num_complete} Seeders")
+        return num_complete
+
+def load_and_group_torrents(client):
+    t_start = datetime.now()
+    print(f"{Colors.BOLD}[1/7]{Colors.END} Fetching torrents...")
+    torrents = client.get_torrents()
+    SCAN_STATS['fetch_duration'] = (datetime.now() - t_start).total_seconds()
+    print(f"{Colors.GREEN}  ✓ Fetching complete in {SCAN_STATS['fetch_duration']:.2f}s.{Colors.END}")
+    print(f"{Colors.GREEN}  ✓ Found {len(torrents)} torrents.{Colors.END}\n")
+
+    t_start = datetime.now()
+    print(f"{Colors.BOLD}[2/7]{Colors.END} Filtering torrents by category...")
+    filtered_torrents = []
+    skipped_count = 0
+
+    debug_log(f"[FILTER] Applying filters to {len(torrents)} torrents...")
+
+    for t in torrents:
+        cat = t.get('category', '')
+        name = t.get('name', 'Unknown')
+        is_allowed = category_allowed(cat)
+
+        if is_allowed:
+            filtered_torrents.append(t)
+            debug_log(f"[FILTER] + Allowed '{name}' (Category: '{cat}')")
+        else:
+            skipped_count += 1
+            debug_log(f"[FILTER] - Blocked '{name}' (Category: '{cat}')")
+
+    torrents = filtered_torrents
+    SCAN_STATS['filter_duration'] = (datetime.now() - t_start).total_seconds()
+
+    print(f"{Colors.GREEN}  ✓ Filtering complete in {SCAN_STATS['filter_duration']:.2f}s.{Colors.END}")
+    print(f"{Colors.GREEN}  ✓ Kept {len(torrents)} torrents ({skipped_count} skipped).{Colors.END}\n")
+
+
+    t_start = datetime.now()
+    external_inodes = set()
+
+    if EXTERNAL_MEDIA_PATHS:
+        print(f"{Colors.BOLD}[3/7]{Colors.END} Scanning external libraries...")
+        external_inodes = scan_external_libraries(EXTERNAL_MEDIA_PATHS)
+    else:
+        print(f"{Colors.BOLD}[3/7]{Colors.END} Skipping External Scan (Not Configured)...")
+
+    SCAN_STATS['scan_duration'] = (datetime.now() - t_start).total_seconds()
+
+
+    t_start = datetime.now()
+    print(f"{Colors.BOLD}[4/7]{Colors.END} Fetching seeders...")
+
+    total_seeders = len(torrents)
+
+    for idx, t in enumerate(torrents, 1):
+
+        if not DEBUG_MODE and idx % 50 == 0:
+            sys.stdout.write(f"\r{Colors.DIM}  ... Fetched {idx}/{total_seeders} seeder counts...{Colors.END}")
+            sys.stdout.flush()
+
+        t['_seeder_count'] = get_seeder_count(client, t)
+
+    if not DEBUG_MODE:
+        sys.stdout.write("\r" + " " * 60 + "\r")
+        sys.stdout.flush()
+
+    SCAN_STATS['meta_duration'] = (datetime.now() - t_start).total_seconds()
+    print(f"{Colors.GREEN}  ✓ Metadata processed in {SCAN_STATS['meta_duration']:.2f}s.{Colors.END}\n")
+
+
+
+    t_start = datetime.now()
+    print(f"{Colors.BOLD}[5/7]{Colors.END} Grouping torrents by matching inodes...")
+
+    debug_log(f"[GROUP] Starting identity check for {len(torrents)} torrents...")
+
+    identity_groups = defaultdict(list)
+    total_to_group = len(torrents)
+
+    for idx, t in enumerate(torrents, 1):
+
+        if not DEBUG_MODE and idx % 100 == 0:
+            sys.stdout.write(f"\r{Colors.DIM}  ... Processed {idx}/{total_to_group} torrents...{Colors.END}")
+            sys.stdout.flush()
+
+        identity = get_path_identity(t)
+        identity_groups[identity].append(t)
+
+    if not DEBUG_MODE:
+        sys.stdout.write("\r" + " " * 60 + "\r")
+        sys.stdout.flush()
+
+    SCAN_STATS['group_duration'] = (datetime.now() - t_start).total_seconds()
+
+    debug_log(f"[GROUP] Processing complete. Created {len(identity_groups)} unique identity groups.")
+
+    final_groups = {}
+    skipped_singles = 0
+    protected_by_external = 0
+
+    for identity, group in identity_groups.items():
+        is_external_linked = False   # Initialize default valuec
+        matched_path = None          # Initialize default value
+
+        # Only check if we have inodes and it's an inode-based group
+        if external_inodes and identity.startswith("inode:"):
+             try:
+                parts = identity.split(":")
+                if len(parts) >= 3:
+                    dev = int(parts[1])
+                    ino = int(parts[2])
+
+                    if (dev, ino) in external_inodes:
+                        candidate_path = external_inodes[(dev, ino)]
+
+                        # Check: Is this "external" path actually one of the torrents in this group?
+                        is_self_match = False
+                        candidate_norm = os.path.normpath(candidate_path)
+
+                        for t in group:
+                            local_t_path = apply_path_mapping(t.get('content_path', ''))
+                            local_norm = os.path.normpath(local_t_path)
+
+                            # Check 1: Exact Match
+                            if candidate_norm == local_norm:
+                                is_self_match = True
+                                break
+
+                            # Check 2: Parent/Child Match
+                            if candidate_norm.startswith(local_norm + os.sep):
+                                is_self_match = True
+                                break
+
+                        if not is_self_match:
+                            is_external_linked = True
+                            matched_path = candidate_path
+                        else:
+                            debug_log(f"[GROUP]   > Ignoring External Match (Self-Reference): {candidate_path}")
+             except Exception:
+                 pass
+
+        for t in group:
+            t['_external_hardlink'] = is_external_linked
+            t['_external_path'] = matched_path
+
+        if is_external_linked:
+            protected_by_external += 1
+
+        if len(group) < 2:
+            skipped_singles += 1
+            s_name = group[0].get('name', 'Unknown')
+
+            if is_external_linked:
+                 debug_log(f"[GROUP] Singleton '{s_name}' ({identity}) matches external library (Ignored as singleton)")
+            else:
+                 debug_log(f"[GROUP] Skipping singleton: '{s_name}' ({identity})")
+            continue
+
+        group.sort(key=lambda t: t.get('added_on', 0))
+        original = group[0]
+        crossseeds = group[1:]
+
+        total_items = 1 + len(crossseeds) + int(is_external_linked)
+        ext_msg = " + 1 external library" if is_external_linked else ""
+
+        debug_log(f"[GROUP] > Group {identity}: {total_items} items (1 original + {len(crossseeds)} cross-seeds{ext_msg})")
+        debug_log(f"[GROUP]   + Original: {original.get('name')} @ {original.get('content_path')}")
+
+        for i, xs in enumerate(crossseeds, 1):
+            debug_log(f"[GROUP]   + Cross-Seed {i}: {xs.get('name')} @ {xs.get('content_path')}")
+
+        if is_external_linked:
+             debug_log(f"[GROUP]   + External Library: @ {matched_path}")
+
+        final_groups[original['hash']] = {
+            'original': original,
+            'crossseeds': crossseeds,
+            'name': original['name']
+        }
+
+
+    SCAN_STATS['group_duration'] = (datetime.now() - t_start).total_seconds()
+
+    print(f"{Colors.GREEN}  ✓ Grouping Complete in {SCAN_STATS['group_duration']:.2f}s.{Colors.END}")
+    print(f"{Colors.GREEN}  ✓ Grouped {len(final_groups)} sets (Found {len(identity_groups)} total identities).{Colors.END}")
+
+    if external_inodes:
+        print(f"{Colors.GREEN}  ✓ {protected_by_external} groups matched external hardlinks.{Colors.END}\n")
+
+    debug_log(f"[GROUP] Skipped {skipped_singles} singletons without cross-seeds")
+
+    return final_groups
+
+
+_logged_category_decisions = set()
+
+def category_allowed(cat):
+
+    mode = CATEGORY_FILTER_MODE.lower()
+
+    if mode == "none":
+        return True
+
+    if mode == "allow":
+        return any(matches_pattern(cat, p) for p in CATEGORY_ALLOWLIST)
+
+    if mode == "block":
+        return not any(matches_pattern(cat, p) for p in CATEGORY_BLOCKLIST)
+
+    if mode == "both":
+        if not any(matches_pattern(cat, p) for p in CATEGORY_ALLOWLIST):
+            return False
+        if any(matches_pattern(cat, p) for p in CATEGORY_BLOCKLIST):
+            return False
+        return True
+
+    return True
+
+
+
+
+def format_bytes(b):
+    for u in ['B', 'KiB', 'MiB', 'GiB', 'TiB']:
+        if b < 1024: return f"{b:.2f} {u}"
+        b /= 1024.0
+    return f"{b:.2f} PB"
+
+def format_timestamp(ts):
+    return datetime.fromtimestamp(ts).strftime("%Y.%m.%d | %H:%M") if ts > 0 else "N/A"
+
+def format_seed_time(s):
+    if s <= 0: return "0:00"
+    return f"{int(s // 86400)}:{int((s % 86400) // 3600):02d}"
+
+def get_tracker_name(client, h):
+    domain = get_tracker_domain(client, h)
+    return domain[:30] if domain else "Unknown"
+
+def sort_torrents(o, x, by, order):
+    rev = (order == "desc")
+    key_map = {'seeds': '_seeder_count', 'uploaded': 'uploaded', 'added': 'added_on',
+               'ratio': 'ratio', 'name': 'name', 'size': 'size', 'time': 'seeding_time'}
+    if by in key_map:
+        k = lambda t: t.get(key_map[by], 0)
+        if by == 'name': k = lambda t: t.get('name', '').lower()
+        x.sort(key=k, reverse=rev)
+    return [o] + x
+
+def print_header():
+    w = 262
+    print(f"\n{Colors.BOLD}{Colors.CYAN}{'═' * w}{Colors.END}")
+    print(f"{Colors.BOLD}{Colors.CYAN}║{' ' * ((w-50)//2)}CROSS-SEED CLEANER v33 - Simplified Seeder Count{' ' * ((w-50)//2)}║{Colors.END}")
+    print(f"{Colors.BOLD}{Colors.CYAN}{'═' * w}{Colors.END}\n")
+
+def print_config():
+    if MANUAL_MODE:
+        if DRY_RUN:
+            mode_text = "MANUAL MODE (DRY RUN)"
+            mode_color = Colors.BLUE
+        else:
+            mode_text = "MANUAL MODE (LIVE - WILL DELETE)"
+            mode_color = Colors.RED
+    else:
+        if DRY_RUN:
+            mode_text = "DRY RUN (SAFE)"
+            mode_color = Colors.GREEN
+        else:
+            mode_text = "LIVE MODE - WILL DELETE!"
+            mode_color = Colors.RED
+
+    unreliable_str = ', '.join(UNRELIABLE_TRACKERS) if UNRELIABLE_TRACKERS else 'None'
+    no_hard_links_cat = ', '.join(NO_HARD_LINKS_CATEGORIES) if NO_HARD_LINKS_CATEGORIES else 'None'
+    ext_media_str = '\n'.join(EXTERNAL_MEDIA_PATHS) if EXTERNAL_MEDIA_PATHS else 'None' # Display nicely
+    cat_allow_str = ', '.join(CATEGORY_ALLOWLIST) if CATEGORY_ALLOWLIST else 'None'
+    cat_block_str = ', '.join(CATEGORY_BLOCKLIST) if CATEGORY_BLOCKLIST else 'None'
+
+    def c(val):
+        """Colorize boolean-like values"""
+        s = str(val)
+        if s == "True": return f"{Colors.GREEN}True{Colors.END}"
+        if s == "False": return f"{Colors.RED}False{Colors.END}"
+        if s == "Disabled": return f"{Colors.RED}Disabled{Colors.END}"
+        if s == "None": return f"{Colors.DIM}None{Colors.END}"
+        return s
+
+    def b(text):
+        """Bold text helper"""
+        return f"{Colors.BOLD}{text}{Colors.END}"
+
+    rows = [
+        [b("Execution Mode"), f"{mode_color}{mode_text}{Colors.END}"],
+        [b("Min Seeders"), str(MIN_SEEDERS)],
+        [b("Min Seed Time"), f"{MIN_ORIGINAL_SEED_TIME_DAYS} days"],
+        [b("Min Size"), f"{MIN_SIZE_GIB} GiB" + (" (no limit)" if MIN_SIZE_GIB == 0 else "")],
+        [b("Max Group Size"), str(MAX_TORRENTS_IN_GROUP)],
+        [b("Category Mode"), CATEGORY_FILTER_MODE],
+        [b("Cat Allowlist"), cat_allow_str],
+        [b("Cat Blocklist"), cat_block_str],
+        [b("Unreliable Trackers"), unreliable_str],
+        [b("Eligible Only"), c(ELIGIBLE_ONLY)],
+        [b("Dry Run"), c(DRY_RUN)],
+        [b("Debug Mode"), c(DEBUG_MODE)],
+        [b("No Hard Links Mode"), c(NO_HARD_LINKS_MODE)],
+        [b("No Hard Links Cat"), c(NO_HARD_LINKS_CATEGORIES)],
+        [b("HTML Export"), c(HTML_EXPORT or "Disabled")],
+        [b("CSV Export"), c(CSV_EXPORT or "Disabled")],
+    ]
+
+    # Handle Path (Multi-line) to prevent overflow
+    if EXTERNAL_MEDIA_PATHS:
+        first = True
+        for path in EXTERNAL_MEDIA_PATHS:
+            # Wrap long paths to fit column (width 120)
+            while len(path) > 118:
+                chunk = path[:118]
+                path = path[118:]
+                label = b("External Media Paths") if first else ""
+                rows.append([label, chunk])
+                first = False
+
+            if path:
+                label = b("External Media Paths") if first else ""
+                rows.append([label, path])
+                first = False
+    else:
+        rows.append([b("Ext Media Paths"), c("None")])
+
+
+    if PATH_MAPPINGS:
+        first = True
+        for k, v in PATH_MAPPINGS.items():
+            label = b("Path Mappings") if first else ""
+            rows.append([label, f"{k} -> {v}"])
+            first = False
+    else:
+        rows.append([b("Path Mappings"), c("None")])
+
+    print(f"\n{Colors.BOLD}CONFIGURATION:{Colors.END}")
+    Table.render([f"{Colors.BOLD}Setting{Colors.END}", f"{Colors.BOLD}Value{Colors.END}"], rows, [25, 120])
+    print()
+
+
+
+def print_group(client, orig, xs, num, total):
+    if NO_HARD_LINKS_MODE:
+        all_t = [orig]
+        # Check criteria
+        seeds_ok = orig.get('_seeder_count', 0) >= MIN_SEEDERS
+        size_ok = orig.get('size', 0) >= MIN_SIZE_BYTES
+        time_ok = orig.get('seeding_time', 0) >= MIN_ORIGINAL_SEED_TIME_HOURS * 3600
+        cat_ok = category_allowed(orig.get('category', ''))
+        path_ok = not orig.get('_path_error')
+
+        # Check External Hardlink
+        is_externally_linked = orig.get('_external_hardlink', False)
+        external_ok = not is_externally_linked
+
+        # Combine (Max group size is ignored for orphans)
+        eligible = all([seeds_ok, time_ok, size_ok, cat_ok, path_ok, external_ok])
+
+        if ELIGIBLE_ONLY and not eligible:
+            return eligible, [orig]
+
+        status = f"{Colors.GREEN}✓ ELIGIBLE{Colors.END}" if eligible else f"{Colors.YELLOW}✗ KEPT{Colors.END} |"
+
+        reasons = []
+        if is_externally_linked: reasons.append(f"{Colors.BLUE}External Hardlink Found{Colors.END}")
+        if not path_ok: reasons.append(f"{Colors.RED}Path Error{Colors.END}")
+        if not seeds_ok: reasons.append(f"{Colors.RED}Low Seeds < {MIN_SEEDERS}{Colors.END}")
+        if not size_ok: reasons.append(f"{Colors.RED}Small Size < {MIN_SIZE_GIB}GiB{Colors.END}")
+        if not time_ok: reasons.append(f"{Colors.RED}Low Time < {MIN_ORIGINAL_SEED_TIME_DAYS}d{Colors.END}")
+        if not cat_ok: reasons.append(f"{Colors.ORANGE}Category Filter{Colors.END}")
+
+        reason_str = " " + " | ".join(reasons) if reasons else " Orphan (No Hard Link)"
+    else:
+        all_t = [orig] + xs
+
+        seeds_ok = all(t.get('_seeder_count', 0) >= MIN_SEEDERS for t in all_t)
+        size_ok = orig.get('size', 0) >= MIN_SIZE_BYTES
+        time_ok = orig.get('seeding_time', 0) >= MIN_ORIGINAL_SEED_TIME_HOURS * 3600
+        count_ok = len(all_t) < MAX_TORRENTS_IN_GROUP
+        cat_ok = category_allowed(orig.get('category', ''))
+
+        is_externally_linked = any(t.get('_external_hardlink', False) for t in all_t)
+        external_ok = not is_externally_linked
+
+        eligible = all([seeds_ok, count_ok, time_ok, cat_ok, size_ok, external_ok])
+
+        if ELIGIBLE_ONLY and not eligible:
+            return eligible, all_t
+
+        status = f"{Colors.GREEN}✓ ELIGIBLE{Colors.END}" if eligible else f"{Colors.YELLOW}✗ KEPT{Colors.END} |"
+        reasons = []
+
+        if is_externally_linked: reasons.append(f"{Colors.BLUE}External Hardlink Found{Colors.END}")
+        if not seeds_ok: reasons.append(f"{Colors.RED}Low Seeds < {MIN_SEEDERS}{Colors.END}")
+        if not size_ok: reasons.append(f"{Colors.RED}Small Size < {MIN_SIZE_GIB}GiB{Colors.END}")
+        if not time_ok: reasons.append(f"{Colors.RED}Low Time < {MIN_ORIGINAL_SEED_TIME_DAYS}d{Colors.END}")
+        if not count_ok: reasons.append(f"{Colors.ORANGE}> {MAX_TORRENTS_IN_GROUP} items{Colors.END}")
+        if not cat_ok: reasons.append(f"{Colors.ORANGE}Category Filter{Colors.END}")
+        reason_str = " " + " | ".join(reasons) if reasons else ""
+
+    print(f"\n{Colors.BOLD}{Colors.BLUE}{'─' * 262}{Colors.END}")
+    print(f"{Colors.BOLD}Group {num}/{total}: "
+          f"{Colors.CYAN}{orig.get('name')[:140]}{Colors.END} "
+          f"({status}{reason_str})")
+
+    headers = ["Type", "Seeds", "Ratio", "Size", "Uploaded", "Seeded (D:H)", "Added", "Tracker", "Category", "Name"]
+    widths = [13, 6, 6, 10, 11, 13, 18, 30, 20, 105]
+    rows = []
+
+    for t in sort_torrents(orig, xs, SORT_BY, SORT_ORDER):
+        if '_tracker_cache' not in t:
+            t['_tracker_cache'] = get_tracker_name(client, t['hash'])
+        is_orig = (t == orig)
+        seeders = t.get('_seeder_count', 0)
+        size = t.get('size', 0)
+        seed_time = t.get('seeding_time', 0)
+        c_seeds = Colors.GREEN if seeders >= MIN_SEEDERS else Colors.RED
+        c_size = Colors.END; c_time = Colors.END; c_cat = Colors.END
+
+        if is_orig:
+            if NO_HARD_LINKS_MODE:
+                 c_size = Colors.GREEN if size >= MIN_SIZE_BYTES else Colors.RED
+                 c_time = Colors.GREEN if seed_time >= (MIN_ORIGINAL_SEED_TIME_HOURS * 3600) else Colors.RED
+                 c_cat = Colors.RED if (t.get('_path_error') or not category_allowed(t.get('category', ''))) else Colors.GREEN
+            else:
+                 c_size = Colors.GREEN if size >= MIN_SIZE_BYTES else Colors.RED
+                 c_time = Colors.GREEN if seed_time >= (MIN_ORIGINAL_SEED_TIME_HOURS * 3600) else Colors.RED
+                 if category_allowed(orig.get('category', '')):
+                     c_cat = Colors.GREEN
+                 else:
+                     c_cat = Colors.RED
+
+        name_str = t.get('name', '')[:105]
+
+        rows.append([
+            f"{Colors.BOLD}[ORPHAN]{Colors.END}" if NO_HARD_LINKS_MODE else (f"{Colors.BOLD}[ORIGINAL]{Colors.END}" if is_orig else f"{Colors.DIM}[CROSS]{Colors.END}"),
+            f"{c_seeds}{seeders}{Colors.END}",
+            f"{t.get('ratio', 0.0):.2f}",
+            f"{c_size}{format_bytes(size)}{Colors.END}",
+            format_bytes(t.get('uploaded', 0)),
+            f"{c_time}{format_seed_time(seed_time)}{Colors.END}",
+            format_timestamp(t.get('added_on', 0)),
+            t['_tracker_cache'][:30],
+            f"{c_cat}{t.get('category', '')[:20]}{Colors.END}",
+            name_str
+        ])
+
+    if is_externally_linked:
+        rows.append([
+            f"{Colors.BLUE}{Colors.BOLD}[LIBRARY]{Colors.END}",
+            f"{Colors.DIM}-{Colors.END}",
+            f"{Colors.DIM}-{Colors.END}",
+            f"{Colors.BOLD}{format_bytes(orig.get('size', 0))}{Colors.END}",
+            f"{Colors.DIM}-{Colors.END}",
+            f"{Colors.DIM}-{Colors.END}",
+            f"{Colors.DIM}-{Colors.END}",
+            f"{Colors.DIM}-{Colors.END}",
+            f"{Colors.DIM}-{Colors.END}",
+            f"{Colors.BOLD}{orig.get('name', '')[:105]}{Colors.END}"
+        ])
+
+    Table.render(headers, rows, widths)
+    return eligible, all_t
+
+def calculate_stats(all_groups, eligible_map):
+    s = defaultdict(int)
+    s['groups_total'] = len(all_groups)
+    for h, g in all_groups.items():
+        s['size_total'] += g['original'].get('size', 0)
+        s['torrents_orig'] += 1
+        s['torrents_xs'] += len(g['crossseeds'])
+    s['groups_del'] = len(eligible_map)
+    for idx, ts in eligible_map.items():
+        s['torrents_del'] += len(ts)
+        if ts: s['size_del'] += ts[0].get('size', 0)
+    s['groups_keep'] = s['groups_total'] - s['groups_del']
+    s['torrents_total'] = s['torrents_orig'] + s['torrents_xs']
+    s['torrents_keep'] = s['torrents_total'] - s['torrents_del']
+    s['size_keep'] = s['size_total'] - s['size_del']
+    return s
+
+def print_summary(s):
+    if MANUAL_MODE:
+        if DRY_RUN:
+            mode_text = "MANUAL MODE (DRY RUN)"
+            mode_color = Colors.BLUE
+        else:
+            mode_text = "MANUAL MODE (LIVE - WILL DELETE)"
+            mode_color = Colors.RED
+    else:
+        if DRY_RUN:
+            mode_text = "DRY RUN (SAFE)"
+            mode_color = Colors.GREEN
+        else:
+            mode_text = "LIVE MODE - WILL DELETE!"
+            mode_color = Colors.RED
+
+    p_del = (s['size_del'] / s['size_total'] * 100) if s['size_total'] > 0 else 0
+    p_keep = 100 - p_del
+
+    def b(text):
+        return f"{Colors.BOLD}{text}{Colors.END}"
+
+    rows = []
+
+    # Execution Mode
+    rows.append([b("Execution Mode"), f"{mode_color}{mode_text}{Colors.END}"])
+
+    # Group Statistics
+    rows.append([b("Groups Analyzed"), str(s['groups_total'])])
+    rows.append([b("Groups Eligible for Deletion"), f"{Colors.RED}{s['groups_del']}{Colors.END}"])
+    rows.append([b("Groups to Keep"), f"{Colors.GREEN}{s['groups_keep']}{Colors.END}"])
+
+    # Torrent Statistics
+    rows.append([b("Torrents Analyzed"), f"{s['torrents_total']} ({s['torrents_orig']} originals + {s['torrents_xs']} cross-seeds)"])
+    rows.append([b("Torrents to Delete"), f"{Colors.RED}{s['torrents_del']}{Colors.END}"])
+    rows.append([b("Torrents to Keep"), f"{Colors.GREEN}{s['torrents_keep']}{Colors.END}"])
+
+    # Size Statistics
+    rows.append([b("Total Size Analyzed"), format_bytes(s['size_total'])])
+    rows.append([b("Size to Delete"), f"{Colors.RED}{format_bytes(s['size_del'])} ({p_del:.1f}%){Colors.END}"])
+    rows.append([b("Size to Keep"), f"{Colors.GREEN}{format_bytes(s['size_keep'])} ({p_keep:.1f}%){Colors.END}"])
+
+    print()
+    w = 262
+    print(f"\n{Colors.BOLD}{Colors.CYAN}{'═' * w}{Colors.END}")
+    print(f"{Colors.BOLD}{Colors.CYAN}║{' ' * ((w-21)//2)}SUMMARY & STATISTICS{' ' * ((w-21)//2)}║{Colors.END}")
+    print(f"{Colors.BOLD}{Colors.CYAN}{'═' * w}{Colors.END}\n")
+
+    Table.render([f"{Colors.BOLD}Metric{Colors.END}", f"{Colors.BOLD}Value{Colors.END}"], rows, [40, 105])
+    print()
+
+
+
+def export_reports(client, all_groups, eligible_ids):
+    from datetime import datetime
+    import json
+    import urllib.parse
+    import os
+    import csv
+
+    # --- Helper Functions ---
+    def format_duration_days(seconds):
+        """Formats seconds into days for dashboard averages"""
+        if seconds <= 0: return "0.0 days"
+        days = seconds / 86400
+        return f"{days:.1f} days"
+
+    def format_duration_ddd_hh_mm(seconds):
+        """Formats seconds into DDD:HH:MM for CSV"""
+        if seconds <= 0: return "0:00:00"
+        m, s = divmod(int(seconds), 60)
+        h, m = divmod(m, 60)
+        d, h = divmod(h, 24)
+        return f"{d}:{h:02d}:{m:02d}"
+
+    def format_duration_ddd_hh(seconds):
+        """Formats seconds into DDD:HH for HTML/CLI match"""
+        if seconds <= 0: return "0:00"
+        m, s = divmod(int(seconds), 60)
+        h, m = divmod(m, 60)
+        d, h = divmod(h, 24)
+        return f"{d}:{h:02d}"
+
+    def format_size_smart(size_bytes):
+        if size_bytes == 0: return "0 B"
+        units = ("B", "KiB", "MiB", "GiB", "TiB", "PiB")
+        i = 0
+        p = size_bytes
+        while p >= 1024 and i < len(units) - 1:
+            p /= 1024
+            i += 1
+        return f"{p:.2f} {units[i]}"
+
+    # --- Data Aggregation ---
+    total_groups = len(all_groups)
+    del_groups_count = len(eligible_ids)
+    keep_groups_count = total_groups - del_groups_count
+
+    total_size = 0
+    del_size = 0
+    keep_size = 0
+
+    total_torrents = 0
+    del_torrents = 0
+    keep_torrents = 0
+
+    stats_analyzed = {'ratio': 0, 'time': 0, 'up': 0, 'count': 0}
+    stats_eligible = {'ratio': 0, 'time': 0, 'up': 0, 'count': 0}
+    tracker_stats = {}
+
+    group_size_stats_total = defaultdict(int)
+    group_size_stats_del = defaultdict(int)
+
+    sorted_items = sorted(all_groups.items(), key=get_group_sort_key, reverse=(SORT_ORDER == 'desc'))
+    report_rows = []
+
+    for idx, (h, d) in enumerate(sorted_items, 1):
+        is_del_group = idx in eligible_ids
+
+        g_size = d['original'].get('size', 0)
+        total_size += g_size
+        if is_del_group:
+            del_size += g_size
+        else:
+            keep_size += g_size
+
+        group_torrents = [d['original']] + d['crossseeds']
+        count = len(group_torrents)
+
+        group_size_stats_total[count] += 1
+        if is_del_group:
+            group_size_stats_del[count] += 1
+
+        total_torrents += count
+        if is_del_group:
+            del_torrents += count
+        else:
+            keep_torrents += count
+
+        for t in group_torrents:
+            ratio = t.get('ratio', 0)
+            time_sec = t.get('seeding_time', 0)
+            up = t.get('uploaded', 0)
+            t_size = t.get('size', 0)
+
+            stats_analyzed['ratio'] += ratio
+            stats_analyzed['time'] += time_sec
+            stats_analyzed['up'] += up
+            stats_analyzed['count'] += 1
+
+            if is_del_group:
+                stats_eligible['ratio'] += ratio
+                stats_eligible['time'] += time_sec
+                stats_eligible['up'] += up
+                stats_eligible['count'] += 1
+
+            raw_tracker = t.get('tracker', '')
+            try:
+                domain = urllib.parse.urlparse(raw_tracker).netloc
+                if not domain: domain = "Unknown"
+            except:
+                domain = "Unknown"
+
+            if domain not in tracker_stats:
+                tracker_stats[domain] = {'total_count': 0, 'total_size': 0, 'del_count': 0, 'del_size': 0}
+
+            tracker_stats[domain]['total_count'] += 1
+            tracker_stats[domain]['total_size'] += t_size
+            if is_del_group:
+                tracker_stats[domain]['del_count'] += 1
+                tracker_stats[domain]['del_size'] += t_size
+
+        rejection_reasons = []
+        if not is_del_group:
+            has_external_link = d['original'].get('_external_hardlink') or any(t.get('_external_hardlink') for t in d['crossseeds'])
+            if has_external_link:
+                rejection_reasons.append({'icon': '🔗', 'text': 'External Hardlink Found'})
+
+            orig = d['original']
+            if NO_HARD_LINKS_MODE:
+                seeds_ok = orig.get('_seeder_count', 0) >= MIN_SEEDERS
+                size_ok = orig.get('size', 0) >= MIN_SIZE_BYTES
+                time_ok = orig.get('seeding_time', 0) >= MIN_ORIGINAL_SEED_TIME_HOURS * 3600
+                cat_ok = category_allowed(orig.get('category', ''))
+                path_ok = not orig.get('_path_error')
+
+                if not path_ok: rejection_reasons.append({'icon': '⚠️', 'text': 'Path Error'})
+                if not seeds_ok: rejection_reasons.append({'icon': '🌱', 'text': f'Low Seeds < {MIN_SEEDERS}'})
+                if not size_ok: rejection_reasons.append({'icon': '💾', 'text': f'Small Size < {MIN_SIZE_GIB}GiB'})
+                if not time_ok: rejection_reasons.append({'icon': '⏳', 'text': f'Low Time < {MIN_ORIGINAL_SEED_TIME_DAYS}d'})
+                if not cat_ok: rejection_reasons.append({'icon': '🏷️', 'text': 'Category Filter'})
+            else:
+                xs = d['crossseeds']
+                all_t = [orig] + xs
+                seeds_ok = all(t.get('_seeder_count', 0) >= MIN_SEEDERS for t in all_t)
+                size_ok = orig.get('size', 0) >= MIN_SIZE_BYTES
+                time_ok = orig.get('seeding_time', 0) >= MIN_ORIGINAL_SEED_TIME_HOURS * 3600
+                count_ok = len(all_t) < MAX_TORRENTS_IN_GROUP
+                cat_ok = category_allowed(orig.get('category', ''))
+
+                if not seeds_ok: rejection_reasons.append({'icon': '🌱', 'text': f'Low Seeds < {MIN_SEEDERS}'})
+                if not size_ok: rejection_reasons.append({'icon': '💾', 'text': f'Small Size < {MIN_SIZE_GIB}GiB'})
+                if not time_ok: rejection_reasons.append({'icon': '⏳', 'text': f'Low Time < {MIN_ORIGINAL_SEED_TIME_DAYS}d'})
+                if not count_ok: rejection_reasons.append({'icon': '📦', 'text': f'> {MAX_TORRENTS_IN_GROUP} items'})
+                if not cat_ok: rejection_reasons.append({'icon': '🏷️', 'text': 'Category Filter'})
+
+
+        report_rows.append({
+            'idx': idx,
+            'is_del': is_del_group,
+            'reasons': rejection_reasons,
+            'data': d
+        })
+
+    del_pct = (del_size / total_size * 100) if total_size > 0 else 0.0
+    keep_pct = (keep_size / total_size * 100) if total_size > 0 else 0.0
+    del_torrents_pct = (del_torrents / total_torrents * 100) if total_torrents > 0 else 0.0
+    keep_torrents_pct = (keep_torrents / total_torrents * 100) if total_torrents > 0 else 0.0
+
+    orig_count = total_groups
+    cross_count = total_torrents - total_groups
+
+    def get_avg(stats_dict, key):
+        return stats_dict[key] / stats_dict['count'] if stats_dict['count'] > 0 else 0
+
+    avg_all_ratio = get_avg(stats_analyzed, 'ratio')
+    avg_all_time = format_duration_days(get_avg(stats_analyzed, 'time'))
+    total_all_up = format_size_smart(stats_analyzed['up'])
+
+    avg_del_ratio = get_avg(stats_eligible, 'ratio')
+    avg_del_time = format_duration_days(get_avg(stats_eligible, 'time'))
+    total_del_up = format_size_smart(stats_eligible['up'])
+
+    sorted_trackers = sorted(tracker_stats.keys(), key=lambda k: tracker_stats[k]['total_size'], reverse=True)
+    chart_labels = sorted_trackers
+    ds_count_total = [tracker_stats[k]['total_count'] for k in sorted_trackers]
+    ds_count_del = [tracker_stats[k]['del_count'] for k in sorted_trackers]
+    ds_size_total = [tracker_stats[k]['total_size'] / (1024**3) for k in sorted_trackers]
+    ds_size_del = [tracker_stats[k]['del_size'] / (1024**3) for k in sorted_trackers]
+
+    max_group_torrent_count = max(group_size_stats_total.keys(), default=1)
+    group_chart_labels = list(range(max_group_torrent_count, 0, -1))
+
+    ds_group_total = [group_size_stats_total.get(n, 0) for n in group_chart_labels]
+    ds_group_del = [group_size_stats_del.get(n, 0) for n in group_chart_labels]
+
+
+    ts_now = datetime.now()
+    ts_str = ts_now.strftime("%Y.%m.%d_%H.%M.%S")
+    ts_display = ts_now.strftime("%Y.%m.%d %H:%M:%S")
+
+    mode_str = "NO HARD LINKS" if NO_HARD_LINKS_MODE else "STANDARD"
+    dry_run_str = "DRY RUN" if DRY_RUN else "LIVE DELETION"
+    dry_run_class = "dry-run" if DRY_RUN else "live-mode"
+
+    total_size_fmt = format_size_smart(total_size)
+    del_size_fmt = format_size_smart(del_size)
+    keep_size_fmt = format_size_smart(keep_size)
+
+    grad_del = f"linear-gradient(90deg, rgba(255, 82, 82, 0.15) {del_pct}%, transparent {del_pct}%)"
+    grad_keep = f"linear-gradient(90deg, rgba(76, 175, 80, 0.15) {keep_pct}%, transparent {keep_pct}%)"
+    grad_torrents_del = f"linear-gradient(90deg, rgba(255, 82, 82, 0.15) {del_torrents_pct}%, transparent {del_torrents_pct}%)"
+    grad_torrents_keep = f"linear-gradient(90deg, rgba(76, 175, 80, 0.15) {keep_torrents_pct}%, transparent {keep_torrents_pct}%)"
+    filtering_orphans_grouping_torrents_label = "Filtering for orphans" if NO_HARD_LINKS_MODE else "Grouping torrents & hardlinks"
+
+    unreliable_str = ', '.join(UNRELIABLE_TRACKERS) if UNRELIABLE_TRACKERS else 'None'
+    no_hard_links_cat = ', '.join(NO_HARD_LINKS_CATEGORIES) if NO_HARD_LINKS_CATEGORIES else 'None'
+    cat_allow_str = ', '.join(CATEGORY_ALLOWLIST) if CATEGORY_ALLOWLIST else 'None'
+    cat_block_str = ', '.join(CATEGORY_BLOCKLIST) if CATEGORY_BLOCKLIST else 'None'
+    html_out_str = HTML_EXPORT if HTML_EXPORT else 'Disabled'
+    csv_out_str = CSV_EXPORT if CSV_EXPORT else 'Disabled'
+
+    external_media_paths_html = "None"
+    if EXTERNAL_MEDIA_PATHS:
+        m_lines = [path for path in EXTERNAL_MEDIA_PATHS]
+        external_media_paths_html = f"<div style='margin-top:2px; font-family:monospace; font-size:10px; color:#aaa; line-height:1.2; word-break:break-all;'>{'<br>'.join(m_lines)}</div>"
+    mappings_html = "None"
+    if PATH_MAPPINGS:
+        m_lines = [f"{k} → {v}" for k, v in PATH_MAPPINGS.items()]
+        mappings_html = f"<div style='margin-top:2px; font-family:monospace; font-size:10px; color:#aaa; line-height:1.2; word-break:break-all;'>{'<br>'.join(m_lines)}</div>"
+
+    config_items = [
+        f"<b>Min Seeders:</b> {MIN_SEEDERS}",
+        f"<b>Min Seed Time:</b> {MIN_ORIGINAL_SEED_TIME_DAYS} days",
+        f"<b>Min Size:</b> {MIN_SIZE_GIB} GiB",
+        f"<b>Max Group Size:</b> {MAX_TORRENTS_IN_GROUP}",
+        f"<b>Category Mode:</b> {CATEGORY_FILTER_MODE}",
+        f"<b>Cat Allowlist:</b> {cat_allow_str}",
+        f"<b>Cat Blocklist:</b> {cat_block_str}",
+        f"<b>Unreliable Trackers:</b> {unreliable_str}",
+        f"<b>Eligible Only:</b> {ELIGIBLE_ONLY}",
+        f"<b>Dry Run:</b> {DRY_RUN}",
+        f"<b>Debug Mode:</b> {DEBUG_MODE}",
+        f"<b>No Hard Links Mode:</b> {NO_HARD_LINKS_MODE}",
+        f"<b>No Hard Links Cat:</b> {no_hard_links_cat}",
+        f"<b>HTML Export:</b> {html_out_str}",
+        f"<b>CSV Export:</b> {csv_out_str}",
+        f"<b>External Media Paths:</b> {external_media_paths_html}",
+        f"<b>Path Mappings:</b> {mappings_html}",
+    ]
+
+    config_html = "<ul class='config-ul'>" + "".join([f"<li>{item}</li>" for item in config_items]) + "</ul>"
+
+
+
+    css_block = """
+        /* ... existing styles ... */
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #121212; color: #e0e0e0; margin: 0; padding: 20px; }
+        .container { max-width: 95%; margin: 0 auto; }
+        .card { background: #1e1e1e; border: 1px solid #333; border-radius: 6px; padding: 20px; margin-bottom: 20px; }
+
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 15px; margin-bottom: 20px; }
+        .header h1 { margin: 0; font-size: 24px; color: #fff; display: inline-block; margin-right: 15px; }
+        .header-meta { text-align: right; font-size: 12px; color: #888; }
+
+        .badges { display: block; margin-top: 5px; }
+        .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 11px; margin-right: 5px; color: #000; }
+        .dry-run { background: #ff9800; }
+        .live-mode { background: #ff5252; color: #fff; }
+        .mode-tag { background: #2196f3; color: #fff; }
+
+        /* CHANGED: Grid supports 5 items now (Total, DelSize, KeepSize, DelCount, KeepCount) */
+        /* Or we can keep it 3 columns and let them wrap, or specific layout. */
+        /* Since Config is moved out, we have 5 boxes. A 3-column grid works well (3 top, 2 bottom) or 5-col. */
+        /* Let's stick to auto-fit or specific columns. */
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+
+        .stat-box {
+            background-color: #252525;
+            padding: 15px; border-radius: 4px; text-align: center; border-top: 3px solid #555;
+            position: relative; overflow: hidden; z-index: 1;
+            background-repeat: no-repeat;
+            background-size: 100% 100%;
+        }
+        .stat-box.danger { border-top-color: #ff5252; }
+        .stat-box.success { border-top-color: #4caf50; }
+
+        .stat-content { position: relative; z-index: 2; }
+        .stat-value { font-size: 24px; font-weight: bold; display: block; margin: 8px 0; color: #fff; }
+        .stat-label { font-size: 12px; color: #aaa; text-transform: uppercase; letter-spacing: 0.5px; }
+        .stat-sub { font-size: 11px; color: #ccc; display: block; margin-top: 2px; }
+        .stat-pct { font-size: 11px; font-weight: bold; margin-top: 5px; display: block; }
+
+        .config-ul {
+            text-align: left; margin: 0; padding: 0 0 0 15px; color: #ddd; font-size: 11px; columns: 1;
+            list-style-type: square;
+        }
+        .config-ul li { margin-bottom: 2px; }
+        .config-ul b { color: #888; font-weight: 600; }
+
+        .charts-row { display: flex; gap: 20px; margin-bottom: 20px; }
+        .chart-col { flex: 1; background: #1e1e1e; padding: 15px; border-radius: 6px; border: 1px solid #333; }
+        .chart-container { position: relative; height: 350px; width: 100%; }
+
+        /* UPDATED: Metrics Row now holds 3 columns */
+        .metrics-row { display: flex; gap: 20px; margin-bottom: 20px; }
+        .metric-col { flex: 1; background: #1e1e1e; padding: 20px; border-radius: 6px; border: 1px solid #333; }
+
+        .metric-title { font-size: 16px; font-weight: bold; margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 10px; }
+        .metric-item { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; }
+        .metric-val { font-weight: bold; color: #fff; }
+
+        /* ... remaining css ... */
+        .table-container { overflow-x: auto; }
+        table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; table-layout: fixed; }
+        th { text-align: left; padding: 12px 8px; background: #252525; color: #aaa; font-weight: 600; border-bottom: 2px solid #333; position: sticky; top: 0; white-space: nowrap; cursor: pointer; user-select: none; }
+        th:hover { color: #fff; background: #333; }
+        td { padding: 8px; border-bottom: 1px solid #2a2a2a; vertical-align: middle; color: #ddd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        tr:hover td { background: #2a2a2a; }
+        .resizer { position: absolute; right: 0; top: 0; height: 100%; width: 5px; cursor: col-resize; user-select: none; touch-action: none; }
+        .resizer:hover, .resizing { background: #bb86fc; opacity: 0.5; }
+        .status-badge { padding: 3px 8px; border-radius: 3px; font-size: 11px; font-weight: bold; text-transform: uppercase; margin-right: 6px; }
+        .status-badge.status-delete { background: #3e2727; color: #ff5252; }
+        .status-badge.status-keep { background: #273e27; color: #4caf50; }
+        .type-badge { padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: bold; }
+        .type-orig { color: #bbdefb; }
+        .type-orphan { color: #fff9c4; }
+        .type-cross { color: #bdbdbd; }
+        .name-cell { color: #fff; }
+        .path-cell { color: #666; font-family: monospace; font-size: 11px; }
+        .text-danger { color: #ff5252 !important; font-weight: bold; }
+        .text-success { color: #4caf50 !important; }
+        .status-container { display: flex; align-items: center; }
+        .rejection-icon { cursor: help; margin-left: 2px; font-size: 14px; opacity: 0.8; }
+        .rejection-icon:hover { opacity: 1; }
+    """
+
+    html_body = f"""
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1>Cross-Seed Cleaner Report</h1>
+                <div class="badges">
+                    <span class="tag mode-tag">{mode_str}</span>
+                    <span class="tag {dry_run_class}">{dry_run_str}</span>
+                </div>
+            </div>
+            <div class="header-meta">
+                Generated: {ts_display}
+            </div>
+        </div>
+
+        <div class="stats-grid" style="grid-template-columns: repeat(5, 1fr);">
+
+            <!-- Box 1: Total Analyzed (Counts) -->
+            <div class="stat-box">
+                <div class="stat-content">
+                    <span class="stat-label">Total Analyzed</span>
+                    <span class="stat-value" style="font-size: 20px;">{total_torrents} / {total_groups}</span>
+                    <span class="stat-sub">Torrents / Groups</span>
+
+                    <div style="margin-top: 10px; margin-bottom: 10px; border-top: 1px solid #444;"></div>
+
+                    <span class="stat-label">Total Size</span>
+                    <span class="stat-value" style="font-size: 20px;">{total_size_fmt}</span>
+
+                    <div style="margin-top: 10px; margin-bottom: 10px; border-top: 1px solid #444;"></div>
+
+                    <span class="stat-label">External Scan</span>
+                    <span class="stat-value" style="font-size: 16px;">{SCAN_STATS['files_scanned']} / {SCAN_STATS['unique_inodes']}</span>
+                    <span class="stat-sub">Files / Unique Inodes</span>
+
+                    <div style="margin-top: 10px; margin-bottom: 10px; border-top: 1px solid #444;"></div>
+
+                    <span class="stat-label">Execution Times</span>
+                    <div style="font-size: 11px; color: #aaa; margin-top: 4px; text-align: left; padding-left: 20px;">
+                        <div>• Fetching torrents: <span style="color:#fff; float:right">{SCAN_STATS.get('fetch_duration', 0):.2f}s</span></div>
+                        <div>• Filtering categories: <span style="color:#fff; float:right">{SCAN_STATS.get('filter_duration', 0):.2f}s</span></div>
+                        <div>• Scanning external libs: <span style="color:#fff; float:right">{SCAN_STATS.get('scan_duration', 0):.2f}s</span></div>
+                        <div>• Fetching seeders: <span style="color:#fff; float:right">{SCAN_STATS.get('meta_duration', 0):.2f}s</span></div>
+                        <div>• {filtering_orphans_grouping_torrents_label}: <span style="color:#fff; float:right">{SCAN_STATS.get('group_duration', 0):.2f}s</span></div>
+                        <div>• Analyze deletable: <span style="color:#fff; float:right">{SCAN_STATS.get('analyze_duration', 0):.2f}s</span></div>
+                    </div>
+
+
+                </div>
+            </div>
+
+
+
+            <!-- Box 2: Size to Delete -->
+            <div class="stat-box danger" style="background-image: {grad_del};">
+                <div class="stat-content">
+                    <span class="stat-label">Size to Delete</span>
+                    <span class="stat-value">{del_size_fmt}</span>
+                    <span class="stat-sub">{del_groups_count} groups / {del_torrents} torrents</span>
+                    <span class="stat-pct" style="color:#ff5252">{del_pct:.1f}% of space</span>
+                </div>
+            </div>
+
+            <!-- Box 3: Size to Keep -->
+            <div class="stat-box success" style="background-image: {grad_keep};">
+                <div class="stat-content">
+                    <span class="stat-label">Size to Keep</span>
+                    <span class="stat-value">{keep_size_fmt}</span>
+                    <span class="stat-sub">{keep_groups_count} groups / {keep_torrents} torrents</span>
+                    <span class="stat-pct" style="color:#4caf50">{keep_pct:.1f}% of space</span>
+                </div>
+            </div>
+
+            <!-- Box 4: Torrents to Delete (Count) -->
+             <div class="stat-box danger" style="background-image: {grad_torrents_del};">
+                <div class="stat-content">
+                    <span class="stat-label">Torrents to Delete</span>
+                    <span class="stat-value">{del_torrents}</span>
+                    <span class="stat-sub">{del_groups_count} Groups</span>
+                    <span class="stat-pct" style="color:#ff5252">{del_torrents_pct:.1f}% of torrents</span>
+                </div>
+            </div>
+
+            <!-- Box 5: Torrents to Keep (Count) -->
+             <div class="stat-box success" style="background-image: {grad_torrents_keep};">
+                <div class="stat-content">
+                    <span class="stat-label">Torrents to Keep</span>
+                    <span class="stat-value">{keep_torrents}</span>
+                    <span class="stat-sub">{keep_groups_count} Groups</span>
+                    <span class="stat-pct" style="color:#4caf50">{keep_torrents_pct:.1f}% of torrents</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="metrics-row">
+            <!-- Col 1: All Analyzed -->
+            <div class="metric-col">
+                <div class="metric-title">All Analyzed ({stats_analyzed['count']})</div>
+                <div class="metric-item"><span>Average Ratio</span><span class="metric-val">{avg_all_ratio:.2f}</span></div>
+                <div class="metric-item"><span>Average Seed Time</span><span class="metric-val">{avg_all_time}</span></div>
+                <div class="metric-item"><span>Total Uploaded</span><span class="metric-val">{total_all_up}</span></div>
+            </div>
+
+            <!-- Col 2: Configuration (MOVED HERE) -->
+            <div class="metric-col">
+                <div class="metric-title">Configuration</div>
+                {config_html}
+            </div>
+
+            <!-- Col 3: Eligible for Deletion -->
+            <div class="metric-col" style="border-color: #ff5252;">
+                <div class="metric-title" style="color: #ff5252;">Eligible for Deletion ({stats_eligible['count']})</div>
+                <div class="metric-item"><span>Average Ratio</span><span class="metric-val">{avg_del_ratio:.2f}</span></div>
+                <div class="metric-item"><span>Average Seed Time</span><span class="metric-val">{avg_del_time}</span></div>
+                <div class="metric-item"><span>Total Uploaded</span><span class="metric-val">{total_del_up}</span></div>
+            </div>
+        </div>
+
+        <!-- ... Charts and Table ... -->
+        <div class="charts-row">
+            <div class="chart-col">
+                <div class="chart-container"><canvas id="countChart"></canvas></div>
+            </div>
+            <div class="chart-col">
+                <div class="chart-container"><canvas id="sizeChart"></canvas></div>
+            </div>
+            <div class="chart-col">
+                <div class="chart-container"><canvas id="groupChart"></canvas></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="table-container">
+            <table id="reportTable">
+                <thead>
+                    <tr>
+                        <th onclick="sortTable(0)" style="width:140px">Status<div class="resizer"></div></th>
+                        <th onclick="sortTable(1)" style="width:70px">Type<div class="resizer"></div></th>
+                        <th onclick="sortTable(2)" style="width:40px">Seeds<div class="resizer"></div></th>
+                        <th onclick="sortTable(3)" style="width:35px">Ratio<div class="resizer"></div></th>
+                        <th onclick="sortTable(4)" style="width:70px">Size<div class="resizer"></div></th>
+                        <th onclick="sortTable(5)" style="width:70px">Uploaded<div class="resizer"></div></th>
+                        <th onclick="sortTable(6)" style="width:80px">Seeded (D:H)<div class="resizer"></div></th>
+                        <th onclick="sortTable(7)" style="width:100px">Added<div class="resizer"></div></th>
+                        <th onclick="sortTable(8)" style="width:160px">Tracker<div class="resizer"></div></th>
+                        <th onclick="sortTable(9)" style="width:130px">Category<div class="resizer"></div></th>
+                        <th onclick="sortTable(10)">Name<div class="resizer"></div></th>
+                        <th onclick="sortTable(11)">Path<div class="resizer"></div></th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+    """
+
+    html_body += "</tbody>"
+
+    for row in report_rows:
+        if ELIGIBLE_ONLY and not row['is_del']:
+            continue
+
+        d = row['data']
+        is_del_group = row['is_del']
+
+        status_class = "status-delete" if is_del_group else "status-keep"
+        status_text = "DELETE" if is_del_group else "KEEP"
+        badge_html = f'<span class="status-badge {status_class}">{status_text}</span>'
+
+        reasons_html = ""
+        if not is_del_group:
+            reasons = row.get('reasons', [])
+            if reasons:
+                for r in reasons:
+                    reasons_html += f'<span class="rejection-icon" title="{r["text"]}">{r["icon"]}</span>'
+
+        status_cell_content = f'<div class="status-container">{badge_html}{reasons_html}</div>'
+        torrents_to_list = [d['original']] + d['crossseeds']
+
+        html_body += '<tbody class="group-body">'
+
+        for i, t in enumerate(torrents_to_list):
+            is_orig = (i == 0)
+            if is_orig:
+                type_badge = (
+                    '<span class="type-badge type-orphan" style="border:1px solid #555;">ORPHAN</span>'
+                    if len(d['crossseeds']) == 0
+                    else '<span class="type-badge type-orig" style="border:1px solid #555;">ORIGINAL</span>'
+                )
+            else:
+                type_badge = '<span class="type-badge type-cross" style="border:1px solid #555;">CROSS</span>'
+
+            added_ts = datetime.fromtimestamp(t.get('added_on', 0)).strftime("%Y.%m.%d | %H:%M")
+            tracker_clean = urllib.parse.urlparse(t.get('tracker', '')).netloc
+
+            # FIX: Use _seeder_count which includes unreliable tracker logic
+            cur_seeds = t.get('_seeder_count', t.get('num_complete', 0))
+
+            c_seeds = "text-success" if cur_seeds >= MIN_SEEDERS else "text-danger"
+            c_size = ""
+            c_time = ""
+            c_cat = ""
+            t_size = t.get('size', 0)
+            t_time = t.get('seeding_time', 0)
+            t_cat = t.get('category', '')
+
+            if is_orig:
+                if t_size >= (MIN_SIZE_GIB * 1024 * 1024 * 1024):
+                    c_size = "text-success"
+                else:
+                    c_size = "text-danger"
+
+                if t_time >= (MIN_ORIGINAL_SEED_TIME_DAYS * 86400):
+                    c_time = "text-success"
+                else:
+                    c_time = "text-danger"
+
+                if category_allowed(t_cat):
+                    c_cat = "text-success"
+                else:
+                    c_cat = "text-danger"
+
+                if t.get('_path_error'):
+                    c_cat = "text-danger"
+
+            html_body += f"""
+            <tr>
+                <td>{status_cell_content}</td>
+                <td>{type_badge}</td>
+                <td><span class="{c_seeds}">{cur_seeds}</span></td>
+                <td>{t.get('ratio', 0):.2f}</td>
+                <td><span class="{c_size}">{format_size_smart(t_size)}</span></td>
+                <td>{format_size_smart(t.get('uploaded', 0))}</td>
+                <td><span class="{c_time}">{format_duration_ddd_hh(t_time)}</span></td>
+                <td style="font-size:11px; color:#888;">{added_ts}</td>
+                <td>{tracker_clean}</td>
+                <td><span class="{c_cat}">{t_cat}</span></td>
+                <td class="name-cell" title="{t.get('name', '')}">{t.get('name', '')}</td>
+                <td class="path-cell" title="{t.get('content_path', '')}">{t.get('content_path', '')}</td>
+            </tr>
+            """
+
+        external_path = d['original'].get('_external_path')
+        if external_path:
+            ext_status_cell = f'<div class="status-container"><span class="status-badge status-keep">KEEP</span>{reasons_html}</div>'
+
+            orig_size = d['original'].get('size', 0)
+
+            html_body += f"""
+            <tr>
+                <td>{ext_status_cell}</td>
+                <td><span class="type-badge" style="color:#aaa; border:1px solid #555;">EXT</span></td>
+                <td style="text-align:center; color:#555;">-</td>
+                <td style="text-align:center; color:#555;">-</td>
+                <td><span class="text-success">{format_size_smart(orig_size)}</span></td>
+                <td style="text-align:center; color:#555;">-</td>
+                <td style="text-align:center; color:#555;">-</td>
+                <td style="text-align:center; color:#555;">-</td>
+                <td style="text-align:center; color:#555;">-</td>
+                <td><span style="color:#2196f3;">External Library</span></td>
+                <td class="name-cell" style="color:#2196f3; font-style:italic;">{d['original'].get('name', '')}</td>
+                <td class="path-cell">{external_path}</td>
+            </tr>
+            """
+
+
+        html_body += "</tbody>"
+
+    html_body += """
+            </table>
+            </div>
+        </div>
+    </div>
+    """
+
+    full_html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Cross-Seed Cleaner Report</title>
+        <meta charset="UTF-8">
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <style>{css_block}</style>
+    </head>
+    <body>
+        {html_body}
+        <script>
+            // --- Helper: Resizing ---
+            const createResizableTable = function(table) {{
+                const cols = table.querySelectorAll('th');
+                [].forEach.call(cols, function(col) {{
+                    const resizer = col.querySelector('.resizer');
+                    if (!resizer) return;
+                    let x = 0; let w = 0;
+                    const mouseDownHandler = function(e) {{
+                        x = e.clientX;
+                        const styles = window.getComputedStyle(col);
+                        w = parseInt(styles.width, 10);
+                        document.addEventListener('mousemove', mouseMoveHandler);
+                        document.addEventListener('mouseup', mouseUpHandler);
+                        resizer.classList.add('resizing');
+                    }};
+                    const mouseMoveHandler = function(e) {{
+                        const dx = e.clientX - x;
+                        col.style.width = (w + dx) + 'px';
+                    }};
+                    const mouseUpHandler = function() {{
+                        document.removeEventListener('mousemove', mouseMoveHandler);
+                        document.removeEventListener('mouseup', mouseUpHandler);
+                        resizer.classList.remove('resizing');
+                    }};
+                    resizer.addEventListener('mousedown', mouseDownHandler);
+                }});
+            }};
+            createResizableTable(document.getElementById('reportTable'));
+
+            // --- Helper: Sorting by Group (tbody) ---
+            let sortDirection = 1;
+            let lastSortedCol = -1;
+
+            function sortTable(n) {{
+                const table = document.getElementById("reportTable");
+                const groups = Array.from(table.getElementsByClassName("group-body"));
+
+                // Reset direction if clicking a new column
+                if (n !== lastSortedCol) {{
+                    sortDirection = 1;
+                    lastSortedCol = n;
+                }} else {{
+                    sortDirection *= -1;
+                }}
+
+                const getVal = (grp, idx) => {{
+                    const firstRow = grp.rows[0];
+                    if (!firstRow) return "";
+                    return firstRow.cells[idx].innerText.trim();
+                }};
+
+                const parseSize = (s) => {{
+                    const match = s.match(/^([\d\.]+)\s*(B|KiB|MiB|GiB|TiB|PiB)$/i);
+                    if (!match) return 0;
+                    const v = parseFloat(match[1]);
+                    const u = match[2].toLowerCase();
+                    const mul = {{ 'b': 1, 'kib': 1024, 'mib': 1048576, 'gib': 1.073741824e+09, 'tib': 1.099511627776e+12, 'pib': 1.125899906842624e+15 }};
+                    return v * (mul[u] || 1);
+                }};
+
+                const parseTime = (s) => {{
+                    if (!s.includes(':')) return 0;
+                    const parts = s.split(':').map(Number);
+                    if (parts.length === 2) return (parts[0] * 24) + parts[1];
+                    return 0;
+                }};
+
+                groups.sort((a, b) => {{
+                    const valA = getVal(a, n);
+                    const valB = getVal(b, n);
+
+                    // 1. Size Columns (4: Size, 5: Uploaded)
+                    if (n === 4 || n === 5) {{
+                        return (parseSize(valA) - parseSize(valB)) * sortDirection;
+                    }}
+
+                    // 2. Duration Column (6: Seeded)
+                    if (n === 6) {{
+                        return (parseTime(valA) - parseTime(valB)) * sortDirection;
+                    }}
+
+                    // 3. Pure Numeric Columns (2: Seeds, 3: Ratio)
+                    if (n === 2 || n === 3) {{
+                         return (parseFloat(valA) - parseFloat(valB)) * sortDirection;
+                    }}
+
+                    // 4. Default: String Sort (Name, Category, Tracker, etc.)
+                    // Use localeCompare for correct alphabetical sorting
+                    return valA.localeCompare(valB, undefined, {{numeric: true, sensitivity: 'base'}}) * sortDirection;
+                }});
+
+                groups.forEach(g => table.appendChild(g));
+            }}
+
+            // --- Charts ---
+            const ctxCount = document.getElementById('countChart').getContext('2d');
+            const ctxSize = document.getElementById('sizeChart').getContext('2d');
+            // NEW CONTEXT
+            const ctxGroup = document.getElementById('groupChart').getContext('2d');
+
+            const labels = {json.dumps(chart_labels)};
+            // NEW LABELS
+            const groupLabels = {json.dumps(group_chart_labels)};
+
+            new Chart(ctxCount, {{
+                type: 'bar',
+                data: {{
+                    labels: labels,
+                    datasets: [
+                        {{ label: 'Deleted Count', data: {json.dumps(ds_count_del)}, backgroundColor: '#ff5252' }},
+                        {{ label: 'Total Count', data: {json.dumps(ds_count_total)}, backgroundColor: '#333' }}
+                    ]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {{ title: {{ display: true, text: 'Torrents per Tracker', color: '#fff' }} }},
+                    scales: {{ x: {{ stacked: true }}, y: {{ stacked: false, beginAtZero: true }} }}
+                }}
+            }});
+
+            new Chart(ctxSize, {{
+                type: 'bar',
+                data: {{
+                    labels: labels,
+                    datasets: [
+                        {{ label: 'Deleted Size (GiB)', data: {json.dumps(ds_size_del)}, backgroundColor: '#ff5252' }},
+                        {{ label: 'Total Size (GiB)', data: {json.dumps(ds_size_total)}, backgroundColor: '#333' }}
+                    ]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {{ title: {{ display: true, text: 'Size per Tracker (GiB)', color: '#fff' }} }},
+                    scales: {{ x: {{ stacked: true }}, y: {{ stacked: false, beginAtZero: true }} }}
+                }}
+            }});
+
+            new Chart(ctxGroup, {{
+                type: 'bar',
+                data: {{
+                    labels: groupLabels,
+                    datasets: [
+                        {{ label: 'Eligible (Groups)', data: {json.dumps(ds_group_del)}, backgroundColor: '#ff5252' }},
+                        {{ label: 'Total (Groups)', data: {json.dumps(ds_group_total)}, backgroundColor: '#333' }}
+                    ]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {{ title: {{ display: true, text: 'Groups by Torrent Count', color: '#fff' }} }},
+                    scales: {{ x: {{ stacked: true }}, y: {{ stacked: false, beginAtZero: true }} }}
+                }}
+            }});
+        </script>
+    </body>
+    </html>
+    """
+
+
+    if HTML_EXPORT:
+        try:
+            base, ext = os.path.splitext(HTML_EXPORT)
+            final_html_path = f"{base}_{ts_str}{ext}"
+            with open(final_html_path, "w", encoding="utf-8") as f:
+                f.write(full_html)
+            print(f"{Colors.GREEN}Successfully exported HTML report to: {final_html_path}{Colors.END}")
+        except Exception as e:
+            print(f"{Colors.RED}Error exporting HTML: {e}{Colors.END}")
+
+    if CSV_EXPORT:
+        if CSV_EXPORT.endswith('.csv'):
+            csv_filename = CSV_EXPORT.replace('.csv', f'_{ts_str}.csv')
+        else:
+            csv_filename = f"{CSV_EXPORT}_{ts_str}.csv"
+
+        print(f"{Colors.BOLD}[INFO]{Colors.END} Exporting CSV report to {csv_filename}...")
+        try:
+            with open(csv_filename, 'w', newline='', encoding='utf-8') as csvfile:
+                fieldnames = ['Group ID', 'Status', 'Type', 'Name', 'Size', 'Tracker', 'Category', 'Added', 'Seeding Time', 'Ratio', 'Seeders', 'Path']
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                writer.writeheader()
+
+                for idx, (h, d) in enumerate(sorted_items, 1):
+                    is_del_group = idx in eligible_ids
+                    status = "DELETE" if is_del_group else "KEEP"
+
+                    group_torrents = [d['original']] + d['crossseeds']
+
+                    # Check if this group was protected by external match
+                    external_path = None
+                    for t in group_torrents:
+                         if t.get('_external_path'):
+                             external_path = t['_external_path']
+                             break
+
+                    for t in group_torrents:
+                        add_date = format_timestamp(t.get('added_on', 0))
+                        seed_time = format_duration_ddd_hh_mm(t.get('seeding_time', 0))
+
+                        writer.writerow({
+                            'Group ID': idx,
+                            'Status': status,
+                            'Type': 'ORIGINAL' if t == d['original'] else 'CROSS-SEED',
+                            'Name': t.get('name', ''),
+                            'Size': format_size_smart(t.get('size', 0)),
+                            'Tracker': get_tracker_domain(client, t.get('hash', '')) or "Unknown",
+                            'Category': t.get('category', ''),
+                            'Added': add_date,
+                            'Seeding Time': seed_time,
+                            'Ratio': f"{t.get('ratio', 0):.2f}",
+                            'Seeders': t.get('_seeder_count', 0),
+                            'Path': t.get('content_path', '')
+                        })
+
+                    if external_path:
+                        writer.writerow({
+                            'Group ID': idx,
+                            'Status': status,
+                            'Type': 'MEDIA-LIBRARY',
+                            'Name': d['original'].get('name', ''),
+                            'Size': format_size_smart(d['original'].get('size', 0)),
+                            'Tracker': '',
+                            'Category': 'External Library',
+                            'Added': '',
+                            'Seeding Time': '',
+                            'Ratio': '',
+                            'Seeders': '',
+                            'Path': external_path
+                        })
+
+
+            print(f"{Colors.GREEN}Successfully exported CSV report to: {csv_filename}{Colors.END}")
+
+        except Exception as e:
+            print(f"{Colors.RED}Error writing CSV: {e}{Colors.END}")
+
+
+def manual_loop(client, emap):
+    if not emap:
+        return
+
+    while True:
+        choice = input(f"\n{Colors.BOLD}Manual:{Colors.END} Enter Group ID(s) (e.g. 5,7), 'all', or 'q': ").strip().lower()
+        if choice in ['q', 'quit']:
+            break
+
+        if choice == 'all':
+            print(f"{Colors.RED}WARNING: You are about to delete ALL {len(emap)} eligible groups.{Colors.END}")
+            if input(f"{Colors.BOLD}Type 'YES' to confirm execution: {Colors.END}") == 'YES':
+                for gid, ts in list(emap.items()):
+                    result = client.delete_torrents([t['hash'] for t in ts], delete_files=True)
+                    if result == "dry_run":
+                        print(f"{Colors.YELLOW}[DRY RUN] Group {gid} would be deleted (no action taken){Colors.END}")
+                    else:
+                        print(f"{Colors.GREEN}Group {gid} deleted.{Colors.END}")
+                        emap.pop(gid, None)
+                break
+            else:
+                print(f"{Colors.YELLOW}Deletion cancelled.{Colors.END}")
+        else:
+            ids_to_process = []
+            for s in choice.split(','):
+                try:
+                    gid = int(s.strip())
+                    if gid in emap:
+                        ids_to_process.append(gid)
+                    else:
+                        print(f"{Colors.RED}Group {gid} not found or not eligible.{Colors.END}")
+                except:
+                    pass
+
+            if not ids_to_process:
+                continue
+
+            print(f"{Colors.RED}You selected {len(ids_to_process)} group(s) for deletion.{Colors.END}")
+            if input(f"{Colors.BOLD}Type 'YES' to confirm execution: {Colors.END}") == 'YES':
+                for gid in ids_to_process:
+                    if gid in emap:
+                        result = client.delete_torrents([t['hash'] for t in emap[gid]], delete_files=True)
+                        if result == "dry_run":
+                            print(f"{Colors.YELLOW}[DRY RUN] Group {gid} would be deleted (no action taken){Colors.END}")
+                        else:
+                            print(f"{Colors.GREEN}Group {gid} deleted.{Colors.END}")
+                            emap.pop(gid, None)
+            else:
+                print(f"{Colors.YELLOW}Deletion cancelled.{Colors.END}")
+
+def get_group_sort_key(item):
+    data = item[1]['original']
+    key = SORT_BY
+    val = 0
+    if key == 'added': val = data.get('added_on', 0)
+    elif key == 'size': val = data.get('size', 0)
+    elif key == 'ratio': val = data.get('ratio', 0)
+    elif key == 'uploaded': val = data.get('uploaded', 0)
+    elif key == 'seeds' or key == 'seeders': val = data.get('_seeder_count', 0)
+    elif key == 'name': return data.get('name', '').lower()
+    return val
+
+
+
+def scan_external_libraries(paths):
+    """
+    Scans external directories for files with hardlinks (nlink > 1).
+    """
+    inodes = {}
+    if not paths:
+        return inodes
+    debug_log(f"  > Raw Input Paths: {paths}")
+    final_paths = []
+    for p in paths:
+        braced_paths = expand_braces(p)
+        for bp in braced_paths:
+            if any(c in bp for c in ['*', '?', '[']):
+                matches = glob.glob(bp)
+                if matches:
+                    final_paths.extend(matches)
+                else:
+                    print(f"{Colors.YELLOW}  ! Wildcard warning: '{bp}' matched 0 paths{Colors.END}")
+            else:
+                final_paths.append(bp)
+
+    # Deduplicate
+    final_paths = sorted(list(set(final_paths)))
+
+    if not final_paths:
+        print(f"{Colors.RED}  ! No valid paths found after expansion.{Colors.END}")
+        return inodes
+
+    debug_log(f"[SCAN] > Scanning {len(final_paths)} locations:")
+    for fp in final_paths:
+        debug_log(f"[SCAN]   > Target: {fp}")
+
+    total_files_scanned = 0
+    start_time = datetime.now()
+
+    for p in final_paths:
+        if not os.path.exists(p):
+            print(f"{Colors.YELLOW}  ! Skipped (not found): {p}{Colors.END}")
+            continue
+
+        debug_log(f"[SCAN] > Walking: {p}...")
+        try:
+            for root, dirs, files in os.walk(p):
+                dirs[:] = [d for d in dirs if not d.startswith('.') and d.lower() not in ('@eaDir', '#recycle')]
+
+                for f in files:
+                    total_files_scanned += 1
+
+                    if not DEBUG_MODE and total_files_scanned % 2000 == 0:
+                        sys.stdout.write(f"\r{Colors.DIM}  ... Scanned {total_files_scanned} files...{Colors.END}")
+                        sys.stdout.flush()
+
+                    file_path = os.path.join(root, f)
+                    try:
+                        stat = os.stat(file_path)
+                        if stat.st_nlink > 1:
+                            inode_tuple = (stat.st_dev, stat.st_ino)
+                            if inode_tuple not in inodes:
+                                debug_log(f"[SCAN]   + Found Link: {f} (Inode: {stat.st_ino})")
+                            inodes[inode_tuple] = file_path
+                    except OSError:
+                        continue
+        except Exception as e:
+
+            print(f"{Colors.RED}  ! Error walking {p}: {e}{Colors.END}")
+
+    if not DEBUG_MODE:
+        sys.stdout.write("\r" + " " * 60 + "\r")
+        sys.stdout.flush()
+
+    duration = (datetime.now() - start_time).total_seconds()
+
+    SCAN_STATS['files_scanned'] = total_files_scanned
+    SCAN_STATS['unique_inodes'] = len(inodes)
+    SCAN_STATS['scan_duration'] = duration
+
+    print(f"{Colors.GREEN}  ✓ Scanning complete in {duration:.2f}s.{Colors.END}")
+    print(f"{Colors.GREEN}  ✓ Scanned {total_files_scanned} files. Found {len(inodes)} unique hard-linked inodes.{Colors.END}\n")
+    return inodes
+
+
+
+def check_no_hard_links(client):
+    if not NO_HARD_LINKS_CATEGORIES:
+        print(f"{Colors.RED}ERROR: --no-hard-links-categories must be specified to use this mode.{Colors.END}")
+        return
+
+    t_start = datetime.now()
+    print(f"{Colors.BOLD}[1/7]{Colors.END} Fetching torrents...")
+    torrents = client.get_torrents()
+    SCAN_STATS['fetch_duration'] = (datetime.now() - t_start).total_seconds()
+    print(f"{Colors.GREEN}  ✓ Fetching complete in {SCAN_STATS['fetch_duration']:.2f}s.{Colors.END}")
+    print(f"{Colors.GREEN}  ✓ Found {len(torrents)} torrents.{Colors.END}\n")
+
+    print(f"{Colors.BOLD}[2/7]{Colors.END} Filtering torrents by category...")
+
+    filtered_torrents = []
+    skipped_count = 0
+
+    debug_log(f"[FILTER] Starting filter loop for {len(torrents)} torrents...")
+
+    for t in torrents:
+        cat = t.get('category', 'unknown')
+        name = t.get('name', 'Unknown')
+
+        is_allowed = category_allowed(cat)
+
+        if is_allowed:
+            filtered_torrents.append(t)
+            debug_log(f"[FILTER] + Allowed '{name}' (Category: '{cat}')")
+        else:
+            skipped_count += 1
+            debug_log(f"[FILTER] - Blocked '{name}' (Category: '{cat}')")
+
+    torrents = filtered_torrents
+    SCAN_STATS['filter_duration'] = (datetime.now() - t_start).total_seconds()
+
+    print(f"{Colors.GREEN}  ✓ Filtering complete in {SCAN_STATS['filter_duration']:.2f}s.{Colors.END}")
+    print(f"{Colors.GREEN}  ✓ Kept {len(torrents)} torrents ({skipped_count} skipped).{Colors.END}\n")
+
+
+
+    external_inodes = set()
+    if EXTERNAL_MEDIA_PATHS:
+        print(f"{Colors.BOLD}[3/7]{Colors.END} Scanning external libraries...")
+        external_inodes = scan_external_libraries(EXTERNAL_MEDIA_PATHS)
+    else:
+        print(f"{Colors.BOLD}[3/7]{Colors.END} Skipping external libraries scan (Not Configured)...")
+
+    t_start = datetime.now()
+    print(f"{Colors.BOLD}[4/7]{Colors.END} Fetching seeders...")
+
+    # --- MODIFIED: Added Progress ---
+    total_seeders = len(torrents)
+    for idx, t in enumerate(torrents, 1):
+        if not DEBUG_MODE and idx % 50 == 0:
+            sys.stdout.write(f"\r{Colors.DIM}  ... Fetched {idx}/{total_seeders} seeder counts...{Colors.END}")
+            sys.stdout.flush()
+
+        t['_seeder_count'] = get_seeder_count(client, t)
+
+    if not DEBUG_MODE:
+        sys.stdout.write("\r" + " " * 60 + "\r")
+        sys.stdout.flush()
+
+    SCAN_STATS['meta_duration'] = (datetime.now() - t_start).total_seconds()
+    print(f"{Colors.GREEN}  ✓ Metadata processed in {SCAN_STATS['meta_duration']:.2f}s.{Colors.END}\n")
+
+    t_start = datetime.now()
+    print(f"{Colors.BOLD}[5/7]{Colors.END} Filtering torrents for orphans...")
+
+    debug_log(f"[FILTER] Starting analysis of {len(torrents)} torrents against {len(external_inodes)} external inodes...")
+
+    identity_map = defaultdict(list)
+    for t in torrents:
+        identity = get_path_identity(t)
+        identity_map[identity].append(t)
+
+    def is_target_category(cat):
+        if not cat: return False
+        cat = cat.lower()
+        for pattern in NO_HARD_LINKS_CATEGORIES:
+            if matches_pattern(cat, pattern):
+                return True
+        return False
+
+    category_torrents = [t for t in torrents if is_target_category(t.get('category', ''))]
+
+    orphans = []
+    external_matches_count = 0
+
+    total_to_process = len(category_torrents)
+
+    for idx, t in enumerate(category_torrents, 1):
+        if not DEBUG_MODE and idx % 100 == 0:
+            sys.stdout.write(f"\r{Colors.DIM}  ... Analyzed {idx}/{total_to_process} candidates...{Colors.END}")
+            sys.stdout.flush()
+
+        ident = get_path_identity(t)
+
+        if len(identity_map[ident]) >= 2:
+            continue
+
+        is_external_match = False
+        if external_inodes and ident.startswith("inode:"):
+            try:
+                parts = ident.split(":")
+                if len(parts) >= 3:
+                    dev = int(parts[1])
+                    ino = int(parts[2])
+                    if (dev, ino) in external_inodes:
+                        is_external_match = True
+                        debug_log(f"Torrent '{t.get('name')}' saved: Matches external hardlink (Inode {ino})")
+            except ValueError:
+                pass
+
+        t['_external_hardlink'] = is_external_match
+        if is_external_match:
+             t['_external_path'] = external_inodes.get((dev, ino))
+
+        if is_external_match:
+            external_matches_count += 1
+            orphans.append(t)
+            continue
+
+        if "heuristic" in ident:
+            t['_path_error'] = True
+        orphans.append(t)
+
+    if not DEBUG_MODE:
+        sys.stdout.write("\r" + " " * 60 + "\r")
+        sys.stdout.flush()
+    # --------------------------------------------------------
+
+    SCAN_STATS['group_duration'] = (datetime.now() - t_start).total_seconds()
+    print(f"{Colors.GREEN}  ✓ Processing complete in {SCAN_STATS['group_duration']:.2f}s.{Colors.END}")
+
+    if external_matches_count > 0:
+        print(f"{Colors.GREEN}  ✓ Preserved {external_matches_count} torrents found in external libraries{Colors.END}")
+
+    print(f"{Colors.GREEN}  ✓ Found {len(orphans)} torrents without internal hard links.{Colors.END}\n")
+
+    all_groups = {t['hash']: {'original': t, 'crossseeds': [], 'name': t['name']} for t in orphans}
+
+
+    print(f"{Colors.BOLD}[6/7]{Colors.END} Analyze deletable torrents...")
+    t_start = datetime.now()
+    emap = {}
+    eligible_torrents = []
+
+    for idx, (h, d) in enumerate(sorted(all_groups.items(), key=get_group_sort_key, reverse=(SORT_ORDER == 'desc')), 1):
+        elig, ts = print_group(client, d['original'], d['crossseeds'], idx, len(all_groups))
+        if elig:
+            emap[idx] = ts
+            eligible_torrents.extend(ts)
+
+    SCAN_STATS['analyze_duration'] = (datetime.now() - t_start).total_seconds()
+    print(f"{Colors.GREEN}\n  ✓ Analysis complete in {SCAN_STATS['analyze_duration']:.2f}s.{Colors.END}")
+
+    print(f"\n{Colors.BOLD}[7/7]{Colors.END} Finalizing & exporting reports...")
+
+    stats = calculate_stats(all_groups, emap)
+    stats['torrents_total'] = len(orphans)
+    stats['size_total'] = sum(t.get('size', 0) for t in orphans)
+    stats['torrents_del'] = len(eligible_torrents)
+    stats['size_del'] = sum(t.get('size', 0) for t in eligible_torrents)
+    stats['torrents_keep'] = stats['torrents_total'] - stats['torrents_del']
+    stats['size_keep'] = stats['size_total'] - stats['size_del']
+    stats['groups_del'] = len(emap)
+    stats['groups_keep'] = stats['groups_total'] - stats['groups_del']
+
+    print_summary(stats)
+    export_reports(client, all_groups, emap.keys())
+
+    if MANUAL_MODE:
+        manual_loop(client, emap)
+    elif not DRY_RUN and emap:
+        print(f"\n{Colors.BOLD}{Colors.RED}WARNING: LIVE DELETION MODE IS ACTIVE.{Colors.END}")
+        print(f"{Colors.RED}You are about to PERMANENTLY DELETE {len(emap)} groups.{Colors.END}")
+        confirm = input(f"{Colors.BOLD}Type 'YES' to confirm execution: {Colors.END}")
+
+        if confirm == 'YES':
+            print(f"{Colors.RED}AUTO-DELETING...{Colors.END}")
+            for gid, ts in emap.items():
+                client.delete_torrents([t['hash'] for t in ts])
+                print(f"{Colors.GREEN}Group {gid} deleted.{Colors.END}")
+        else:
+            print(f"{Colors.YELLOW}Deletion cancelled.{Colors.END}")
+
+    elif not emap:
+        print(f"{Colors.GREEN}Nothing to delete.{Colors.END}")
+    else:
+        print(f"{Colors.YELLOW}DRY RUN. Use --manual or --delete.{Colors.END}")
+
+
+def main():
+    print_header()
+    print_config()
+    client = QBittorrentClient(QBITTORRENT_HOST, QBITTORRENT_USER, QBITTORRENT_PASS)
+    if NO_HARD_LINKS_MODE:
+        check_no_hard_links(client)
+        return
+    all_groups = load_and_group_torrents(client)
+
+    print(f"{Colors.BOLD}[6/7]{Colors.END} Analyze deletable torrents...")
+    t_start = datetime.now()
+    emap = {}
+    for idx, (h, d) in enumerate(sorted(all_groups.items(), key=get_group_sort_key, reverse=(SORT_ORDER == 'desc')), 1):
+        elig, ts = print_group(client, d['original'], d['crossseeds'], idx, len(all_groups))
+        if elig: emap[idx] = ts
+    SCAN_STATS['analyze_duration'] = (datetime.now() - t_start).total_seconds()
+    print(f"{Colors.GREEN}\n  ✓ Analysis complete in {SCAN_STATS['analyze_duration']:.2f}s.{Colors.END}")
+    print(f"\n{Colors.BOLD}[7/7]{Colors.END} Finalizing & exporting reports...")
+    stats = calculate_stats(all_groups, emap)
+    print_summary(stats)
+    export_reports(client, all_groups, emap.keys())
+
+    if MANUAL_MODE:
+        manual_loop(client, emap)
+    elif not DRY_RUN and emap:
+        print(f"\n{Colors.BOLD}{Colors.RED}WARNING: LIVE DELETION MODE IS ACTIVE.{Colors.END}")
+        print(f"{Colors.RED}You are about to PERMANENTLY DELETE {len(emap)} groups.{Colors.END}")
+        confirm = input(f"{Colors.BOLD}Type 'YES' to confirm execution: {Colors.END}")
+
+        if confirm == 'YES':
+            print(f"{Colors.RED}AUTO-DELETING...{Colors.END}")
+            for gid, ts in emap.items():
+                client.delete_torrents([t['hash'] for t in ts])
+                print(f"{Colors.GREEN}Group {gid} deleted.{Colors.END}")
+        else:
+            print(f"{Colors.YELLOW}Deletion cancelled.{Colors.END}")
+
+    elif not emap:
+        print(f"{Colors.GREEN}Nothing to delete.{Colors.END}")
+    else:
+        print(f"{Colors.YELLOW}DRY RUN. Use --manual or --delete.{Colors.END}")
+
+if __name__ == "__main__":
+    main()
