@@ -1726,7 +1726,7 @@ def export_reports(client, all_groups, eligible_ids):
                 }};
 
                 const parseSize = (s) => {{
-                    const match = s.match(/^([\d\.]+)\s*(B|KiB|MiB|GiB|TiB|PiB)$/i);
+                    const match = s.match(/^([\\d\\.]+)\\s*(B|KiB|MiB|GiB|TiB|PiB)$/i);
                     if (!match) return 0;
                     const v = parseFloat(match[1]);
                     const u = match[2].toLowerCase();
