@@ -1157,7 +1157,7 @@ def print_summary(s):
 
 
 
-def export_reports(client, all_groups, eligible_ids):
+def export_reports(all_groups, eligible_ids):
     def _mono_block(lines):
         return f"<div style='margin-top:2px; font-family:monospace; font-size:10px; color:#aaa; line-height:1.2; word-break:break-all;'>{'<br>'.join(lines)}</div>"
 
@@ -2166,7 +2166,7 @@ def check_no_hard_links(client):
 
     stats = calculate_stats(all_groups, emap)
     print_summary(stats)
-    export_reports(client, all_groups, emap.keys())
+    export_reports(all_groups, emap.keys())
 
     _finalize_deletion(client, emap)
 
@@ -2191,7 +2191,7 @@ def main():
     print(f"\n{Colors.BOLD}[7/7]{Colors.END} Finalizing & exporting reports...")
     stats = calculate_stats(all_groups, emap)
     print_summary(stats)
-    export_reports(client, all_groups, emap.keys())
+    export_reports(all_groups, emap.keys())
 
     _finalize_deletion(client, emap)
 
