@@ -63,12 +63,6 @@ _SORTED_PATH_MAPPING_PREFIXES = sorted(PATH_MAPPINGS.keys(), key=len, reverse=Tr
 #   "none"  = Disable category filtering (process everything)
 CATEGORY_FILTER_MODE = os.environ.get("CATEGORY_FILTER_MODE", "block")
 _VALID_CATEGORY_FILTER_MODES = {"none", "allow", "block", "both"}
-if CATEGORY_FILTER_MODE.lower() not in _VALID_CATEGORY_FILTER_MODES:
-    sys.stderr.write(
-        f"ERROR: CATEGORY_FILTER_MODE={CATEGORY_FILTER_MODE!r} is invalid. "
-        f"Expected one of {sorted(_VALID_CATEGORY_FILTER_MODES)}.\n"
-    )
-    sys.exit(1)
 
 # Filter Lists. Support exact match or Regex (prefix with 'r:').
 # Examples:
@@ -87,23 +81,13 @@ CATEGORY_BLOCKLIST = ["freeleech-orpheus", "r:.*-blocksuffix$"]
 #   "name"     = Name of torrent
 SORT_BY = os.environ.get("SORT_BY", "name")
 _VALID_SORT_BY = {"seeders", "seeds", "ratio", "size", "uploaded", "added", "name", "time"}
-if SORT_BY not in _VALID_SORT_BY:
-    sys.stderr.write(
-        f"ERROR: SORT_BY={SORT_BY!r} is invalid. "
-        f"Expected one of {sorted(_VALID_SORT_BY)}.\n"
-    )
-    sys.exit(1)
 
 # Sorting Order
 # Options:
 #   "asc"  = Ascending (Smallest/Oldest first)
 #   "desc" = Descending (Largest/Newest first)
 SORT_ORDER = os.environ.get("SORT_ORDER", "asc")
-if SORT_ORDER not in {"asc", "desc"}:
-    sys.stderr.write(
-        f"ERROR: SORT_ORDER={SORT_ORDER!r} is invalid. Expected 'asc' or 'desc'.\n"
-    )
-    sys.exit(1)
+_VALID_SORT_ORDER = {"asc", "desc"}
 
 
 # Trackers that report incorrect seeder counts (fallback to peer list counting)
@@ -137,6 +121,27 @@ DEFAULT_EXTERNAL_MEDIA_PATHS = "/mnt/hdd-pool/userdata/media/{user_1,user_2,user
 def str2bool(v):
     if isinstance(v, bool): return v
     return v.lower() in ('yes', 'true', 't', 'y', '1')
+
+
+def _validate_config():
+    if CATEGORY_FILTER_MODE.lower() not in _VALID_CATEGORY_FILTER_MODES:
+        sys.stderr.write(
+            f"ERROR: CATEGORY_FILTER_MODE={CATEGORY_FILTER_MODE!r} is invalid. "
+            f"Expected one of {sorted(_VALID_CATEGORY_FILTER_MODES)}.\n"
+        )
+        sys.exit(1)
+    if SORT_BY not in _VALID_SORT_BY:
+        sys.stderr.write(
+            f"ERROR: SORT_BY={SORT_BY!r} is invalid. "
+            f"Expected one of {sorted(_VALID_SORT_BY)}.\n"
+        )
+        sys.exit(1)
+    if SORT_ORDER not in _VALID_SORT_ORDER:
+        sys.stderr.write(
+            f"ERROR: SORT_ORDER={SORT_ORDER!r} is invalid. Expected 'asc' or 'desc'.\n"
+        )
+        sys.exit(1)
+
 
 def get_config():
     env_host = os.environ.get("QBITTORRENT_HOST", DEFAULT_QBITTORRENT_HOST)
@@ -186,6 +191,7 @@ def get_config():
     elif args.delete:
         final_dry_run = False
 
+    _validate_config()
     return args, final_dry_run
 
 
