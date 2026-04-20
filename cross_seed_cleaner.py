@@ -1145,14 +1145,14 @@ def print_summary(s):
 
 
 
-def export_reports(all_groups, eligible_ids):
+def export_reports(sorted_items, eligible_ids):
     def _mono_block(lines):
         return f"<div style='margin-top:2px; font-family:monospace; font-size:10px; color:#aaa; line-height:1.2; word-break:break-all;'>{'<br>'.join(lines)}</div>"
 
     _h = html_escape
     _js = js_string
 
-    total_groups = len(all_groups)
+    total_groups = len(sorted_items)
     del_groups_count = len(eligible_ids)
     keep_groups_count = total_groups - del_groups_count
 
@@ -1171,7 +1171,6 @@ def export_reports(all_groups, eligible_ids):
     group_size_stats_total = defaultdict(int)
     group_size_stats_del = defaultdict(int)
 
-    sorted_items = sorted(all_groups.items(), key=get_group_sort_key, reverse=(SORT_ORDER == 'desc'))
     report_rows = []
 
     for idx, (h, d) in enumerate(sorted_items, 1):
@@ -2133,11 +2132,13 @@ def check_no_hard_links(client):
 
 
 def _run_analyze_and_finalize(client, all_groups):
+    sorted_items = sorted(all_groups.items(), key=get_group_sort_key, reverse=(SORT_ORDER == 'desc'))
+
     print(f"{Colors.BOLD}[6/7]{Colors.END} Analyze deletable torrents...")
     t_start = datetime.now()
     emap = {}
-    for idx, (h, d) in enumerate(sorted(all_groups.items(), key=get_group_sort_key, reverse=(SORT_ORDER == 'desc')), 1):
-        elig, ts = print_group(client, d, idx, len(all_groups))
+    for idx, (h, d) in enumerate(sorted_items, 1):
+        elig, ts = print_group(client, d, idx, len(sorted_items))
         if elig:
             emap[idx] = ts
     SCAN_STATS['analyze_duration'] = (datetime.now() - t_start).total_seconds()
@@ -2146,7 +2147,7 @@ def _run_analyze_and_finalize(client, all_groups):
     print(f"\n{Colors.BOLD}[7/7]{Colors.END} Finalizing & exporting reports...")
     stats = calculate_stats(all_groups, emap)
     print_summary(stats)
-    export_reports(all_groups, emap.keys())
+    export_reports(sorted_items, emap.keys())
     _finalize_deletion(client, emap)
 
 

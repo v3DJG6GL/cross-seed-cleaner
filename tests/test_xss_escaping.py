@@ -74,9 +74,9 @@ class XSSEscapingTest(unittest.TestCase):
         cross = dict(torrent)
         cross["name"] = self.XSS_NAME + "-cross"
         cross["hash"] = "cafebabe"
-        all_groups = {"group1": {"original": torrent, "crossseeds": [cross]}}
+        sorted_items = [("group1", {"original": torrent, "crossseeds": [cross]})]
 
-        self.csc.export_reports(all_groups=all_groups, eligible_ids={1})
+        self.csc.export_reports(sorted_items=sorted_items, eligible_ids={1})
 
         base = os.path.join(self.tmpdir.name, "report")
         matches = sorted(glob.glob(base + "*.html"), key=os.path.getmtime)
