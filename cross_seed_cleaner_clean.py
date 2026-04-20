@@ -1400,7 +1400,7 @@ def export_reports(client, all_groups, eligible_ids):
         .rejection-icon:hover { opacity: 1; }
     """
 
-    html_body = f"""
+    html_parts = [f"""
     <div class="container">
         <div class="header">
             <div>
@@ -1550,7 +1550,7 @@ def export_reports(client, all_groups, eligible_ids):
                         <th onclick="sortTable(11)">Path<div class="resizer"></div></th>
                     </tr>
                 </thead>
-    """
+    """]
 
     for row in report_rows:
         if ELIGIBLE_ONLY and not row['is_del']:
@@ -1573,7 +1573,7 @@ def export_reports(client, all_groups, eligible_ids):
         status_cell_content = f'<div class="status-container">{badge_html}{reasons_html}</div>'
         torrents_to_list = [d['original']] + d['crossseeds']
 
-        html_body += '<tbody class="group-body">'
+        html_parts.append('<tbody class="group-body">')
 
         for i, t in enumerate(torrents_to_list):
             is_orig = (i == 0)
@@ -1620,7 +1620,7 @@ def export_reports(client, all_groups, eligible_ids):
 
             name_h = _h(t.get('name', ''))
             path_h = _h(t.get('content_path', ''))
-            html_body += f"""
+            html_parts.append(f"""
             <tr>
                 <td>{status_cell_content}</td>
                 <td>{type_badge}</td>
@@ -1635,7 +1635,7 @@ def export_reports(client, all_groups, eligible_ids):
                 <td class="name-cell" title="{name_h}">{name_h}</td>
                 <td class="path-cell" title="{path_h}">{path_h}</td>
             </tr>
-            """
+            """)
 
         external_path = d['original'].get('_external_path')
         if external_path:
@@ -1643,7 +1643,7 @@ def export_reports(client, all_groups, eligible_ids):
 
             orig_size = d['original'].get('size', 0)
 
-            html_body += f"""
+            html_parts.append(f"""
             <tr>
                 <td>{ext_status_cell}</td>
                 <td><span class="type-badge" style="color:#aaa; border:1px solid #555;">EXT</span></td>
@@ -1658,17 +1658,18 @@ def export_reports(client, all_groups, eligible_ids):
                 <td class="name-cell" style="color:#2196f3; font-style:italic;">{_h(d['original'].get('name', ''))}</td>
                 <td class="path-cell">{_h(external_path)}</td>
             </tr>
-            """
+            """)
 
 
-        html_body += "</tbody>"
+        html_parts.append("</tbody>")
 
-    html_body += """
+    html_parts.append("""
             </table>
             </div>
         </div>
     </div>
-    """
+    """)
+    html_body = "".join(html_parts)
 
     full_html = f"""
     <!DOCTYPE html>
