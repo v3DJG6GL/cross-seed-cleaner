@@ -2096,11 +2096,21 @@ def check_no_hard_links(client):
     else:
         print(f"{Colors.BOLD}[3/7]{Colors.END} Skipping external libraries scan (Not Configured)...")
 
+    def is_target_category(cat):
+        if not cat: return False
+        cat = cat.lower()
+        for spec in _NO_HARD_LINKS_CATEGORY_SPECS:
+            if matches_pattern(cat, spec):
+                return True
+        return False
+
+    category_torrents = [t for t in torrents if is_target_category(t.get('category', ''))]
+
     t_start = datetime.now()
     print(f"{Colors.BOLD}[4/7]{Colors.END} Fetching seeders...")
 
-    total_seeders = len(torrents)
-    for idx, t in enumerate(torrents, 1):
+    total_seeders = len(category_torrents)
+    for idx, t in enumerate(category_torrents, 1):
         if not DEBUG_MODE and idx % 50 == 0:
             sys.stdout.write(f"\r{Colors.DIM}  ... Fetched {idx}/{total_seeders} seeder counts...{Colors.END}")
             sys.stdout.flush()
@@ -2123,16 +2133,6 @@ def check_no_hard_links(client):
     for t in torrents:
         t['_identity'] = get_path_identity(t)
         identity_map[t['_identity']].append(t)
-
-    def is_target_category(cat):
-        if not cat: return False
-        cat = cat.lower()
-        for spec in _NO_HARD_LINKS_CATEGORY_SPECS:
-            if matches_pattern(cat, spec):
-                return True
-        return False
-
-    category_torrents = [t for t in torrents if is_target_category(t.get('category', ''))]
 
     orphans = []
     external_matches_count = 0
