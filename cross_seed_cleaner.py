@@ -2026,14 +2026,13 @@ def scan_external_libraries(paths):
     total_files_scanned = 0
     start_time = datetime.now()
 
-    for p in final_paths:
-        if not os.path.exists(p):
-            print(f"{Colors.YELLOW}  ! Skipped (not found): {p}{Colors.END}")
-            continue
+    def _on_walk_error(err):
+        print(f"{Colors.YELLOW}  ! {err}{Colors.END}")
 
+    for p in final_paths:
         debug_log(f"[SCAN] > Walking: {p}...")
         try:
-            for root, dirs, files in os.walk(p):
+            for root, dirs, files in os.walk(p, onerror=_on_walk_error):
                 dirs[:] = [d for d in dirs if not d.startswith('.') and d.lower() not in ('@eaDir', '#recycle')]
 
                 for f in files:
@@ -2054,7 +2053,6 @@ def scan_external_libraries(paths):
                     except OSError:
                         continue
         except Exception as e:
-
             print(f"{Colors.RED}  ! Error walking {p}: {e}{Colors.END}")
 
     if not DEBUG_MODE:
