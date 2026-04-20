@@ -684,14 +684,12 @@ def load_and_group_torrents(client):
 
     for identity, group in identity_groups.items():
         is_external_linked = False
-        matched_path = None          # Initialize default value
+        matched_path = None
 
-        # Only check if we have inodes and it's an inode-based group
         pair = _parse_inode_identity(identity) if external_inodes else None
         if pair and pair in external_inodes:
             candidate_path = external_inodes[pair]
 
-            # Check: Is this "external" path actually one of the torrents in this group?
             is_self_match = False
             candidate_norm = os.path.normpath(candidate_path)
 
@@ -699,12 +697,10 @@ def load_and_group_torrents(client):
                 local_t_path = apply_path_mapping(t.get('content_path', ''))
                 local_norm = os.path.normpath(local_t_path)
 
-                # Check 1: Exact Match
                 if candidate_norm == local_norm:
                     is_self_match = True
                     break
 
-                # Check 2: Parent/Child Match
                 if candidate_norm.startswith(local_norm + os.sep):
                     is_self_match = True
                     break
@@ -1148,14 +1144,12 @@ def print_summary(s):
 
 
 def export_reports(client, all_groups, eligible_ids):
-    # --- Helper Functions ---
     def _mono_block(lines):
         return f"<div style='margin-top:2px; font-family:monospace; font-size:10px; color:#aaa; line-height:1.2; word-break:break-all;'>{'<br>'.join(lines)}</div>"
 
     _h = html_escape
     _js = js_string
 
-    # --- Data Aggregation ---
     total_groups = len(all_groups)
     del_groups_count = len(eligible_ids)
     keep_groups_count = total_groups - del_groups_count
@@ -1420,7 +1414,6 @@ def export_reports(client, all_groups, eligible_ids):
 
         <div class="stats-grid" style="grid-template-columns: repeat(5, 1fr);">
 
-            <!-- Box 1: Total Analyzed (Counts) -->
             <div class="stat-box">
                 <div class="stat-content">
                     <span class="stat-label">Total Analyzed</span>
@@ -1456,7 +1449,6 @@ def export_reports(client, all_groups, eligible_ids):
 
 
 
-            <!-- Box 2: Size to Delete -->
             <div class="stat-box danger" style="background-image: {grad_del};">
                 <div class="stat-content">
                     <span class="stat-label">Size to Delete</span>
@@ -1466,7 +1458,6 @@ def export_reports(client, all_groups, eligible_ids):
                 </div>
             </div>
 
-            <!-- Box 3: Size to Keep -->
             <div class="stat-box success" style="background-image: {grad_keep};">
                 <div class="stat-content">
                     <span class="stat-label">Size to Keep</span>
@@ -1476,7 +1467,6 @@ def export_reports(client, all_groups, eligible_ids):
                 </div>
             </div>
 
-            <!-- Box 4: Torrents to Delete (Count) -->
              <div class="stat-box danger" style="background-image: {grad_torrents_del};">
                 <div class="stat-content">
                     <span class="stat-label">Torrents to Delete</span>
@@ -1486,7 +1476,6 @@ def export_reports(client, all_groups, eligible_ids):
                 </div>
             </div>
 
-            <!-- Box 5: Torrents to Keep (Count) -->
              <div class="stat-box success" style="background-image: {grad_torrents_keep};">
                 <div class="stat-content">
                     <span class="stat-label">Torrents to Keep</span>
@@ -1498,7 +1487,6 @@ def export_reports(client, all_groups, eligible_ids):
         </div>
 
         <div class="metrics-row">
-            <!-- Col 1: All Analyzed -->
             <div class="metric-col">
                 <div class="metric-title">All Analyzed ({stats_analyzed['count']})</div>
                 <div class="metric-item"><span>Average Ratio</span><span class="metric-val">{avg_all_ratio:.2f}</span></div>
@@ -1506,13 +1494,11 @@ def export_reports(client, all_groups, eligible_ids):
                 <div class="metric-item"><span>Total Uploaded</span><span class="metric-val">{total_all_up}</span></div>
             </div>
 
-            <!-- Col 2: Configuration (MOVED HERE) -->
             <div class="metric-col">
                 <div class="metric-title">Configuration</div>
                 {config_html}
             </div>
 
-            <!-- Col 3: Eligible for Deletion -->
             <div class="metric-col" style="border-color: #ff5252;">
                 <div class="metric-title" style="color: #ff5252;">Eligible for Deletion ({stats_eligible['count']})</div>
                 <div class="metric-item"><span>Average Ratio</span><span class="metric-val">{avg_del_ratio:.2f}</span></div>
@@ -1521,7 +1507,6 @@ def export_reports(client, all_groups, eligible_ids):
             </div>
         </div>
 
-        <!-- ... Charts and Table ... -->
         <div class="charts-row">
             <div class="chart-col">
                 <div class="chart-container"><canvas id="countChart"></canvas></div>
@@ -1874,7 +1859,6 @@ def export_reports(client, all_groups, eligible_ids):
 
                     group_torrents = [d['original']] + d['crossseeds']
 
-                    # Check if this group was protected by external match
                     external_path = None
                     for t in group_torrents:
                          if t.get('_external_path'):
@@ -2188,7 +2172,6 @@ def check_no_hard_links(client):
 
     if not DEBUG_MODE:
         _clear_progress_line()
-    # --------------------------------------------------------
 
     SCAN_STATS['group_duration'] = (datetime.now() - t_start).total_seconds()
     print(f"{Colors.GREEN}  ✓ Processing complete in {SCAN_STATS['group_duration']:.2f}s.{Colors.END}")
