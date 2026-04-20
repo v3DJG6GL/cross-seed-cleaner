@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-Cross-Seed Cleaner v2025.12.24 - Simple Tracker-Based Seeder Counting
-For unreliable trackers, count seeders as num_complete + num_incomplete.
+Cross-Seed Cleaner v2026.04.21 - Deduplicate and cleanup cross-seeded torrents in qBittorrent
 """
 
 import urllib.request
@@ -63,7 +62,7 @@ DEBUG_MODE = False
 
 # True = simulate only (nothing is deleted); False = actually delete torrents.
 # The --dry-run / --delete command-line flags override this.
-# In Manual Mode the cleaner always asks you to confirm before deleting, no matter what this is set to.
+# In Manual Mode the script always asks you to confirm before deleting, no matter what this is set to.
 DRY_RUN = True
 
 # True = hide non-eligible groups from the CLI output and the HTML report.
@@ -130,7 +129,7 @@ SORT_ORDER = "asc"
 
 # ─── UNRELIABLE TRACKERS ───────────────────────────────────────────────────
 # Some trackers misreport the seeder count.
-# For trackers listed here, the cleaner estimates the seeder count from the total peer count (seeders + leechers) instead.
+# For trackers listed here, the script estimates the seeder count from the total peer count (seeders + leechers) instead.
 # Patterns are matched against the tracker's domain, with any leading "tracker." or "www." removed.
 # Comma-separated.
 # Each entry is either a plain domain or a regex prefixed with "r:".
@@ -139,7 +138,7 @@ UNRELIABLE_TRACKERS = "hdts-announce.ru,hd-space.pw,tfa.tf"
 
 
 # ─── PATH MAPPINGS (hardcoded) ─────────────────────────────────────────────
-# Remap internal qBittorrent (container) paths to host paths so the cleaner can check files on disk.
+# Remap internal qBittorrent (container) paths to host paths so the script can check files on disk.
 # Format: {"Internal Container Path": "Host Path"}
 # If two mappings could both apply (e.g. "/media" and "/media/downloads" both match "/media/downloads/file.mkv"), the more-specific (longer) one is used.
 # Paths that don't match any prefix are used as-is.
@@ -982,8 +981,10 @@ def sort_torrents(original, crossseeds, by, order):
 
 def print_header():
     w = 262
+    title = "CROSS-SEED CLEANER v2026.04.21"
+    pad = (w - len(title)) // 2
     print(f"\n{Colors.BOLD}{Colors.CYAN}{'═' * w}{Colors.END}")
-    print(f"{Colors.BOLD}{Colors.CYAN}║{' ' * ((w-50)//2)}CROSS-SEED CLEANER v33 - Simplified Seeder Count{' ' * ((w-50)//2)}║{Colors.END}")
+    print(f"{Colors.BOLD}{Colors.CYAN}║{' ' * pad}{title}{' ' * pad}║{Colors.END}")
     print(f"{Colors.BOLD}{Colors.CYAN}{'═' * w}{Colors.END}\n")
 
 
