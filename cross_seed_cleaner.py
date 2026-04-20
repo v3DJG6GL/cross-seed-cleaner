@@ -29,6 +29,7 @@ QBITTORRENT_HOST = "http://localhost:8080"
 QBITTORRENT_USER = "admin"
 QBITTORRENT_PASS = "password"
 
+
 # ─── SAFETY LIMITS ─────────────────────────────────────────────────────────
 # A group is kept (not deleted) if any of its torrents has fewer than X seeders.
 # In No-Hard-Links mode, only the orphan torrent itself is checked.
@@ -48,21 +49,27 @@ MIN_ORIGINAL_SEED_TIME_DAYS = 365
 # Set to 0 to turn off the size check.
 MIN_SIZE_GIB = 15
 
-# ─── RUN MODES ─────────────────────────────────────────────────────────────
-DEBUG_MODE = False                      # Enable verbose logging
-# True = simulate only (nothing is deleted); False = actually delete torrents.
-# The --dry-run / --delete command-line flags override this.
-# In Manual Mode the cleaner always asks you to confirm before deleting, no matter what this is set to.
-DRY_RUN = True
-# True = hide non-eligible groups from the CLI output and the HTML report.
-# This does NOT affect the CSV export — the CSV always contains every group.
-ELIGIBLE_ONLY = True
 
 # ─── REPORT EXPORTS ────────────────────────────────────────────────────────
 # A timestamp is added to each export filename before the extension (e.g. output.html -> output_2026.04.21_14.30.00.html).
 # Leave empty (or pass an empty string via environment variable / command-line) to turn the export off.
 HTML_EXPORT = "output.html"
 CSV_EXPORT = "output.csv"
+
+
+# ─── RUN MODES ─────────────────────────────────────────────────────────────
+# Enable verbose logging
+DEBUG_MODE = False
+
+# True = simulate only (nothing is deleted); False = actually delete torrents.
+# The --dry-run / --delete command-line flags override this.
+# In Manual Mode the cleaner always asks you to confirm before deleting, no matter what this is set to.
+DRY_RUN = True
+
+# True = hide non-eligible groups from the CLI output and the HTML report.
+# This does NOT affect the CSV export — the CSV always contains every group.
+ELIGIBLE_ONLY = True
+
 
 # ─── NO-HARD-LINKS MODE ────────────────────────────────────────────────────
 # When enabled, the script finds torrents in selected qBittorrent categories that have NO hard-links.
@@ -74,13 +81,16 @@ CSV_EXPORT = "output.csv"
 NO_HARD_LINKS_MODE = False
 NO_HARD_LINKS_CATEGORIES = "cross-seed-category,r:autobrr-.*"
 
-# Path(s) to external media libraries to scan for hardlinks.
+
+# ─── EXTERNAL MEDIA PATHS ──────────────────────────────────────────────────
+# Path(s) to external media libraries to scan for hardlinks (used in No-Hard-Links mode).
 # Supports:
 # 1. Comma-separated paths:         "/mnt/movies, /mnt/tv"
 # 2. Wildcards (* = anything, ? = one character, [abc] = one of the listed characters): "/mnt/users/*"
 # 3. Brace groups {a,b,c} expand into multiple paths (not nested): "/mnt/media/{movies,tv,anime}"
 # 4. Mixed — combine any of the above: "/mnt/local/{movies,tv}, /mnt/remote/user_*"
 EXTERNAL_MEDIA_PATHS = "/mnt/hdd-pool/userdata/media/{user_1,user_2,user_3}"
+
 
 # ─── CATEGORY FILTERING ────────────────────────────────────────────────────
 # CATEGORY_FILTER_MODE applies to the ORIGINAL torrent's category only. Choose one:
@@ -100,6 +110,7 @@ CATEGORY_FILTER_MODE = "block"
 CATEGORY_ALLOWLIST = ["sonarr-imported", "radarr-imported", "lidarr-imported", "r:.*-allowsuffix$"]
 CATEGORY_BLOCKLIST = ["freeleech-orpheus", "r:.*-blocksuffix$"]
 
+
 # ─── SORTING ───────────────────────────────────────────────────────────────
 # SORT_BY — sort field for the CLI table and for group-processing order. Choose one:
 #   "seeders" / "seeds" = Number of active seeders (aliases)
@@ -116,6 +127,7 @@ SORT_BY = "name"
 #   "desc" = Descending (Largest/Newest first)
 SORT_ORDER = "asc"
 
+
 # ─── UNRELIABLE TRACKERS ───────────────────────────────────────────────────
 # Some trackers misreport the seeder count.
 # For trackers listed here, the cleaner estimates the seeder count from the total peer count (seeders + leechers) instead.
@@ -125,10 +137,11 @@ SORT_ORDER = "asc"
 # Regex patterns match from the start of the domain — add "$" at the end to require a full match.
 UNRELIABLE_TRACKERS = "hdts-announce.ru,hd-space.pw,tfa.tf"
 
+
 # ─── PATH MAPPINGS (hardcoded) ─────────────────────────────────────────────
-# Remap internal (container) paths to host paths so the cleaner can check files on disk.
+# Remap internal qBittorrent (container) paths to host paths so the cleaner can check files on disk.
 # Format: {"Internal Container Path": "Host Path"}
-# If a path starts with more than one listed prefix, the longest one wins.
+# If two mappings could both apply (e.g. "/media" and "/media/downloads" both match "/media/downloads/file.mkv"), the more-specific (longer) one is used.
 # Paths that don't match any prefix are used as-is.
 # Cannot be overridden by environment variable or command-line.
 PATH_MAPPINGS = {
