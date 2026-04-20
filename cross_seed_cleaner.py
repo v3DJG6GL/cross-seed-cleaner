@@ -18,58 +18,59 @@ from collections import defaultdict
 from datetime import datetime
 
 # ============================================================================
-# 1. DEFAULTS (Lowest Priority)
+# 1. SETTINGS (edit these; ENV vars and CLI flags override at startup)
 # ============================================================================
 # Connection details for qBittorrent WebUI
-DEFAULT_QBITTORRENT_HOST = "http://localhost:8080"
-DEFAULT_QBITTORRENT_USER = "admin"
-DEFAULT_QBITTORRENT_PASS = "password"
+QBITTORRENT_HOST = "http://localhost:8080"
+QBITTORRENT_USER = "admin"
+QBITTORRENT_PASS = "password"
 
 # Global Safety: Group is skipped/kept if ANY torrent (Original or Cross-Seed) has fewer than X seeders
-DEFAULT_MIN_SEEDERS = 4
+MIN_SEEDERS = 4
 
 # Group Safety: Group is skipped/kept if total count (Original + Cross-Seeds) exceeds X items
-DEFAULT_MAX_TORRENTS_IN_GROUP = 6
+MAX_TORRENTS_IN_GROUP = 6
 
 # Original Criteria: The ORIGINAL torrent must be seeding > X days to allow deletion of its cross-seeds
-DEFAULT_MIN_DAYS = 365
+MIN_ORIGINAL_SEED_TIME_DAYS = 365
 
 # Original Criteria: The ORIGINAL torrent must be > X GiB to allow deletion of its cross-seeds (0 = disable)
-DEFAULT_MIN_SIZE_GIB = 15  # 0 = no minimum size filter
+MIN_SIZE_GIB = 15
 
 # Helper flags
-DEFAULT_DEBUG = False                   # Enable verbose logging
-DEFAULT_DRY_RUN = True                  # True = simulate only (no deletions), False = actually delete torrents
-DEFAULT_ELIGIBLE_ONLY = True            # True = only show groups containing deletable candidates in reports
+DEBUG_MODE = False                      # Enable verbose logging
+DRY_RUN = True                          # True = simulate only (no deletions), False = actually delete torrents
+ELIGIBLE_ONLY = True                    # True = only show groups containing deletable candidates in reports
 
 # Report filenames
-DEFAULT_HTML_EXPORT = "output.html"     # None means disabled
-DEFAULT_CSV_EXPORT = "output.csv"       # None means disabled
+HTML_EXPORT = "output.html"             # None means disabled
+CSV_EXPORT = "output.csv"               # None means disabled
 
-# Remap internal container paths to host paths for file checking
-# Format: {"Internal Container Path": "Host Path"}
-PATH_MAPPINGS = {
-    "/media/downloads/torrents": "/mnt/hdd-pool/userdata/media/downloads/torrents",
-    "/media/downloads/freeleech": "/mnt/hdd-pool/appdata/qbittorrent/freeleech",
-}
-_SORTED_PATH_MAPPING_PREFIXES = sorted(PATH_MAPPINGS.keys(), key=len, reverse=True)
+# No Hard Links Mode
+# When enabled, the script finds torrents in selected qBittorrent categories that have NO hard-links.
+# Category selection supports:
+# - Exact match: "cross-seed-links"
+# - Regex match:  prefix with "r:" (Python regex), e.g. "r:autobrr-.*"
+# - Combined  "cross-seed-category,r:autobrr-.*"
+NO_HARD_LINKS_MODE = False
+NO_HARD_LINKS_CATEGORIES = "cross-seed-category,r:autobrr-.*"
 
+# Path(s) to external media libraries to scan for hardlinks.
+# Supports:
+# 1. Comma-separated: "/mnt/movies, /mnt/tv"
+# 2. Wildcards (*):   "/mnt/users/*" (scans all subfolders)
+# 3. Brace Expansion: "/mnt/media/{movies,tv,anime}" (scans specific folders)
+# 4. Mixed:           "/mnt/local/{movies,tv}, /mnt/remote/user_*"
+EXTERNAL_MEDIA_PATHS = "/mnt/hdd-pool/userdata/media/{user_1,user_2,user_3}"
 
-# Scope: Applies to the ORIGINAL torrent's category only.
+# Category filter mode. Applies to the ORIGINAL torrent's category only.
 # Modes:
 #   "allow" = Only process groups where Original matches ALLOWLIST
 #   "block" = Skip groups where Original matches BLOCKLIST
 #   "both"  = Must match ALLOWLIST *and* NOT match BLOCKLIST
 #   "none"  = Disable category filtering (process everything)
-CATEGORY_FILTER_MODE = os.environ.get("CATEGORY_FILTER_MODE", "block")
+CATEGORY_FILTER_MODE = "block"
 _VALID_CATEGORY_FILTER_MODES = {"none", "allow", "block", "both"}
-
-# Filter Lists. Support exact match or Regex (prefix with 'r:').
-# Examples:
-#   "Movies"       -> Exact match for category "Movies"
-#   "r:.*-4k$"     -> Regex match (e.g. matches "Movies-4k", "TV-4k") , "r:autobrr-.*"
-CATEGORY_ALLOWLIST = ["sonarr-imported", "radarr-imported", "lidarr-imported", "r:.*-allowsuffix$"]
-CATEGORY_BLOCKLIST = ["freeleech-orpheus", "r:.*-blocksuffix$"]
 
 # Sorting for CLI output (CLI Table & Group processing order)
 # Options:
@@ -79,41 +80,35 @@ CATEGORY_BLOCKLIST = ["freeleech-orpheus", "r:.*-blocksuffix$"]
 #   "uploaded" = Total uploaded amount
 #   "added"    = Date added (useful to see oldest first)
 #   "name"     = Name of torrent
-SORT_BY = os.environ.get("SORT_BY", "name")
+SORT_BY = "name"
 _VALID_SORT_BY = {"seeders", "seeds", "ratio", "size", "uploaded", "added", "name", "time"}
 
 # Sorting Order
 # Options:
 #   "asc"  = Ascending (Smallest/Oldest first)
 #   "desc" = Descending (Largest/Newest first)
-SORT_ORDER = os.environ.get("SORT_ORDER", "asc")
+SORT_ORDER = "asc"
 _VALID_SORT_ORDER = {"asc", "desc"}
-
 
 # Trackers that report incorrect seeder counts (fallback to peer list counting)
 # Comma-separated domains or regex patterns (e.g., "tracker.bad.com,r:.*\.bad\.net")
-UNRELIABLE_TRACKER_ENV = os.environ.get("UNRELIABLE_TRACKERS", "hdts-announce.ru,hd-space.pw,tfa.tf")
-if UNRELIABLE_TRACKER_ENV:
-    UNRELIABLE_TRACKERS = [t.strip() for t in UNRELIABLE_TRACKER_ENV.split(",") if t.strip()]
-else:
-    UNRELIABLE_TRACKERS = []
+UNRELIABLE_TRACKERS = "hdts-announce.ru,hd-space.pw,tfa.tf"
 
-# No Hard Links Mode
-# When enabled, the script finds torrents in selected qBittorrent categories that have NO hard-links.
-# Category selection supports:
-# - Exact match: "cross-seed-links"
-# - Regex match:  prefix with "r:" (Python regex), e.g. "r:autobrr-.*"
-# - Combined  "cross-seed-category,r:autobrr-.*"
-DEFAULT_NO_HARD_LINKS_MODE = False
-DEFAULT_NO_HARD_LINKS_CATEGORIES = "cross-seed-category,r:autobrr-.*"
+# Hardcoded — no ENV/CLI override
+# Remap internal container paths to host paths for file checking
+# Format: {"Internal Container Path": "Host Path"}
+PATH_MAPPINGS = {
+    "/media/downloads/torrents": "/mnt/hdd-pool/userdata/media/downloads/torrents",
+    "/media/downloads/freeleech": "/mnt/hdd-pool/appdata/qbittorrent/freeleech",
+}
+_SORTED_PATH_MAPPING_PREFIXES = sorted(PATH_MAPPINGS.keys(), key=len, reverse=True)
 
-# Path(s) to external media libraries to scan for hardlinks.
-# Supports:
-# 1. Comma-separated: "/mnt/movies, /mnt/tv"
-# 2. Wildcards (*):   "/mnt/users/*" (scans all subfolders)
-# 3. Brace Expansion: "/mnt/media/{movies,tv,anime}" (scans specific folders)
-# 4. Mixed:           "/mnt/local/{movies,tv}, /mnt/remote/user_*"
-DEFAULT_EXTERNAL_MEDIA_PATHS = "/mnt/hdd-pool/userdata/media/{user_1,user_2,user_3}"
+# Filter Lists. Support exact match or Regex (prefix with 'r:').
+# Examples:
+#   "Movies"       -> Exact match for category "Movies"
+#   "r:.*-4k$"     -> Regex match (e.g. matches "Movies-4k", "TV-4k") , "r:autobrr-.*"
+CATEGORY_ALLOWLIST = ["sonarr-imported", "radarr-imported", "lidarr-imported", "r:.*-allowsuffix$"]
+CATEGORY_BLOCKLIST = ["freeleech-orpheus", "r:.*-blocksuffix$"]
 
 # ============================================================================
 # 2. CONFIGURATION LOADER (CLI > ENV > DEFAULTS)
@@ -144,21 +139,21 @@ def _validate_config():
 
 
 def get_config():
-    env_host = os.environ.get("QBITTORRENT_HOST", DEFAULT_QBITTORRENT_HOST)
-    env_user = os.environ.get("QBITTORRENT_USER", DEFAULT_QBITTORRENT_USER)
-    env_pass = os.environ.get("QBITTORRENT_PASS", DEFAULT_QBITTORRENT_PASS)
-    env_min_seeders = int(os.environ.get("MIN_SEEDERS", DEFAULT_MIN_SEEDERS))
-    env_max_group = int(os.environ.get("MAX_TORRENTS_IN_GROUP", DEFAULT_MAX_TORRENTS_IN_GROUP))
-    env_min_days = float(os.environ.get("MIN_ORIGINAL_SEED_TIME_DAYS", DEFAULT_MIN_DAYS))
-    env_min_size_gib = float(os.environ.get("MIN_SIZE_GIB", DEFAULT_MIN_SIZE_GIB))
-    env_debug = str2bool(os.environ.get("DEBUG_MODE", str(DEFAULT_DEBUG)))
-    env_dry_run = str2bool(os.environ.get("DRY_RUN", str(DEFAULT_DRY_RUN)))
-    env_eligible_only = str2bool(os.environ.get("ELIGIBLE_ONLY", str(DEFAULT_ELIGIBLE_ONLY)))
-    env_html_export = os.environ.get("HTML_EXPORT", DEFAULT_HTML_EXPORT)
-    env_csv_export = os.environ.get("CSV_EXPORT", DEFAULT_CSV_EXPORT)
-    env_no_hard_links_mode = str2bool(os.environ.get("NO_HARD_LINKS_MODE", str(DEFAULT_NO_HARD_LINKS_MODE)))
-    env_no_hard_links_cats = os.environ.get("NO_HARD_LINKS_CATEGORIES", DEFAULT_NO_HARD_LINKS_CATEGORIES)
-    env_ext_media_paths = os.environ.get("EXTERNAL_MEDIA_PATHS", DEFAULT_EXTERNAL_MEDIA_PATHS)
+    env_host = os.environ.get("QBITTORRENT_HOST", QBITTORRENT_HOST)
+    env_user = os.environ.get("QBITTORRENT_USER", QBITTORRENT_USER)
+    env_pass = os.environ.get("QBITTORRENT_PASS", QBITTORRENT_PASS)
+    env_min_seeders = int(os.environ.get("MIN_SEEDERS", MIN_SEEDERS))
+    env_max_group = int(os.environ.get("MAX_TORRENTS_IN_GROUP", MAX_TORRENTS_IN_GROUP))
+    env_min_days = float(os.environ.get("MIN_ORIGINAL_SEED_TIME_DAYS", MIN_ORIGINAL_SEED_TIME_DAYS))
+    env_min_size_gib = float(os.environ.get("MIN_SIZE_GIB", MIN_SIZE_GIB))
+    env_debug = str2bool(os.environ.get("DEBUG_MODE", str(DEBUG_MODE)))
+    env_dry_run = str2bool(os.environ.get("DRY_RUN", str(DRY_RUN)))
+    env_eligible_only = str2bool(os.environ.get("ELIGIBLE_ONLY", str(ELIGIBLE_ONLY)))
+    env_html_export = os.environ.get("HTML_EXPORT", HTML_EXPORT)
+    env_csv_export = os.environ.get("CSV_EXPORT", CSV_EXPORT)
+    env_no_hard_links_mode = str2bool(os.environ.get("NO_HARD_LINKS_MODE", str(NO_HARD_LINKS_MODE)))
+    env_no_hard_links_cats = os.environ.get("NO_HARD_LINKS_CATEGORIES", NO_HARD_LINKS_CATEGORIES)
+    env_ext_media_paths = os.environ.get("EXTERNAL_MEDIA_PATHS", EXTERNAL_MEDIA_PATHS)
 
     parser = argparse.ArgumentParser(description='Cross-Seed Cleaner: Deduplicate and cleanup torrents.')
     parser.add_argument('--host', default=env_host, help='qBittorrent Host')
@@ -191,7 +186,6 @@ def get_config():
     elif args.delete:
         final_dry_run = False
 
-    _validate_config()
     return args, final_dry_run
 
 
@@ -313,6 +307,14 @@ if HTML_EXPORT:
 NO_HARD_LINKS_MODE = ARGS.no_hard_links_mode
 NO_HARD_LINKS_CATEGORIES = [c.strip().lower() for c in ARGS.no_hard_links_categories.split(',') if c.strip()] if ARGS.no_hard_links_categories else []
 EXTERNAL_MEDIA_PATHS = smart_split_paths(ARGS.external_media_paths) if ARGS.external_media_paths else []
+
+CATEGORY_FILTER_MODE = os.environ.get("CATEGORY_FILTER_MODE", CATEGORY_FILTER_MODE)
+SORT_BY = os.environ.get("SORT_BY", SORT_BY)
+SORT_ORDER = os.environ.get("SORT_ORDER", SORT_ORDER)
+_UNRELIABLE_RAW = os.environ.get("UNRELIABLE_TRACKERS", UNRELIABLE_TRACKERS)
+UNRELIABLE_TRACKERS = [t.strip() for t in _UNRELIABLE_RAW.split(",") if t.strip()] if _UNRELIABLE_RAW else []
+
+_validate_config()
 
 SCAN_STATS = {
     'files_scanned': 0,
