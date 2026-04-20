@@ -247,6 +247,9 @@ _ANSI_RE = re.compile(r'\033\[[0-9;]+m')
 def strip_colors(text):
     return _ANSI_RE.sub('', text)
 
+def bold(text):
+    return f"{Colors.BOLD}{text}{Colors.END}"
+
 ARGS, DRY_RUN = get_config()
 
 QBITTORRENT_HOST = ARGS.host
@@ -849,27 +852,23 @@ def print_config():
         if s == "None": return f"{Colors.DIM}None{Colors.END}"
         return s
 
-    def b(text):
-        """Bold text helper"""
-        return f"{Colors.BOLD}{text}{Colors.END}"
-
     rows = [
-        [b("Execution Mode"), f"{mode_color}{mode_text}{Colors.END}"],
-        [b("Min Seeders"), str(MIN_SEEDERS)],
-        [b("Min Seed Time"), f"{MIN_ORIGINAL_SEED_TIME_DAYS} days"],
-        [b("Min Size"), f"{MIN_SIZE_GIB} GiB" + (" (no limit)" if MIN_SIZE_GIB == 0 else "")],
-        [b("Max Group Size"), str(MAX_TORRENTS_IN_GROUP)],
-        [b("Category Mode"), CATEGORY_FILTER_MODE],
-        [b("Cat Allowlist"), cat_allow_str],
-        [b("Cat Blocklist"), cat_block_str],
-        [b("Unreliable Trackers"), unreliable_str],
-        [b("Eligible Only"), c(ELIGIBLE_ONLY)],
-        [b("Dry Run"), c(DRY_RUN)],
-        [b("Debug Mode"), c(DEBUG_MODE)],
-        [b("No Hard Links Mode"), c(NO_HARD_LINKS_MODE)],
-        [b("No Hard Links Cat"), no_hard_links_cat if NO_HARD_LINKS_CATEGORIES else c("None")],
-        [b("HTML Export"), c(HTML_EXPORT or "Disabled")],
-        [b("CSV Export"), c(CSV_EXPORT or "Disabled")],
+        [bold("Execution Mode"), f"{mode_color}{mode_text}{Colors.END}"],
+        [bold("Min Seeders"), str(MIN_SEEDERS)],
+        [bold("Min Seed Time"), f"{MIN_ORIGINAL_SEED_TIME_DAYS} days"],
+        [bold("Min Size"), f"{MIN_SIZE_GIB} GiB" + (" (no limit)" if MIN_SIZE_GIB == 0 else "")],
+        [bold("Max Group Size"), str(MAX_TORRENTS_IN_GROUP)],
+        [bold("Category Mode"), CATEGORY_FILTER_MODE],
+        [bold("Cat Allowlist"), cat_allow_str],
+        [bold("Cat Blocklist"), cat_block_str],
+        [bold("Unreliable Trackers"), unreliable_str],
+        [bold("Eligible Only"), c(ELIGIBLE_ONLY)],
+        [bold("Dry Run"), c(DRY_RUN)],
+        [bold("Debug Mode"), c(DEBUG_MODE)],
+        [bold("No Hard Links Mode"), c(NO_HARD_LINKS_MODE)],
+        [bold("No Hard Links Cat"), no_hard_links_cat if NO_HARD_LINKS_CATEGORIES else c("None")],
+        [bold("HTML Export"), c(HTML_EXPORT or "Disabled")],
+        [bold("CSV Export"), c(CSV_EXPORT or "Disabled")],
     ]
 
     # Handle Path (Multi-line) to prevent overflow
@@ -880,26 +879,26 @@ def print_config():
             while len(path) > 118:
                 chunk = path[:118]
                 path = path[118:]
-                label = b("External Media Paths") if first else ""
+                label = bold("External Media Paths") if first else ""
                 rows.append([label, chunk])
                 first = False
 
             if path:
-                label = b("External Media Paths") if first else ""
+                label = bold("External Media Paths") if first else ""
                 rows.append([label, path])
                 first = False
     else:
-        rows.append([b("External Media Paths"), c("None")])
+        rows.append([bold("External Media Paths"), c("None")])
 
 
     if PATH_MAPPINGS:
         first = True
         for k, v in PATH_MAPPINGS.items():
-            label = b("Path Mappings") if first else ""
+            label = bold("Path Mappings") if first else ""
             rows.append([label, f"{k} -> {v}"])
             first = False
     else:
-        rows.append([b("Path Mappings"), c("None")])
+        rows.append([bold("Path Mappings"), c("None")])
 
     print(f"\n{Colors.BOLD}CONFIGURATION:{Colors.END}")
     Table.render([f"{Colors.BOLD}Setting{Colors.END}", f"{Colors.BOLD}Value{Colors.END}"], rows, [25, 120])
@@ -1057,28 +1056,25 @@ def print_summary(s):
     p_del = (s['size_del'] / s['size_total'] * 100) if s['size_total'] > 0 else 0
     p_keep = 100 - p_del
 
-    def b(text):
-        return f"{Colors.BOLD}{text}{Colors.END}"
-
     rows = []
 
     # Execution Mode
-    rows.append([b("Execution Mode"), f"{mode_color}{mode_text}{Colors.END}"])
+    rows.append([bold("Execution Mode"), f"{mode_color}{mode_text}{Colors.END}"])
 
     # Group Statistics
-    rows.append([b("Groups Analyzed"), str(s['groups_total'])])
-    rows.append([b("Groups Eligible for Deletion"), f"{Colors.RED}{s['groups_del']}{Colors.END}"])
-    rows.append([b("Groups to Keep"), f"{Colors.GREEN}{s['groups_keep']}{Colors.END}"])
+    rows.append([bold("Groups Analyzed"), str(s['groups_total'])])
+    rows.append([bold("Groups Eligible for Deletion"), f"{Colors.RED}{s['groups_del']}{Colors.END}"])
+    rows.append([bold("Groups to Keep"), f"{Colors.GREEN}{s['groups_keep']}{Colors.END}"])
 
     # Torrent Statistics
-    rows.append([b("Torrents Analyzed"), f"{s['torrents_total']} ({s['torrents_orig']} originals + {s['torrents_xs']} cross-seeds)"])
-    rows.append([b("Torrents to Delete"), f"{Colors.RED}{s['torrents_del']}{Colors.END}"])
-    rows.append([b("Torrents to Keep"), f"{Colors.GREEN}{s['torrents_keep']}{Colors.END}"])
+    rows.append([bold("Torrents Analyzed"), f"{s['torrents_total']} ({s['torrents_orig']} originals + {s['torrents_xs']} cross-seeds)"])
+    rows.append([bold("Torrents to Delete"), f"{Colors.RED}{s['torrents_del']}{Colors.END}"])
+    rows.append([bold("Torrents to Keep"), f"{Colors.GREEN}{s['torrents_keep']}{Colors.END}"])
 
     # Size Statistics
-    rows.append([b("Total Size Analyzed"), format_size_smart(s['size_total'])])
-    rows.append([b("Size to Delete"), f"{Colors.RED}{format_size_smart(s['size_del'])} ({p_del:.1f}%){Colors.END}"])
-    rows.append([b("Size to Keep"), f"{Colors.GREEN}{format_size_smart(s['size_keep'])} ({p_keep:.1f}%){Colors.END}"])
+    rows.append([bold("Total Size Analyzed"), format_size_smart(s['size_total'])])
+    rows.append([bold("Size to Delete"), f"{Colors.RED}{format_size_smart(s['size_del'])} ({p_del:.1f}%){Colors.END}"])
+    rows.append([bold("Size to Keep"), f"{Colors.GREEN}{format_size_smart(s['size_keep'])} ({p_keep:.1f}%){Colors.END}"])
 
     print()
     w = 262
