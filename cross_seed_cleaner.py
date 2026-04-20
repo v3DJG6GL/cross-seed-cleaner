@@ -2121,8 +2121,8 @@ def check_no_hard_links(client):
 
     identity_map = defaultdict(list)
     for t in torrents:
-        identity = get_path_identity(t)
-        identity_map[identity].append(t)
+        t['_identity'] = get_path_identity(t)
+        identity_map[t['_identity']].append(t)
 
     def is_target_category(cat):
         if not cat: return False
@@ -2144,7 +2144,7 @@ def check_no_hard_links(client):
             sys.stdout.write(f"\r{Colors.DIM}  ... Analyzed {idx}/{total_to_process} candidates...{Colors.END}")
             sys.stdout.flush()
 
-        ident = get_path_identity(t)
+        ident = t['_identity']
 
         if len(identity_map[ident]) >= 2:
             continue
