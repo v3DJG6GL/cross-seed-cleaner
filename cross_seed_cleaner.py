@@ -812,6 +812,86 @@ def get_tracker_name(client, h):
     domain = get_tracker_domain(client, h)
     return domain[:30] if domain else "Unknown"
 
+
+def evaluate_group(d):
+    """Decide whether a group is eligible for deletion and why not.
+
+    Returns a dict with:
+      - eligible: bool
+      - reasons: list[str] of semantic codes (EXTERNAL_LINK, PATH_ERROR,
+        LOW_SEEDS, SMALL_SIZE, LOW_TIME, TOO_MANY, CATEGORY_FILTER)
+      - all_torrents: torrents treated as the eligibility unit (what gets
+        deleted if eligible)
+      - externally_linked: bool
+    """
+    orig = d['original']
+    xs = d.get('crossseeds', [])
+
+    if NO_HARD_LINKS_MODE:
+        all_t = [orig]
+        externally_linked = bool(orig.get('_external_hardlink'))
+        seeds_ok = orig.get('_seeder_count', 0) >= MIN_SEEDERS
+        path_ok = not orig.get('_path_error')
+        count_ok = True
+    else:
+        all_t = [orig] + xs
+        externally_linked = any(t.get('_external_hardlink') for t in all_t)
+        seeds_ok = all(t.get('_seeder_count', 0) >= MIN_SEEDERS for t in all_t)
+        path_ok = True
+        count_ok = len(all_t) < MAX_TORRENTS_IN_GROUP
+
+    size_ok = orig.get('size', 0) >= MIN_SIZE_BYTES
+    time_ok = orig.get('seeding_time', 0) >= MIN_ORIGINAL_SEED_TIME_HOURS * 3600
+    cat_ok = category_allowed(orig.get('category', ''))
+
+    reasons = []
+    if externally_linked: reasons.append("EXTERNAL_LINK")
+    if NO_HARD_LINKS_MODE and not path_ok: reasons.append("PATH_ERROR")
+    if not seeds_ok: reasons.append("LOW_SEEDS")
+    if not size_ok: reasons.append("SMALL_SIZE")
+    if not time_ok: reasons.append("LOW_TIME")
+    if not count_ok: reasons.append("TOO_MANY")
+    if not cat_ok: reasons.append("CATEGORY_FILTER")
+
+    return {
+        "eligible": not reasons,
+        "reasons": reasons,
+        "all_torrents": all_t,
+        "externally_linked": externally_linked,
+    }
+
+
+def _reason_text(code):
+    if code == "EXTERNAL_LINK": return "External Hardlink Found"
+    if code == "PATH_ERROR": return "Path Error"
+    if code == "LOW_SEEDS": return f"Low Seeds < {MIN_SEEDERS}"
+    if code == "SMALL_SIZE": return f"Small Size < {MIN_SIZE_GIB}GiB"
+    if code == "LOW_TIME": return f"Low Time < {MIN_ORIGINAL_SEED_TIME_DAYS}d"
+    if code == "TOO_MANY": return f"> {MAX_TORRENTS_IN_GROUP} items"
+    if code == "CATEGORY_FILTER": return "Category Filter"
+    return code
+
+
+_REASON_CLI_COLOR = {
+    "EXTERNAL_LINK": Colors.BLUE,
+    "PATH_ERROR": Colors.RED,
+    "LOW_SEEDS": Colors.RED,
+    "SMALL_SIZE": Colors.RED,
+    "LOW_TIME": Colors.RED,
+    "TOO_MANY": Colors.ORANGE,
+    "CATEGORY_FILTER": Colors.ORANGE,
+}
+
+_REASON_HTML_ICON = {
+    "EXTERNAL_LINK": "🔗",
+    "PATH_ERROR": "⚠️",
+    "LOW_SEEDS": "🌱",
+    "SMALL_SIZE": "💾",
+    "LOW_TIME": "⏳",
+    "TOO_MANY": "📦",
+    "CATEGORY_FILTER": "🏷️",
+}
+
 def sort_torrents(o, x, by, order):
     rev = (order == "desc")
     key_map = {'seeds': '_seeder_count', 'uploaded': 'uploaded', 'added': 'added_on',
@@ -907,63 +987,23 @@ def print_config():
 
 
 def print_group(client, orig, xs, num, total):
-    if NO_HARD_LINKS_MODE:
-        all_t = [orig]
-        # Check criteria
-        seeds_ok = orig.get('_seeder_count', 0) >= MIN_SEEDERS
-        size_ok = orig.get('size', 0) >= MIN_SIZE_BYTES
-        time_ok = orig.get('seeding_time', 0) >= MIN_ORIGINAL_SEED_TIME_HOURS * 3600
-        cat_ok = category_allowed(orig.get('category', ''))
-        path_ok = not orig.get('_path_error')
+    result = evaluate_group({'original': orig, 'crossseeds': xs})
+    eligible = result['eligible']
+    all_t = result['all_torrents']
+    is_externally_linked = result['externally_linked']
 
-        # Check External Hardlink
-        is_externally_linked = orig.get('_external_hardlink', False)
-        external_ok = not is_externally_linked
+    if ELIGIBLE_ONLY and not eligible:
+        return eligible, all_t
 
-        # Combine (Max group size is ignored for orphans)
-        eligible = all([seeds_ok, time_ok, size_ok, cat_ok, path_ok, external_ok])
+    status = f"{Colors.GREEN}✓ ELIGIBLE{Colors.END}" if eligible else f"{Colors.YELLOW}✗ KEPT{Colors.END} |"
+    reasons = [f"{_REASON_CLI_COLOR[code]}{_reason_text(code)}{Colors.END}" for code in result['reasons']]
 
-        if ELIGIBLE_ONLY and not eligible:
-            return eligible, [orig]
-
-        status = f"{Colors.GREEN}✓ ELIGIBLE{Colors.END}" if eligible else f"{Colors.YELLOW}✗ KEPT{Colors.END} |"
-
-        reasons = []
-        if is_externally_linked: reasons.append(f"{Colors.BLUE}External Hardlink Found{Colors.END}")
-        if not path_ok: reasons.append(f"{Colors.RED}Path Error{Colors.END}")
-        if not seeds_ok: reasons.append(f"{Colors.RED}Low Seeds < {MIN_SEEDERS}{Colors.END}")
-        if not size_ok: reasons.append(f"{Colors.RED}Small Size < {MIN_SIZE_GIB}GiB{Colors.END}")
-        if not time_ok: reasons.append(f"{Colors.RED}Low Time < {MIN_ORIGINAL_SEED_TIME_DAYS}d{Colors.END}")
-        if not cat_ok: reasons.append(f"{Colors.ORANGE}Category Filter{Colors.END}")
-
-        reason_str = " " + " | ".join(reasons) if reasons else " Orphan (No Hard Link)"
+    if reasons:
+        reason_str = " " + " | ".join(reasons)
+    elif NO_HARD_LINKS_MODE:
+        reason_str = " Orphan (No Hard Link)"
     else:
-        all_t = [orig] + xs
-
-        seeds_ok = all(t.get('_seeder_count', 0) >= MIN_SEEDERS for t in all_t)
-        size_ok = orig.get('size', 0) >= MIN_SIZE_BYTES
-        time_ok = orig.get('seeding_time', 0) >= MIN_ORIGINAL_SEED_TIME_HOURS * 3600
-        count_ok = len(all_t) < MAX_TORRENTS_IN_GROUP
-        cat_ok = category_allowed(orig.get('category', ''))
-
-        is_externally_linked = any(t.get('_external_hardlink', False) for t in all_t)
-        external_ok = not is_externally_linked
-
-        eligible = all([seeds_ok, count_ok, time_ok, cat_ok, size_ok, external_ok])
-
-        if ELIGIBLE_ONLY and not eligible:
-            return eligible, all_t
-
-        status = f"{Colors.GREEN}✓ ELIGIBLE{Colors.END}" if eligible else f"{Colors.YELLOW}✗ KEPT{Colors.END} |"
-        reasons = []
-
-        if is_externally_linked: reasons.append(f"{Colors.BLUE}External Hardlink Found{Colors.END}")
-        if not seeds_ok: reasons.append(f"{Colors.RED}Low Seeds < {MIN_SEEDERS}{Colors.END}")
-        if not size_ok: reasons.append(f"{Colors.RED}Small Size < {MIN_SIZE_GIB}GiB{Colors.END}")
-        if not time_ok: reasons.append(f"{Colors.RED}Low Time < {MIN_ORIGINAL_SEED_TIME_DAYS}d{Colors.END}")
-        if not count_ok: reasons.append(f"{Colors.ORANGE}> {MAX_TORRENTS_IN_GROUP} items{Colors.END}")
-        if not cat_ok: reasons.append(f"{Colors.ORANGE}Category Filter{Colors.END}")
-        reason_str = " " + " | ".join(reasons) if reasons else ""
+        reason_str = ""
 
     print(f"\n{Colors.BOLD}{Colors.BLUE}{'─' * 262}{Colors.END}")
     print(f"{Colors.BOLD}Group {num}/{total}: "
@@ -1175,38 +1215,8 @@ def export_reports(client, all_groups, eligible_ids):
 
         rejection_reasons = []
         if not is_del_group:
-            has_external_link = d['original'].get('_external_hardlink') or any(t.get('_external_hardlink') for t in d['crossseeds'])
-            if has_external_link:
-                rejection_reasons.append({'icon': '🔗', 'text': 'External Hardlink Found'})
-
-            orig = d['original']
-            if NO_HARD_LINKS_MODE:
-                seeds_ok = orig.get('_seeder_count', 0) >= MIN_SEEDERS
-                size_ok = orig.get('size', 0) >= MIN_SIZE_BYTES
-                time_ok = orig.get('seeding_time', 0) >= MIN_ORIGINAL_SEED_TIME_HOURS * 3600
-                cat_ok = category_allowed(orig.get('category', ''))
-                path_ok = not orig.get('_path_error')
-
-                if not path_ok: rejection_reasons.append({'icon': '⚠️', 'text': 'Path Error'})
-                if not seeds_ok: rejection_reasons.append({'icon': '🌱', 'text': f'Low Seeds < {MIN_SEEDERS}'})
-                if not size_ok: rejection_reasons.append({'icon': '💾', 'text': f'Small Size < {MIN_SIZE_GIB}GiB'})
-                if not time_ok: rejection_reasons.append({'icon': '⏳', 'text': f'Low Time < {MIN_ORIGINAL_SEED_TIME_DAYS}d'})
-                if not cat_ok: rejection_reasons.append({'icon': '🏷️', 'text': 'Category Filter'})
-            else:
-                xs = d['crossseeds']
-                all_t = [orig] + xs
-                seeds_ok = all(t.get('_seeder_count', 0) >= MIN_SEEDERS for t in all_t)
-                size_ok = orig.get('size', 0) >= MIN_SIZE_BYTES
-                time_ok = orig.get('seeding_time', 0) >= MIN_ORIGINAL_SEED_TIME_HOURS * 3600
-                count_ok = len(all_t) < MAX_TORRENTS_IN_GROUP
-                cat_ok = category_allowed(orig.get('category', ''))
-
-                if not seeds_ok: rejection_reasons.append({'icon': '🌱', 'text': f'Low Seeds < {MIN_SEEDERS}'})
-                if not size_ok: rejection_reasons.append({'icon': '💾', 'text': f'Small Size < {MIN_SIZE_GIB}GiB'})
-                if not time_ok: rejection_reasons.append({'icon': '⏳', 'text': f'Low Time < {MIN_ORIGINAL_SEED_TIME_DAYS}d'})
-                if not count_ok: rejection_reasons.append({'icon': '📦', 'text': f'> {MAX_TORRENTS_IN_GROUP} items'})
-                if not cat_ok: rejection_reasons.append({'icon': '🏷️', 'text': 'Category Filter'})
-
+            for code in evaluate_group(d)['reasons']:
+                rejection_reasons.append({'icon': _REASON_HTML_ICON[code], 'text': _reason_text(code)})
 
         report_rows.append({
             'idx': idx,
