@@ -242,17 +242,6 @@ def strip_colors(text):
 
 ARGS, DRY_RUN = get_config()
 
-_VENDOR_CHARTJS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'vendor', 'chart.js', 'chart.umd.min.js')
-try:
-    with open(_VENDOR_CHARTJS_PATH, 'r', encoding='utf-8') as _f:
-        CHARTJS_SOURCE = _f.read()
-except FileNotFoundError:
-    sys.stderr.write(
-        f"ERROR: vendored Chart.js not found at {_VENDOR_CHARTJS_PATH}.\n"
-        f"Run from a full checkout of the repository (the vendor/chart.js/ directory must be present).\n"
-    )
-    sys.exit(1)
-
 QBITTORRENT_HOST = ARGS.host
 QBITTORRENT_USER = ARGS.user
 QBITTORRENT_PASS = ARGS.password
@@ -267,6 +256,19 @@ MANUAL_MODE = ARGS.manual
 ELIGIBLE_ONLY = ARGS.eligible_only
 HTML_EXPORT = ARGS.html
 CSV_EXPORT = ARGS.csv
+
+CHARTJS_SOURCE = None
+if HTML_EXPORT:
+    _VENDOR_CHARTJS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'vendor', 'chart.js', 'chart.umd.min.js')
+    try:
+        with open(_VENDOR_CHARTJS_PATH, 'r', encoding='utf-8') as _f:
+            CHARTJS_SOURCE = _f.read()
+    except FileNotFoundError:
+        sys.stderr.write(
+            f"ERROR: vendored Chart.js not found at {_VENDOR_CHARTJS_PATH}.\n"
+            f"Run from a full checkout of the repository (the vendor/chart.js/ directory must be present).\n"
+        )
+        sys.exit(1)
 
 
 NO_HARD_LINKS_MODE = ARGS.no_hard_links_mode
