@@ -1006,8 +1006,12 @@ def print_group(client, orig, xs, num, total):
 
         name_str = t.get('name', '')[:105]
 
+        if is_orig:
+            type_label = f"{Colors.BOLD}[ORPHAN]{Colors.END}" if NO_HARD_LINKS_MODE else f"{Colors.BOLD}[ORIGINAL]{Colors.END}"
+        else:
+            type_label = f"{Colors.DIM}[CROSS]{Colors.END}"
         rows.append([
-            f"{Colors.BOLD}[ORPHAN]{Colors.END}" if NO_HARD_LINKS_MODE else (f"{Colors.BOLD}[ORIGINAL]{Colors.END}" if is_orig else f"{Colors.DIM}[CROSS]{Colors.END}"),
+            type_label,
             f"{c_seeds}{seeders}{Colors.END}",
             f"{t.get('ratio', 0.0):.2f}",
             f"{c_size}{format_size_smart(size)}{Colors.END}",
