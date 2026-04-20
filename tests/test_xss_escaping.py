@@ -14,21 +14,21 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def _load_module():
-    """Import cross_seed_cleaner_clean with argv/env stubbed so argparse and
+    """Import cross_seed_cleaner with argv/env stubbed so argparse and
     the env-driven config block don't explode under a test runner."""
     saved_argv = sys.argv
     saved_env = {
         k: os.environ.get(k)
         for k in ("UNRELIABLE_TRACKERS", "CATEGORY_ALLOWLIST", "HTML_EXPORT", "CSV_EXPORT")
     }
-    sys.argv = ["cross_seed_cleaner_clean.py"]
+    sys.argv = ["cross_seed_cleaner.py"]
     os.environ["UNRELIABLE_TRACKERS"] = '<img src=x onerror=alert("unreliable-env")>'
     os.environ["CATEGORY_ALLOWLIST"] = '<script>alert("cat-allow")</script>'
     sys.path.insert(0, REPO_ROOT)
     try:
-        if "cross_seed_cleaner_clean" in sys.modules:
-            del sys.modules["cross_seed_cleaner_clean"]
-        import cross_seed_cleaner_clean as csc  # noqa: E402
+        if "cross_seed_cleaner" in sys.modules:
+            del sys.modules["cross_seed_cleaner"]
+        import cross_seed_cleaner as csc  # noqa: E402
         return csc
     finally:
         sys.argv = saved_argv
