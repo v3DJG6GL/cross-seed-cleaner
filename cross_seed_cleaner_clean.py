@@ -1100,6 +1100,9 @@ def export_reports(client, all_groups, eligible_ids):
             i += 1
         return f"{p:.2f} {units[i]}"
 
+    def _mono_block(lines):
+        return f"<div style='margin-top:2px; font-family:monospace; font-size:10px; color:#aaa; line-height:1.2; word-break:break-all;'>{'<br>'.join(lines)}</div>"
+
     def _h(v):
         return html.escape("" if v is None else str(v), quote=True)
 
@@ -1285,14 +1288,8 @@ def export_reports(client, all_groups, eligible_ids):
     html_out_str = _h(HTML_EXPORT) if HTML_EXPORT else 'Disabled'
     csv_out_str = _h(CSV_EXPORT) if CSV_EXPORT else 'Disabled'
 
-    external_media_paths_html = "None"
-    if EXTERNAL_MEDIA_PATHS:
-        m_lines = [_h(path) for path in EXTERNAL_MEDIA_PATHS]
-        external_media_paths_html = f"<div style='margin-top:2px; font-family:monospace; font-size:10px; color:#aaa; line-height:1.2; word-break:break-all;'>{'<br>'.join(m_lines)}</div>"
-    mappings_html = "None"
-    if PATH_MAPPINGS:
-        m_lines = [f"{_h(k)} → {_h(v)}" for k, v in PATH_MAPPINGS.items()]
-        mappings_html = f"<div style='margin-top:2px; font-family:monospace; font-size:10px; color:#aaa; line-height:1.2; word-break:break-all;'>{'<br>'.join(m_lines)}</div>"
+    external_media_paths_html = _mono_block([_h(path) for path in EXTERNAL_MEDIA_PATHS]) if EXTERNAL_MEDIA_PATHS else "None"
+    mappings_html = _mono_block([f"{_h(k)} → {_h(v)}" for k, v in PATH_MAPPINGS.items()]) if PATH_MAPPINGS else "None"
 
     config_items = [
         f"<b>Min Seeders:</b> {MIN_SEEDERS}",
