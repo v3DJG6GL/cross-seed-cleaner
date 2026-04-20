@@ -20,47 +20,60 @@ from datetime import datetime
 # ============================================================================
 # 1. SETTINGS (edit these; ENV vars and CLI flags override at startup)
 # ============================================================================
-# Connection details for qBittorrent WebUI
+# Connection details for qBittorrent WebUI. HOST must include scheme (http:// or https://)
+# and port if non-default, e.g. "http://localhost:8080". No trailing slash.
 QBITTORRENT_HOST = "http://localhost:8080"
 QBITTORRENT_USER = "admin"
 QBITTORRENT_PASS = "password"
 
-# Global Safety: Group is skipped/kept if ANY torrent (Original or Cross-Seed) has fewer than X seeders
+# Global Safety: group kept if any torrent has < X seeders (>= X passes).
+# In NO_HARD_LINKS_MODE, only the orphan (original) is checked.
 MIN_SEEDERS = 4
 
-# Group Safety: Group is skipped/kept if total count (Original + Cross-Seeds) exceeds X items
+# Group Safety: group kept once total count (Original + Cross-Seeds) reaches X items
+# (strict: len < X passes). Not enforced in NO_HARD_LINKS_MODE.
 MAX_TORRENTS_IN_GROUP = 6
 
-# Original Criteria: The ORIGINAL torrent must be seeding > X days to allow deletion of its cross-seeds
+# Original Criteria: the Original must have been seeding at least X days (float allowed)
+# to allow deletion of its cross-seeds.
 MIN_ORIGINAL_SEED_TIME_DAYS = 365
 
-# Original Criteria: The ORIGINAL torrent must be > X GiB to allow deletion of its cross-seeds (0 = disable)
+# Original Criteria: the Original must be at least X GiB (float allowed) to allow deletion
+# of its cross-seeds. 0 disables the size check.
 MIN_SIZE_GIB = 15
 
 # Helper flags
 DEBUG_MODE = False                      # Enable verbose logging
-DRY_RUN = True                          # True = simulate only (no deletions), False = actually delete torrents
-ELIGIBLE_ONLY = True                    # True = only show groups containing deletable candidates in reports
+# True = simulate only (no deletions); False = actually delete torrents.
+# --dry-run / --delete CLI flags override this. In MANUAL_MODE, deletion is always
+# interactive regardless of this setting.
+DRY_RUN = True
+# True = hide non-eligible groups from CLI output and the HTML report. Does NOT affect
+# the CSV export (always includes all groups).
+ELIGIBLE_ONLY = True
 
-# Report filenames
-HTML_EXPORT = "output.html"             # None means disabled
-CSV_EXPORT = "output.csv"               # None means disabled
+# Output filenames; a _<timestamp> suffix is appended before the extension
+# (e.g. output.html -> output_2026.04.21_14.30.00.html). Set to "" via ENV or CLI to disable.
+HTML_EXPORT = "output.html"
+CSV_EXPORT = "output.csv"
 
 # No Hard Links Mode
 # When enabled, the script finds torrents in selected qBittorrent categories that have NO hard-links.
 # Category selection supports:
 # - Exact match: "cross-seed-links"
 # - Regex match:  prefix with "r:" (Python regex), e.g. "r:autobrr-.*"
-# - Combined  "cross-seed-category,r:autobrr-.*"
+# - Combined:     "cross-seed-category,r:autobrr-.*"
+# Note: categories (and r: regex bodies) are lowercased before matching, so uppercase
+# literals or regex patterns will never match.
 NO_HARD_LINKS_MODE = False
 NO_HARD_LINKS_CATEGORIES = "cross-seed-category,r:autobrr-.*"
 
 # Path(s) to external media libraries to scan for hardlinks.
 # Supports:
-# 1. Comma-separated: "/mnt/movies, /mnt/tv"
-# 2. Wildcards (*):   "/mnt/users/*" (scans all subfolders)
-# 3. Brace Expansion: "/mnt/media/{movies,tv,anime}" (scans specific folders)
-# 4. Mixed:           "/mnt/local/{movies,tv}, /mnt/remote/user_*"
+# 1. Comma-separated:             "/mnt/movies, /mnt/tv"
+# 2. Glob wildcards (*, ?, [abc]): "/mnt/users/*" (scans matching paths)
+# 3. Single-level brace expansion: "/mnt/media/{movies,tv,anime}" (not nested)
+# 4. Mixed:                       "/mnt/local/{movies,tv}, /mnt/remote/user_*"
 EXTERNAL_MEDIA_PATHS = "/mnt/hdd-pool/userdata/media/{user_1,user_2,user_3}"
 
 # Category filter mode. Applies to the ORIGINAL torrent's category only.
@@ -73,12 +86,13 @@ CATEGORY_FILTER_MODE = "block"
 
 # Sorting for CLI output (CLI Table & Group processing order)
 # Options:
-#   "seeders"  = Number of active seeders
-#   "ratio"    = Share ratio
-#   "size"     = Torrent size
-#   "uploaded" = Total uploaded amount
-#   "added"    = Date added (useful to see oldest first)
-#   "name"     = Name of torrent
+#   "seeders" / "seeds" = Number of active seeders (aliases)
+#   "ratio"             = Share ratio
+#   "size"              = Torrent size
+#   "uploaded"          = Total uploaded amount
+#   "added"             = Date added (useful to see oldest first)
+#   "time"              = Seeding time
+#   "name"              = Name of torrent (case-insensitive)
 SORT_BY = "name"
 
 # Sorting Order
@@ -87,13 +101,16 @@ SORT_BY = "name"
 #   "desc" = Descending (Largest/Newest first)
 SORT_ORDER = "asc"
 
-# Trackers that report incorrect seeder counts (fallback to peer list counting)
-# Comma-separated domains or regex patterns (e.g., "tracker.bad.com,r:.*\.bad\.net")
+# Trackers whose num_complete field is unreliable; for these, seeder count falls back to
+# num_complete + num_incomplete from /torrents/info (no extra HTTP call).
+# Match is against the display domain with leading 'tracker.' / 'www.' stripped.
+# Comma-separated literals or r:<regex> entries (anchored at start via re.match).
 UNRELIABLE_TRACKERS = "hdts-announce.ru,hd-space.pw,tfa.tf"
 
 # Hardcoded — no ENV/CLI override
-# Remap internal container paths to host paths for file checking
+# Remap internal container paths to host paths for file checking.
 # Format: {"Internal Container Path": "Host Path"}
+# Longest matching prefix wins; paths with no matching prefix pass through normalized.
 PATH_MAPPINGS = {
     "/media/downloads/torrents": "/mnt/hdd-pool/userdata/media/downloads/torrents",
     "/media/downloads/freeleech": "/mnt/hdd-pool/appdata/qbittorrent/freeleech",
@@ -102,7 +119,9 @@ PATH_MAPPINGS = {
 # Filter Lists. Support exact match or Regex (prefix with 'r:').
 # Examples:
 #   "Movies"       -> Exact match for category "Movies"
-#   "r:.*-4k$"     -> Regex match (e.g. matches "Movies-4k", "TV-4k") , "r:autobrr-.*"
+#   "r:.*-4k$"     -> Regex match (e.g. matches "Movies-4k", "TV-4k"); also "r:autobrr-.*"
+# Note: regex is anchored at the start via re.match — add '$' to require a full match,
+# as in "r:.*-4k$". Matching is case-sensitive.
 CATEGORY_ALLOWLIST = ["sonarr-imported", "radarr-imported", "lidarr-imported", "r:.*-allowsuffix$"]
 CATEGORY_BLOCKLIST = ["freeleech-orpheus", "r:.*-blocksuffix$"]
 
