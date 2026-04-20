@@ -1680,6 +1680,7 @@ def export_reports(client, all_groups, eligible_ids):
     <!DOCTYPE html>
     <html>
     <head>
+        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
         <title>Cross-Seed Cleaner Report</title>
         <meta charset="UTF-8">
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
