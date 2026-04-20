@@ -371,7 +371,8 @@ class QBittorrentClient:
                 return json.loads(content)
             except json.JSONDecodeError:
                 return content
-        except:
+        except (urllib.error.URLError, urllib.error.HTTPError, ConnectionError, TimeoutError) as e:
+            debug_log(f"[HTTP] {endpoint} failed: {e}")
             return None
 
     def get_torrents(self):
@@ -497,7 +498,8 @@ def matches_pattern(text, pattern):
     if pattern.startswith("r:"):
         try:
             return bool(re.match(pattern[2:], text))
-        except:
+        except re.error as e:
+            debug_log(f"[REGEX] invalid pattern {pattern!r}: {e}")
             return False
     return text == pattern
 
@@ -511,8 +513,8 @@ def get_tracker_domain(client, torrent_hash):
                 domain = url.split('://')[1].split('/')[0].split(':')[0]
                 domain = domain.replace('tracker.', '').replace('www.', '')
                 return domain
-    except:
-        pass
+    except (urllib.error.URLError, AttributeError, KeyError) as e:
+        debug_log(f"[TRACKER] lookup failed for {torrent_hash}: {e}")
     return None
 
 def is_unreliable_tracker(tracker_domain):
@@ -676,7 +678,7 @@ def load_and_group_torrents(client):
                             matched_path = candidate_path
                         else:
                             debug_log(f"[GROUP]   > Ignoring External Match (Self-Reference): {candidate_path}")
-             except Exception:
+             except (ValueError, IndexError):
                  pass
 
         for t in group:
@@ -1180,7 +1182,7 @@ def export_reports(client, all_groups, eligible_ids):
             try:
                 domain = urllib.parse.urlparse(raw_tracker).netloc
                 if not domain: domain = "Unknown"
-            except:
+            except (ValueError, AttributeError):
                 domain = "Unknown"
 
             if domain not in tracker_stats:
@@ -1951,8 +1953,8 @@ def manual_loop(client, emap):
                         ids_to_process.append(gid)
                     else:
                         print(f"{Colors.RED}Group {gid} not found or not eligible.{Colors.END}")
-                except:
-                    pass
+                except ValueError:
+                    print(f"{Colors.YELLOW}Ignored non-numeric input: {s.strip()!r}{Colors.END}")
 
             if not ids_to_process:
                 continue
