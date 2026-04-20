@@ -85,12 +85,24 @@ CATEGORY_BLOCKLIST = ["freeleech-orpheus", "r:.*-blocksuffix$"]
 #   "added"    = Date added (useful to see oldest first)
 #   "name"     = Name of torrent
 SORT_BY = os.environ.get("SORT_BY", "name")
+_VALID_SORT_BY = {"seeders", "seeds", "ratio", "size", "uploaded", "added", "name", "time"}
+if SORT_BY not in _VALID_SORT_BY:
+    sys.stderr.write(
+        f"ERROR: SORT_BY={SORT_BY!r} is invalid. "
+        f"Expected one of {sorted(_VALID_SORT_BY)}.\n"
+    )
+    sys.exit(1)
 
 # Sorting Order
 # Options:
 #   "asc"  = Ascending (Smallest/Oldest first)
 #   "desc" = Descending (Largest/Newest first)
 SORT_ORDER = os.environ.get("SORT_ORDER", "asc")
+if SORT_ORDER not in {"asc", "desc"}:
+    sys.stderr.write(
+        f"ERROR: SORT_ORDER={SORT_ORDER!r} is invalid. Expected 'asc' or 'desc'.\n"
+    )
+    sys.exit(1)
 
 
 # Trackers that report incorrect seeder counts (fallback to peer list counting)
