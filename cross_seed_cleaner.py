@@ -321,44 +321,25 @@ if not DRY_RUN and not MANUAL_MODE:
 
 class Table:
     @staticmethod
-    def render(headers, rows, col_widths):
+    def _pad(cell, width, align):
+        padding = width - len(strip_colors(str(cell)))
+        if align == 'r':
+            return f" {' ' * padding}{cell} │"
+        return f" {cell}{' ' * padding} │"
+
+    @staticmethod
+    def render(headers, rows, col_widths, aligns=None):
+        aligns = aligns or ['l'] * len(headers)
         top = "┌" + "┬".join("─" * (w + 2) for w in col_widths) + "┐"
-        print(top)
-
-        header_parts = ["│"]
-        for i, (header, width) in enumerate(zip(headers, col_widths)):
-            clean_header = strip_colors(header)
-            # Alignment logic: Only columns 2-5 are right-aligned (numeric data in main table)
-            # Column 1 ("Value" in config, "Type" in main) is now LEFT aligned.
-            if i in [2, 3, 4, 5]:
-                padding = width - len(clean_header)
-                header_parts.append(f" {' ' * padding}{header} │")
-            else:
-                padding = width - len(clean_header)
-                header_parts.append(f" {header}{' ' * padding} │")
-        print("".join(header_parts))
-
         sep = "├" + "┼".join("─" * (w + 2) for w in col_widths) + "┤"
+        bottom = "└" + "┴".join("─" * (w + 2) for w in col_widths) + "┘"
+        print(top)
+        print("│" + "".join(Table._pad(h, w, a) for h, w, a in zip(headers, col_widths, aligns)))
         print(sep)
-
         for idx, row in enumerate(rows):
-            row_parts = ["│"]
-            for i, (cell, width) in enumerate(zip(row, col_widths)):
-                cell_str = str(cell)
-                clean_str = strip_colors(cell_str)
-                # Same alignment logic for rows
-                if i in [2, 3, 4, 5]:
-                    padding = width - len(clean_str)
-                    row_parts.append(f" {' ' * padding}{cell_str} │")
-                else:
-                    padding = width - len(clean_str)
-                    row_parts.append(f" {cell_str}{' ' * padding} │")
-            print("".join(row_parts))
-
+            print("│" + "".join(Table._pad(c, w, a) for c, w, a in zip(row, col_widths, aligns)))
             if idx < len(rows) - 1:
                 print(sep)
-
-        bottom = "└" + "┴".join("─" * (w + 2) for w in col_widths) + "┘"
         print(bottom)
 
 
@@ -1049,7 +1030,8 @@ def print_group(client, d, num, total):
           f"({status}{reason_str})")
 
     headers = ["Type", "Seeds", "Ratio", "Size", "Uploaded", "Seeded (D:H)", "Added", "Tracker", "Category", "Name"]
-    widths = [13, 6, 6, 10, 11, 13, 18, 30, 20, 105]
+    widths  = [    13,       6,       6,     10,         11,             13,      18,        30,         20,    105]
+    aligns  = [   'l',     'r',     'r',    'r',        'r',            'r',     'l',       'l',        'l',    'l']
     rows = []
 
     for t in sort_torrents(orig, xs, SORT_BY, SORT_ORDER):
@@ -1104,7 +1086,7 @@ def print_group(client, d, num, total):
             f"{Colors.BOLD}{orig.get('name', '')[:105]}{Colors.END}"
         ])
 
-    Table.render(headers, rows, widths)
+    Table.render(headers, rows, widths, aligns)
     return eligible, all_t
 
 def calculate_stats(all_groups, eligible_map):
