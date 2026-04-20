@@ -235,8 +235,10 @@ def debug_log(message):
     if DEBUG_MODE:
         print(f"{Colors.DIM}  [DEBUG] {message}{Colors.END}")
 
+_ANSI_RE = re.compile(r'\033\[[0-9;]+m')
+
 def strip_colors(text):
-    return re.sub(r'\033\[[0-9;]+m', '', text)
+    return _ANSI_RE.sub('', text)
 
 ARGS, DRY_RUN = get_config()
 
