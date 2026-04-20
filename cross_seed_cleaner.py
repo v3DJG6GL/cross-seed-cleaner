@@ -425,8 +425,8 @@ def get_representative_inode(path):
             return None
 
     largest_file = None
+    largest_stat = None
     max_size = -1
-
 
     try:
         for root, dirs, files in os.walk(path):
@@ -437,31 +437,25 @@ def get_representative_inode(path):
 
                 f_path = os.path.join(root, f)
                 try:
-                    if os.path.islink(f_path):
-                        size = os.path.getsize(os.path.realpath(f_path))
-                    else:
-                        size = os.path.getsize(f_path)
+                    stat = os.stat(f_path)  # follows symlinks; raises OSError on broken links
+                    size = stat.st_size
 
                     if size > max_size:
                         max_size = size
                         largest_file = f_path
+                        largest_stat = stat
                     elif size == max_size and largest_file:
                         if os.path.basename(f_path) < os.path.basename(largest_file):
                             largest_file = f_path
+                            largest_stat = stat
                 except OSError: continue
     except Exception as e:
         debug_log(f"  > Inode: Error walking dir: {e}")
 
-    if largest_file:
-        try:
-            real_path = os.path.realpath(largest_file)
-            stat = os.stat(real_path)
-            inode = (stat.st_dev, stat.st_ino)
-            debug_log(f"[GROUP]   > Inode: Winner '{os.path.basename(largest_file)}' ({max_size} bytes) -> {inode}")
-            return inode
-        except Exception as e:
-            debug_log(f"[GROUP]   > Inode: Error stating winner: {e}")
-            return None
+    if largest_stat is not None:
+        inode = (largest_stat.st_dev, largest_stat.st_ino)
+        debug_log(f"[GROUP]   > Inode: Winner '{os.path.basename(largest_file)}' ({max_size} bytes) -> {inode}")
+        return inode
 
     # Fallback
     try:
