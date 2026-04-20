@@ -52,6 +52,7 @@ PATH_MAPPINGS = {
     "/media/downloads/torrents": "/mnt/hdd-pool/userdata/media/downloads/torrents",
     "/media/downloads/freeleech": "/mnt/hdd-pool/appdata/qbittorrent/freeleech",
 }
+_SORTED_PATH_MAPPING_PREFIXES = sorted(PATH_MAPPINGS.keys(), key=len, reverse=True)
 
 
 # Scope: Applies to the ORIGINAL torrent's category only.
@@ -404,8 +405,7 @@ def apply_path_mapping(remote_path):
     if not remote_path:
         return ""
 
-    sorted_prefixes = sorted(PATH_MAPPINGS.keys(), key=len, reverse=True)
-    for remote_prefix in sorted_prefixes:
+    for remote_prefix in _SORTED_PATH_MAPPING_PREFIXES:
         if remote_path.startswith(remote_prefix):
             local_prefix = PATH_MAPPINGS[remote_prefix]
             local_path = os.path.normpath(remote_path.replace(remote_prefix, local_prefix, 1))
