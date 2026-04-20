@@ -1121,25 +1121,18 @@ def print_summary(s):
     p_del = (s['size_del'] / s['size_total'] * 100) if s['size_total'] > 0 else 0
     p_keep = 100 - p_del
 
-    rows = []
-
-    # Execution Mode
-    rows.append([bold("Execution Mode"), f"{mode_color}{mode_text}{Colors.END}"])
-
-    # Group Statistics
-    rows.append([bold("Groups Analyzed"), str(s['groups_total'])])
-    rows.append([bold("Groups Eligible for Deletion"), f"{Colors.RED}{s['groups_del']}{Colors.END}"])
-    rows.append([bold("Groups to Keep"), f"{Colors.GREEN}{s['groups_keep']}{Colors.END}"])
-
-    # Torrent Statistics
-    rows.append([bold("Torrents Analyzed"), f"{s['torrents_total']} ({s['torrents_orig']} originals + {s['torrents_xs']} cross-seeds)"])
-    rows.append([bold("Torrents to Delete"), f"{Colors.RED}{s['torrents_del']}{Colors.END}"])
-    rows.append([bold("Torrents to Keep"), f"{Colors.GREEN}{s['torrents_keep']}{Colors.END}"])
-
-    # Size Statistics
-    rows.append([bold("Total Size Analyzed"), format_size_smart(s['size_total'])])
-    rows.append([bold("Size to Delete"), f"{Colors.RED}{format_size_smart(s['size_del'])} ({p_del:.1f}%){Colors.END}"])
-    rows.append([bold("Size to Keep"), f"{Colors.GREEN}{format_size_smart(s['size_keep'])} ({p_keep:.1f}%){Colors.END}"])
+    rows = [
+        [bold("Execution Mode"), f"{mode_color}{mode_text}{Colors.END}"],
+        [bold("Groups Analyzed"), str(s['groups_total'])],
+        [bold("Groups Eligible for Deletion"), f"{Colors.RED}{s['groups_del']}{Colors.END}"],
+        [bold("Groups to Keep"), f"{Colors.GREEN}{s['groups_keep']}{Colors.END}"],
+        [bold("Torrents Analyzed"), f"{s['torrents_total']} ({s['torrents_orig']} originals + {s['torrents_xs']} cross-seeds)"],
+        [bold("Torrents to Delete"), f"{Colors.RED}{s['torrents_del']}{Colors.END}"],
+        [bold("Torrents to Keep"), f"{Colors.GREEN}{s['torrents_keep']}{Colors.END}"],
+        [bold("Total Size Analyzed"), format_size_smart(s['size_total'])],
+        [bold("Size to Delete"), f"{Colors.RED}{format_size_smart(s['size_del'])} ({p_del:.1f}%){Colors.END}"],
+        [bold("Size to Keep"), f"{Colors.GREEN}{format_size_smart(s['size_keep'])} ({p_keep:.1f}%){Colors.END}"],
+    ]
 
     print()
     w = 262
