@@ -1326,7 +1326,6 @@ def export_reports(client, all_groups, eligible_ids):
 
 
     css_block = """
-        /* ... existing styles ... */
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #121212; color: #e0e0e0; margin: 0; padding: 20px; }
         .container { max-width: 95%; margin: 0 auto; }
         .card { background: #1e1e1e; border: 1px solid #333; border-radius: 6px; padding: 20px; margin-bottom: 20px; }
@@ -1341,10 +1340,6 @@ def export_reports(client, all_groups, eligible_ids):
         .live-mode { background: #ff5252; color: #fff; }
         .mode-tag { background: #2196f3; color: #fff; }
 
-        /* CHANGED: Grid supports 5 items now (Total, DelSize, KeepSize, DelCount, KeepCount) */
-        /* Or we can keep it 3 columns and let them wrap, or specific layout. */
-        /* Since Config is moved out, we have 5 boxes. A 3-column grid works well (3 top, 2 bottom) or 5-col. */
-        /* Let's stick to auto-fit or specific columns. */
         .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
 
         .stat-box {
@@ -1374,7 +1369,6 @@ def export_reports(client, all_groups, eligible_ids):
         .chart-col { flex: 1; background: #1e1e1e; padding: 15px; border-radius: 6px; border: 1px solid #333; }
         .chart-container { position: relative; height: 350px; width: 100%; }
 
-        /* UPDATED: Metrics Row now holds 3 columns */
         .metrics-row { display: flex; gap: 20px; margin-bottom: 20px; }
         .metric-col { flex: 1; background: #1e1e1e; padding: 20px; border-radius: 6px; border: 1px solid #333; }
 
@@ -1382,7 +1376,6 @@ def export_reports(client, all_groups, eligible_ids):
         .metric-item { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; }
         .metric-val { font-weight: bold; color: #fff; }
 
-        /* ... remaining css ... */
         .table-container { overflow-x: auto; }
         table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; table-layout: fixed; }
         th { text-align: left; padding: 12px 8px; background: #252525; color: #aaa; font-weight: 600; border-bottom: 2px solid #333; position: sticky; top: 0; white-space: nowrap; cursor: pointer; user-select: none; }
@@ -1599,7 +1592,6 @@ def export_reports(client, all_groups, eligible_ids):
             added_ts = datetime.fromtimestamp(t.get('added_on', 0)).strftime("%Y.%m.%d | %H:%M")
             tracker_clean = urllib.parse.urlparse(t.get('tracker', '')).netloc
 
-            # FIX: Use _seeder_count which includes unreliable tracker logic
             cur_seeds = t.get('_seeder_count', t.get('num_complete', 0))
 
             c_seeds = "text-success" if cur_seeds >= MIN_SEEDERS else "text-danger"
@@ -1791,11 +1783,9 @@ def export_reports(client, all_groups, eligible_ids):
             // --- Charts ---
             const ctxCount = document.getElementById('countChart').getContext('2d');
             const ctxSize = document.getElementById('sizeChart').getContext('2d');
-            // NEW CONTEXT
             const ctxGroup = document.getElementById('groupChart').getContext('2d');
 
             const labels = {_js(chart_labels)};
-            // NEW LABELS
             const groupLabels = {_js(group_chart_labels)};
 
             new Chart(ctxCount, {{
@@ -2128,7 +2118,6 @@ def check_no_hard_links(client):
     t_start = datetime.now()
     print(f"{Colors.BOLD}[4/7]{Colors.END} Fetching seeders...")
 
-    # --- MODIFIED: Added Progress ---
     total_seeders = len(torrents)
     for idx, t in enumerate(torrents, 1):
         if not DEBUG_MODE and idx % 50 == 0:
