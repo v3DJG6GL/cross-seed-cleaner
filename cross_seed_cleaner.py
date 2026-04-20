@@ -589,7 +589,8 @@ def get_seeder_count(client, torrent):
         debug_log(f"[FETCH] '{name}' on {tracker_domain}: Reliable -> {num_complete} Seeders")
         return num_complete
 
-def load_and_group_torrents(client):
+def _fetch_and_filter_torrents(client):
+    """[1/7] fetch + [2/7] category-filter. Returns list of torrents that passed."""
     t_start = datetime.now()
     print(f"{Colors.BOLD}[1/7]{Colors.END} Fetching torrents...")
     torrents = client.get_torrents()
@@ -599,53 +600,49 @@ def load_and_group_torrents(client):
 
     t_start = datetime.now()
     print(f"{Colors.BOLD}[2/7]{Colors.END} Filtering torrents by category...")
-    filtered_torrents = []
-    skipped_count = 0
-
     debug_log(f"[FILTER] Applying filters to {len(torrents)} torrents...")
 
+    filtered = []
+    skipped = 0
     for t in torrents:
         cat = t.get('category', '')
         name = t.get('name', 'Unknown')
-        is_allowed = category_allowed(cat)
-
-        if is_allowed:
-            filtered_torrents.append(t)
+        if category_allowed(cat):
+            filtered.append(t)
             debug_log(f"[FILTER] + Allowed '{name}' (Category: '{cat}')")
         else:
-            skipped_count += 1
+            skipped += 1
             debug_log(f"[FILTER] - Blocked '{name}' (Category: '{cat}')")
 
-    torrents = filtered_torrents
     SCAN_STATS['filter_duration'] = (datetime.now() - t_start).total_seconds()
-
     print(f"{Colors.GREEN}  ✓ Filtering complete in {SCAN_STATS['filter_duration']:.2f}s.{Colors.END}")
-    print(f"{Colors.GREEN}  ✓ Kept {len(torrents)} torrents ({skipped_count} skipped).{Colors.END}\n")
+    print(f"{Colors.GREEN}  ✓ Kept {len(filtered)} torrents ({skipped} skipped).{Colors.END}\n")
+    return filtered
 
 
+def _scan_external_libs_phase():
+    """[3/7] scan configured external paths; returns {(dev,ino): path} dict."""
     t_start = datetime.now()
-    external_inodes = set()
-
+    external_inodes = {}
     if EXTERNAL_MEDIA_PATHS:
         print(f"{Colors.BOLD}[3/7]{Colors.END} Scanning external libraries...")
         external_inodes = scan_external_libraries(EXTERNAL_MEDIA_PATHS)
     else:
-        print(f"{Colors.BOLD}[3/7]{Colors.END} Skipping External Scan (Not Configured)...")
-
+        print(f"{Colors.BOLD}[3/7]{Colors.END} Skipping external libraries scan (Not Configured)...")
     SCAN_STATS['scan_duration'] = (datetime.now() - t_start).total_seconds()
+    return external_inodes
 
 
+def _fetch_seeders_phase(client, torrents):
+    """[4/7] populate _seeder_count on each torrent."""
     t_start = datetime.now()
     print(f"{Colors.BOLD}[4/7]{Colors.END} Fetching seeders...")
 
-    total_seeders = len(torrents)
-
+    total = len(torrents)
     for idx, t in enumerate(torrents, 1):
-
         if not DEBUG_MODE and idx % 50 == 0:
-            sys.stdout.write(f"\r{Colors.DIM}  ... Fetched {idx}/{total_seeders} seeder counts...{Colors.END}")
+            sys.stdout.write(f"\r{Colors.DIM}  ... Fetched {idx}/{total} seeder counts...{Colors.END}")
             sys.stdout.flush()
-
         t['_seeder_count'] = get_seeder_count(client, t)
 
     if not DEBUG_MODE:
@@ -653,6 +650,12 @@ def load_and_group_torrents(client):
 
     SCAN_STATS['meta_duration'] = (datetime.now() - t_start).total_seconds()
     print(f"{Colors.GREEN}  ✓ Metadata processed in {SCAN_STATS['meta_duration']:.2f}s.{Colors.END}\n")
+
+
+def load_and_group_torrents(client):
+    torrents = _fetch_and_filter_torrents(client)
+    external_inodes = _scan_external_libs_phase()
+    _fetch_seeders_phase(client, torrents)
 
 
 
@@ -2083,47 +2086,8 @@ def check_no_hard_links(client):
         print(f"{Colors.RED}ERROR: --no-hard-links-categories must be specified to use this mode.{Colors.END}")
         return
 
-    t_start = datetime.now()
-    print(f"{Colors.BOLD}[1/7]{Colors.END} Fetching torrents...")
-    torrents = client.get_torrents()
-    SCAN_STATS['fetch_duration'] = (datetime.now() - t_start).total_seconds()
-    print(f"{Colors.GREEN}  ✓ Fetching complete in {SCAN_STATS['fetch_duration']:.2f}s.{Colors.END}")
-    print(f"{Colors.GREEN}  ✓ Found {len(torrents)} torrents.{Colors.END}\n")
-
-    print(f"{Colors.BOLD}[2/7]{Colors.END} Filtering torrents by category...")
-
-    filtered_torrents = []
-    skipped_count = 0
-
-    debug_log(f"[FILTER] Starting filter loop for {len(torrents)} torrents...")
-
-    for t in torrents:
-        cat = t.get('category', 'unknown')
-        name = t.get('name', 'Unknown')
-
-        is_allowed = category_allowed(cat)
-
-        if is_allowed:
-            filtered_torrents.append(t)
-            debug_log(f"[FILTER] + Allowed '{name}' (Category: '{cat}')")
-        else:
-            skipped_count += 1
-            debug_log(f"[FILTER] - Blocked '{name}' (Category: '{cat}')")
-
-    torrents = filtered_torrents
-    SCAN_STATS['filter_duration'] = (datetime.now() - t_start).total_seconds()
-
-    print(f"{Colors.GREEN}  ✓ Filtering complete in {SCAN_STATS['filter_duration']:.2f}s.{Colors.END}")
-    print(f"{Colors.GREEN}  ✓ Kept {len(torrents)} torrents ({skipped_count} skipped).{Colors.END}\n")
-
-
-
-    external_inodes = set()
-    if EXTERNAL_MEDIA_PATHS:
-        print(f"{Colors.BOLD}[3/7]{Colors.END} Scanning external libraries...")
-        external_inodes = scan_external_libraries(EXTERNAL_MEDIA_PATHS)
-    else:
-        print(f"{Colors.BOLD}[3/7]{Colors.END} Skipping external libraries scan (Not Configured)...")
+    torrents = _fetch_and_filter_torrents(client)
+    external_inodes = _scan_external_libs_phase()
 
     def is_target_category(cat):
         if not cat: return False
@@ -2135,22 +2099,7 @@ def check_no_hard_links(client):
 
     category_torrents = [t for t in torrents if is_target_category(t.get('category', ''))]
 
-    t_start = datetime.now()
-    print(f"{Colors.BOLD}[4/7]{Colors.END} Fetching seeders...")
-
-    total_seeders = len(category_torrents)
-    for idx, t in enumerate(category_torrents, 1):
-        if not DEBUG_MODE and idx % 50 == 0:
-            sys.stdout.write(f"\r{Colors.DIM}  ... Fetched {idx}/{total_seeders} seeder counts...{Colors.END}")
-            sys.stdout.flush()
-
-        t['_seeder_count'] = get_seeder_count(client, t)
-
-    if not DEBUG_MODE:
-        _clear_progress_line()
-
-    SCAN_STATS['meta_duration'] = (datetime.now() - t_start).total_seconds()
-    print(f"{Colors.GREEN}  ✓ Metadata processed in {SCAN_STATS['meta_duration']:.2f}s.{Colors.END}\n")
+    _fetch_seeders_phase(client, category_torrents)
 
     t_start = datetime.now()
     print(f"{Colors.BOLD}[5/7]{Colors.END} Filtering torrents for orphans...")
