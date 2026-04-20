@@ -925,8 +925,6 @@ def _torrent_sort_key(torrent, by):
     return torrent.get(field, 0)
 
 def sort_torrents(original, crossseeds, by, order):
-    if by not in _SORT_KEY_MAP:
-        return [original] + list(crossseeds)
     rev = (order == "desc")
     return [original] + sorted(crossseeds, key=lambda t: _torrent_sort_key(t, by), reverse=rev)
 
@@ -1979,8 +1977,6 @@ def _finalize_deletion(client, emap):
 
 
 def get_group_sort_key(item):
-    if SORT_BY not in _SORT_KEY_MAP:
-        return 0
     return _torrent_sort_key(item[1]['original'], SORT_BY)
 
 
