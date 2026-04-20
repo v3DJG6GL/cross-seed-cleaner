@@ -985,17 +985,13 @@ def print_group(client, orig, xs, num, total):
         c_size = Colors.END; c_time = Colors.END; c_cat = Colors.END
 
         if is_orig:
+            c_size = Colors.GREEN if size >= MIN_SIZE_BYTES else Colors.RED
+            c_time = Colors.GREEN if seed_time >= (MIN_ORIGINAL_SEED_TIME_HOURS * 3600) else Colors.RED
             if NO_HARD_LINKS_MODE:
-                 c_size = Colors.GREEN if size >= MIN_SIZE_BYTES else Colors.RED
-                 c_time = Colors.GREEN if seed_time >= (MIN_ORIGINAL_SEED_TIME_HOURS * 3600) else Colors.RED
-                 c_cat = Colors.RED if (t.get('_path_error') or not category_allowed(t.get('category', ''))) else Colors.GREEN
+                cat_bad = t.get('_path_error') or not category_allowed(t.get('category', ''))
             else:
-                 c_size = Colors.GREEN if size >= MIN_SIZE_BYTES else Colors.RED
-                 c_time = Colors.GREEN if seed_time >= (MIN_ORIGINAL_SEED_TIME_HOURS * 3600) else Colors.RED
-                 if category_allowed(orig.get('category', '')):
-                     c_cat = Colors.GREEN
-                 else:
-                     c_cat = Colors.RED
+                cat_bad = not category_allowed(orig.get('category', ''))
+            c_cat = Colors.RED if cat_bad else Colors.GREEN
 
         name_str = t.get('name', '')[:105]
 
