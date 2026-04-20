@@ -1213,12 +1213,7 @@ def export_reports(client, all_groups, eligible_ids):
                 stats_eligible['up'] += up
                 stats_eligible['count'] += 1
 
-            raw_tracker = t.get('tracker', '')
-            try:
-                domain = urllib.parse.urlparse(raw_tracker).netloc
-                if not domain: domain = "Unknown"
-            except (ValueError, AttributeError):
-                domain = "Unknown"
+            domain = _domain_from_tracker_url(t.get('tracker', '')) or "Unknown"
 
             if domain not in tracker_stats:
                 tracker_stats[domain] = {'total_count': 0, 'total_size': 0, 'del_count': 0, 'del_size': 0}
@@ -1588,7 +1583,7 @@ def export_reports(client, all_groups, eligible_ids):
                 type_badge = '<span class="type-badge type-cross" style="border:1px solid #555;">CROSS</span>'
 
             added_ts = datetime.fromtimestamp(t.get('added_on', 0)).strftime("%Y.%m.%d | %H:%M")
-            tracker_clean = urllib.parse.urlparse(t.get('tracker', '')).netloc
+            tracker_clean = _domain_from_tracker_url(t.get('tracker', '')) or "Unknown"
 
             cur_seeds = t.get('_seeder_count', t.get('num_complete', 0))
 
@@ -1889,7 +1884,7 @@ def export_reports(client, all_groups, eligible_ids):
                             'Type': 'ORIGINAL' if t == d['original'] else 'CROSS-SEED',
                             'Name': t.get('name', ''),
                             'Size': format_size_smart(t.get('size', 0)),
-                            'Tracker': get_tracker_domain(client, t) or "Unknown",
+                            'Tracker': _domain_from_tracker_url(t.get('tracker', '')) or "Unknown",
                             'Category': t.get('category', ''),
                             'Added': add_date,
                             'Seeding Time': seed_time,
