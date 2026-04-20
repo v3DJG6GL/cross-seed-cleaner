@@ -61,6 +61,13 @@ PATH_MAPPINGS = {
 #   "both"  = Must match ALLOWLIST *and* NOT match BLOCKLIST
 #   "none"  = Disable category filtering (process everything)
 CATEGORY_FILTER_MODE = os.environ.get("CATEGORY_FILTER_MODE", "block")
+_VALID_CATEGORY_FILTER_MODES = {"none", "allow", "block", "both"}
+if CATEGORY_FILTER_MODE.lower() not in _VALID_CATEGORY_FILTER_MODES:
+    sys.stderr.write(
+        f"ERROR: CATEGORY_FILTER_MODE={CATEGORY_FILTER_MODE!r} is invalid. "
+        f"Expected one of {sorted(_VALID_CATEGORY_FILTER_MODES)}.\n"
+    )
+    sys.exit(1)
 
 # Filter Lists. Support exact match or Regex (prefix with 'r:').
 # Examples:
@@ -755,7 +762,7 @@ def category_allowed(cat):
             return False
         return True
 
-    return True
+    raise AssertionError(f"unreachable CATEGORY_FILTER_MODE: {mode!r}")
 
 
 
