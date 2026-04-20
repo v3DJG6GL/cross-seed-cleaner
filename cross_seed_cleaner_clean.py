@@ -1550,10 +1550,7 @@ def export_reports(client, all_groups, eligible_ids):
                         <th onclick="sortTable(11)">Path<div class="resizer"></div></th>
                     </tr>
                 </thead>
-                <tbody id="tableBody">
     """
-
-    html_body += "</tbody>"
 
     for row in report_rows:
         if ELIGIBLE_ONLY and not row['is_del']:
