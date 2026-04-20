@@ -414,17 +414,13 @@ def get_representative_inode(path):
     """
     Recursively find the largest non-metadata file.
     """
-    if not os.path.exists(path):
-        debug_log(f"[GROUP]   > Inode: Path not found: {path}")
-        return None
-
     if os.path.isfile(path):
         try:
             stat = os.stat(path)
             inode = (stat.st_dev, stat.st_ino)
             debug_log(f"[GROUP]   > Inode: File found ({stat.st_size} bytes) -> {inode}")
             return inode
-        except Exception as e:
+        except OSError as e:
             debug_log(f"[GROUP]   > Inode: Error stating file: {e}")
             return None
 
