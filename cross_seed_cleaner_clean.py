@@ -512,14 +512,32 @@ def get_path_identity(torrent):
     return identity
 
 
-def matches_pattern(text, pattern):
-    if pattern.startswith("r:"):
-        try:
-            return bool(re.match(pattern[2:], text))
-        except re.error as e:
-            debug_log(f"[REGEX] invalid pattern {pattern!r}: {e}")
-            return False
-    return text == pattern
+def _compile_specs(patterns, label):
+    """Build a list of (compiled_regex_or_None, literal_or_None) from raw r:…/exact patterns."""
+    specs = []
+    for p in patterns:
+        if p.startswith("r:"):
+            try:
+                specs.append((re.compile(p[2:]), None))
+            except re.error as e:
+                sys.stderr.write(f"ERROR: invalid regex in {label}: {p!r} ({e})\n")
+                sys.exit(1)
+        else:
+            specs.append((None, p))
+    return specs
+
+
+def matches_pattern(text, spec):
+    regex, literal = spec
+    if regex is not None:
+        return bool(regex.match(text))
+    return text == literal
+
+
+_CATEGORY_ALLOWLIST_SPECS = _compile_specs(CATEGORY_ALLOWLIST, "CATEGORY_ALLOWLIST")
+_CATEGORY_BLOCKLIST_SPECS = _compile_specs(CATEGORY_BLOCKLIST, "CATEGORY_BLOCKLIST")
+_UNRELIABLE_TRACKERS_SPECS = _compile_specs(UNRELIABLE_TRACKERS, "UNRELIABLE_TRACKERS")
+_NO_HARD_LINKS_CATEGORY_SPECS = _compile_specs(NO_HARD_LINKS_CATEGORIES, "NO_HARD_LINKS_CATEGORIES")
 
 def get_tracker_domain(client, torrent_hash):
     """Get the primary tracker domain for a torrent"""
@@ -540,8 +558,8 @@ def is_unreliable_tracker(tracker_domain):
     if not tracker_domain or not UNRELIABLE_TRACKERS:
         return False
 
-    for pattern in UNRELIABLE_TRACKERS:
-        if matches_pattern(tracker_domain, pattern):
+    for spec in _UNRELIABLE_TRACKERS_SPECS:
+        if matches_pattern(tracker_domain, spec):
             debug_log(f"[FETCH] Tracker '{tracker_domain}' matches unreliable pattern '{pattern}'")
             return True
     return False
@@ -753,15 +771,15 @@ def category_allowed(cat):
         return True
 
     if mode == "allow":
-        return any(matches_pattern(cat, p) for p in CATEGORY_ALLOWLIST)
+        return any(matches_pattern(cat, s) for s in _CATEGORY_ALLOWLIST_SPECS)
 
     if mode == "block":
-        return not any(matches_pattern(cat, p) for p in CATEGORY_BLOCKLIST)
+        return not any(matches_pattern(cat, s) for s in _CATEGORY_BLOCKLIST_SPECS)
 
     if mode == "both":
-        if not any(matches_pattern(cat, p) for p in CATEGORY_ALLOWLIST):
+        if not any(matches_pattern(cat, s) for s in _CATEGORY_ALLOWLIST_SPECS):
             return False
-        if any(matches_pattern(cat, p) for p in CATEGORY_BLOCKLIST):
+        if any(matches_pattern(cat, s) for s in _CATEGORY_BLOCKLIST_SPECS):
             return False
         return True
 
@@ -2134,8 +2152,8 @@ def check_no_hard_links(client):
     def is_target_category(cat):
         if not cat: return False
         cat = cat.lower()
-        for pattern in NO_HARD_LINKS_CATEGORIES:
-            if matches_pattern(cat, pattern):
+        for spec in _NO_HARD_LINKS_CATEGORY_SPECS:
+            if matches_pattern(cat, spec):
                 return True
         return False
 
