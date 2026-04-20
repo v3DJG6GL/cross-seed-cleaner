@@ -438,9 +438,7 @@ def get_representative_inode(path):
                 f_path = os.path.join(root, f)
                 try:
                     if os.path.islink(f_path):
-                        real_path = os.path.realpath(f_path)
-                        if os.path.exists(real_path): size = os.path.getsize(real_path)
-                        else: continue
+                        size = os.path.getsize(os.path.realpath(f_path))
                     else:
                         size = os.path.getsize(f_path)
 
