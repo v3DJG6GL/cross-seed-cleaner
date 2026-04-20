@@ -13,6 +13,7 @@ import os
 import argparse
 import csv
 import glob
+import html
 from collections import defaultdict
 from datetime import datetime
 
@@ -1101,6 +1102,12 @@ def export_reports(client, all_groups, eligible_ids):
             i += 1
         return f"{p:.2f} {units[i]}"
 
+    def _h(v):
+        return html.escape("" if v is None else str(v), quote=True)
+
+    def _js(v):
+        return json.dumps(v).replace("</", "<\\/")
+
     # --- Data Aggregation ---
     total_groups = len(all_groups)
     del_groups_count = len(eligible_ids)
@@ -1273,20 +1280,20 @@ def export_reports(client, all_groups, eligible_ids):
     grad_torrents_keep = f"linear-gradient(90deg, rgba(76, 175, 80, 0.15) {keep_torrents_pct}%, transparent {keep_torrents_pct}%)"
     filtering_orphans_grouping_torrents_label = "Filtering for orphans" if NO_HARD_LINKS_MODE else "Grouping torrents & hardlinks"
 
-    unreliable_str = ', '.join(UNRELIABLE_TRACKERS) if UNRELIABLE_TRACKERS else 'None'
-    no_hard_links_cat = ', '.join(NO_HARD_LINKS_CATEGORIES) if NO_HARD_LINKS_CATEGORIES else 'None'
-    cat_allow_str = ', '.join(CATEGORY_ALLOWLIST) if CATEGORY_ALLOWLIST else 'None'
-    cat_block_str = ', '.join(CATEGORY_BLOCKLIST) if CATEGORY_BLOCKLIST else 'None'
-    html_out_str = HTML_EXPORT if HTML_EXPORT else 'Disabled'
-    csv_out_str = CSV_EXPORT if CSV_EXPORT else 'Disabled'
+    unreliable_str = _h(', '.join(UNRELIABLE_TRACKERS)) if UNRELIABLE_TRACKERS else 'None'
+    no_hard_links_cat = _h(', '.join(NO_HARD_LINKS_CATEGORIES)) if NO_HARD_LINKS_CATEGORIES else 'None'
+    cat_allow_str = _h(', '.join(CATEGORY_ALLOWLIST)) if CATEGORY_ALLOWLIST else 'None'
+    cat_block_str = _h(', '.join(CATEGORY_BLOCKLIST)) if CATEGORY_BLOCKLIST else 'None'
+    html_out_str = _h(HTML_EXPORT) if HTML_EXPORT else 'Disabled'
+    csv_out_str = _h(CSV_EXPORT) if CSV_EXPORT else 'Disabled'
 
     external_media_paths_html = "None"
     if EXTERNAL_MEDIA_PATHS:
-        m_lines = [path for path in EXTERNAL_MEDIA_PATHS]
+        m_lines = [_h(path) for path in EXTERNAL_MEDIA_PATHS]
         external_media_paths_html = f"<div style='margin-top:2px; font-family:monospace; font-size:10px; color:#aaa; line-height:1.2; word-break:break-all;'>{'<br>'.join(m_lines)}</div>"
     mappings_html = "None"
     if PATH_MAPPINGS:
-        m_lines = [f"{k} → {v}" for k, v in PATH_MAPPINGS.items()]
+        m_lines = [f"{_h(k)} → {_h(v)}" for k, v in PATH_MAPPINGS.items()]
         mappings_html = f"<div style='margin-top:2px; font-family:monospace; font-size:10px; color:#aaa; line-height:1.2; word-break:break-all;'>{'<br>'.join(m_lines)}</div>"
 
     config_items = [
@@ -1566,7 +1573,7 @@ def export_reports(client, all_groups, eligible_ids):
             reasons = row.get('reasons', [])
             if reasons:
                 for r in reasons:
-                    reasons_html += f'<span class="rejection-icon" title="{r["text"]}">{r["icon"]}</span>'
+                    reasons_html += f'<span class="rejection-icon" title="{_h(r["text"])}">{_h(r["icon"])}</span>'
 
         status_cell_content = f'<div class="status-container">{badge_html}{reasons_html}</div>'
         torrents_to_list = [d['original']] + d['crossseeds']
@@ -1617,6 +1624,8 @@ def export_reports(client, all_groups, eligible_ids):
                 if t.get('_path_error'):
                     c_cat = "text-danger"
 
+            name_h = _h(t.get('name', ''))
+            path_h = _h(t.get('content_path', ''))
             html_body += f"""
             <tr>
                 <td>{status_cell_content}</td>
@@ -1627,10 +1636,10 @@ def export_reports(client, all_groups, eligible_ids):
                 <td>{format_size_smart(t.get('uploaded', 0))}</td>
                 <td><span class="{c_time}">{format_duration_ddd_hh(t_time)}</span></td>
                 <td style="font-size:11px; color:#888;">{added_ts}</td>
-                <td>{tracker_clean}</td>
-                <td><span class="{c_cat}">{t_cat}</span></td>
-                <td class="name-cell" title="{t.get('name', '')}">{t.get('name', '')}</td>
-                <td class="path-cell" title="{t.get('content_path', '')}">{t.get('content_path', '')}</td>
+                <td>{_h(tracker_clean)}</td>
+                <td><span class="{c_cat}">{_h(t_cat)}</span></td>
+                <td class="name-cell" title="{name_h}">{name_h}</td>
+                <td class="path-cell" title="{path_h}">{path_h}</td>
             </tr>
             """
 
@@ -1652,8 +1661,8 @@ def export_reports(client, all_groups, eligible_ids):
                 <td style="text-align:center; color:#555;">-</td>
                 <td style="text-align:center; color:#555;">-</td>
                 <td><span style="color:#2196f3;">External Library</span></td>
-                <td class="name-cell" style="color:#2196f3; font-style:italic;">{d['original'].get('name', '')}</td>
-                <td class="path-cell">{external_path}</td>
+                <td class="name-cell" style="color:#2196f3; font-style:italic;">{_h(d['original'].get('name', ''))}</td>
+                <td class="path-cell">{_h(external_path)}</td>
             </tr>
             """
 
@@ -1779,17 +1788,17 @@ def export_reports(client, all_groups, eligible_ids):
             // NEW CONTEXT
             const ctxGroup = document.getElementById('groupChart').getContext('2d');
 
-            const labels = {json.dumps(chart_labels)};
+            const labels = {_js(chart_labels)};
             // NEW LABELS
-            const groupLabels = {json.dumps(group_chart_labels)};
+            const groupLabels = {_js(group_chart_labels)};
 
             new Chart(ctxCount, {{
                 type: 'bar',
                 data: {{
                     labels: labels,
                     datasets: [
-                        {{ label: 'Deleted Count', data: {json.dumps(ds_count_del)}, backgroundColor: '#ff5252' }},
-                        {{ label: 'Total Count', data: {json.dumps(ds_count_total)}, backgroundColor: '#333' }}
+                        {{ label: 'Deleted Count', data: {_js(ds_count_del)}, backgroundColor: '#ff5252' }},
+                        {{ label: 'Total Count', data: {_js(ds_count_total)}, backgroundColor: '#333' }}
                     ]
                 }},
                 options: {{
@@ -1805,8 +1814,8 @@ def export_reports(client, all_groups, eligible_ids):
                 data: {{
                     labels: labels,
                     datasets: [
-                        {{ label: 'Deleted Size (GiB)', data: {json.dumps(ds_size_del)}, backgroundColor: '#ff5252' }},
-                        {{ label: 'Total Size (GiB)', data: {json.dumps(ds_size_total)}, backgroundColor: '#333' }}
+                        {{ label: 'Deleted Size (GiB)', data: {_js(ds_size_del)}, backgroundColor: '#ff5252' }},
+                        {{ label: 'Total Size (GiB)', data: {_js(ds_size_total)}, backgroundColor: '#333' }}
                     ]
                 }},
                 options: {{
@@ -1822,8 +1831,8 @@ def export_reports(client, all_groups, eligible_ids):
                 data: {{
                     labels: groupLabels,
                     datasets: [
-                        {{ label: 'Eligible (Groups)', data: {json.dumps(ds_group_del)}, backgroundColor: '#ff5252' }},
-                        {{ label: 'Total (Groups)', data: {json.dumps(ds_group_total)}, backgroundColor: '#333' }}
+                        {{ label: 'Eligible (Groups)', data: {_js(ds_group_del)}, backgroundColor: '#ff5252' }},
+                        {{ label: 'Total (Groups)', data: {_js(ds_group_total)}, backgroundColor: '#333' }}
                     ]
                 }},
                 options: {{
