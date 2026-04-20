@@ -18,7 +18,7 @@ from collections import defaultdict
 from datetime import datetime
 
 # ============================================================================
-# 1. SETTINGS (edit these; can be overridden by environment variables or command-line arguments)
+# 1. SETTINGS (edit these; can be overridden by command-line arguments)
 # ============================================================================
 
 # ─── CONNECTION ────────────────────────────────────────────────────────────
