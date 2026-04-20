@@ -2187,13 +2187,11 @@ def check_no_hard_links(client):
     print(f"{Colors.BOLD}[6/7]{Colors.END} Analyze deletable torrents...")
     t_start = datetime.now()
     emap = {}
-    eligible_torrents = []
 
     for idx, (h, d) in enumerate(sorted(all_groups.items(), key=get_group_sort_key, reverse=(SORT_ORDER == 'desc')), 1):
         elig, ts = print_group(client, d, idx, len(all_groups))
         if elig:
             emap[idx] = ts
-            eligible_torrents.extend(ts)
 
     SCAN_STATS['analyze_duration'] = (datetime.now() - t_start).total_seconds()
     print(f"{Colors.GREEN}\n  ✓ Analysis complete in {SCAN_STATS['analyze_duration']:.2f}s.{Colors.END}")
@@ -2201,15 +2199,6 @@ def check_no_hard_links(client):
     print(f"\n{Colors.BOLD}[7/7]{Colors.END} Finalizing & exporting reports...")
 
     stats = calculate_stats(all_groups, emap)
-    stats['torrents_total'] = len(orphans)
-    stats['size_total'] = sum(t.get('size', 0) for t in orphans)
-    stats['torrents_del'] = len(eligible_torrents)
-    stats['size_del'] = sum(t.get('size', 0) for t in eligible_torrents)
-    stats['torrents_keep'] = stats['torrents_total'] - stats['torrents_del']
-    stats['size_keep'] = stats['size_total'] - stats['size_del']
-    stats['groups_del'] = len(emap)
-    stats['groups_keep'] = stats['groups_total'] - stats['groups_del']
-
     print_summary(stats)
     export_reports(client, all_groups, emap.keys())
 
