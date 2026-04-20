@@ -556,7 +556,7 @@ def is_unreliable_tracker(tracker_domain):
 
     for spec in _UNRELIABLE_TRACKERS_SPECS:
         if matches_pattern(tracker_domain, spec):
-            debug_log(f"[FETCH] Tracker '{tracker_domain}' matches unreliable pattern '{pattern}'")
+            debug_log(f"[FETCH] Tracker '{tracker_domain}' matches unreliable pattern")
             return True
     return False
 
