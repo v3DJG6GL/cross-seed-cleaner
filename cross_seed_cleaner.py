@@ -1588,7 +1588,7 @@ def export_reports(all_groups, eligible_ids):
             added_ts = format_timestamp(t.get('added_on', 0))
             tracker_clean = t.get('_tracker_domain') or "Unknown"
 
-            cur_seeds = t.get('_seeder_count', t.get('num_complete', 0))
+            cur_seeds = t.get('_seeder_count', 0)
 
             c_seeds = "text-success" if cur_seeds >= MIN_SEEDERS else "text-danger"
             c_size = ""
