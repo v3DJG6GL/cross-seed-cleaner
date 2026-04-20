@@ -2009,7 +2009,7 @@ def scan_external_libraries(paths):
                 final_paths.append(bp)
 
     # Deduplicate
-    final_paths = sorted(list(set(final_paths)))
+    final_paths = sorted(set(final_paths))
 
     if not final_paths:
         print(f"{Colors.RED}  ! No valid paths found after expansion.{Colors.END}")
