@@ -1569,8 +1569,10 @@ def export_reports(client, all_groups, eligible_ids):
         if not is_del_group:
             reasons = row.get('reasons', [])
             if reasons:
-                for r in reasons:
-                    reasons_html += f'<span class="rejection-icon" title="{_h(r["text"])}">{_h(r["icon"])}</span>'
+                reasons_html = "".join(
+                    f'<span class="rejection-icon" title="{_h(r["text"])}">{_h(r["icon"])}</span>'
+                    for r in reasons
+                )
 
         status_cell_content = f'<div class="status-container">{badge_html}{reasons_html}</div>'
         torrents_to_list = [d['original']] + d['crossseeds']
