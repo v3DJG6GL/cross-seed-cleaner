@@ -27,11 +27,11 @@ QBITTORRENT_HOST = "http://localhost:8080"
 QBITTORRENT_USER = "admin"
 QBITTORRENT_PASS = "password"
 
-# Global safety net: a group is kept (not deleted) if any of its torrents has fewer than X seeders.
+# A group is kept (not deleted) if any of its torrents has fewer than X seeders.
 # In No-Hard-Links mode, only the orphan torrent itself is checked.
 MIN_SEEDERS = 4
 
-# Group safety: if a group is made up of X or more torrents in total (Original plus Cross-Seeds), it is kept.
+# If a group is made up of X or more torrents in total (Original plus Cross-Seeds), it is kept.
 # E.g. X=6 means groups of 6+ torrents are protected from deletion.
 # This check is skipped in No-Hard-Links mode.
 MAX_TORRENTS_IN_GROUP = 6
@@ -45,7 +45,6 @@ MIN_ORIGINAL_SEED_TIME_DAYS = 365
 # Set to 0 to turn off the size check.
 MIN_SIZE_GIB = 15
 
-# Helper flags
 DEBUG_MODE = False                      # Enable verbose logging
 # True = simulate only (nothing is deleted); False = actually delete torrents.
 # The --dry-run / --delete command-line flags override this.
@@ -55,13 +54,11 @@ DRY_RUN = True
 # This does NOT affect the CSV export — the CSV always contains every group.
 ELIGIBLE_ONLY = True
 
-# Output filenames.
-# A timestamp is added before the extension (e.g. output.html -> output_2026.04.21_14.30.00.html).
+# A timestamp is added to each export filename before the extension (e.g. output.html -> output_2026.04.21_14.30.00.html).
 # Leave empty (or pass an empty string via environment variable / command-line) to turn the export off.
 HTML_EXPORT = "output.html"
 CSV_EXPORT = "output.csv"
 
-# No Hard Links Mode
 # When enabled, the script finds torrents in selected qBittorrent categories that have NO hard-links.
 # Category selection supports:
 # - Exact match:  "cross-seed-links"
@@ -79,17 +76,14 @@ NO_HARD_LINKS_CATEGORIES = "cross-seed-category,r:autobrr-.*"
 # 4. Mixed — combine any of the above: "/mnt/local/{movies,tv}, /mnt/remote/user_*"
 EXTERNAL_MEDIA_PATHS = "/mnt/hdd-pool/userdata/media/{user_1,user_2,user_3}"
 
-# Category filter mode.
-# Applies to the ORIGINAL torrent's category only.
-# Modes:
+# Applies to the ORIGINAL torrent's category only. Choose one:
 #   "allow" = Only process groups where Original matches ALLOWLIST
 #   "block" = Skip groups where Original matches BLOCKLIST
 #   "both"  = Must match ALLOWLIST *and* NOT match BLOCKLIST
 #   "none"  = Disable category filtering (process everything)
 CATEGORY_FILTER_MODE = "block"
 
-# Sorting for CLI output (CLI Table & Group processing order)
-# Options:
+# Sort field for the CLI table and for group-processing order. Choose one:
 #   "seeders" / "seeds" = Number of active seeders (aliases)
 #   "ratio"             = Share ratio
 #   "size"              = Torrent size
@@ -99,8 +93,7 @@ CATEGORY_FILTER_MODE = "block"
 #   "name"              = Name of torrent (case-insensitive)
 SORT_BY = "name"
 
-# Sorting Order
-# Options:
+# Sort direction for SORT_BY above. Choose one:
 #   "asc"  = Ascending (Smallest/Oldest first)
 #   "desc" = Descending (Largest/Newest first)
 SORT_ORDER = "asc"
@@ -123,7 +116,6 @@ PATH_MAPPINGS = {
     "/media/downloads/freeleech": "/mnt/hdd-pool/appdata/qbittorrent/freeleech",
 }
 
-# Filter Lists.
 # Each entry is either an exact category name or a regex prefixed with "r:".
 # Examples:
 #   "Movies"       -> Exact match for category "Movies"
