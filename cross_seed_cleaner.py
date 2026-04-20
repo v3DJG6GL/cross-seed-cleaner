@@ -184,12 +184,12 @@ def get_config():
     parser.add_argument('--min-size-gib', type=float, default=env_min_size_gib, help='Min torrent size in GiB (0=no limit)')
     parser.add_argument('--debug', action=argparse.BooleanOptionalAction, default=env_debug, help='Enable debug logging')
     parser.add_argument('--manual', action='store_true', help='Enable Interactive Manual Deletion Mode')
-    parser.add_argument('--eligible-only', action=argparse.BooleanOptionalAction, default=env_eligible_only, help='Only show eligible groups')
+    parser.add_argument('--eligible-only', action=argparse.BooleanOptionalAction, default=env_eligible_only, help='Hide non-eligible groups from CLI and HTML (CSV always exports all groups)')
     parser.add_argument('--html', type=str, default=env_html_export, help='Path to save HTML report')
     parser.add_argument('--csv', type=str, default=env_csv_export, help='Path to save CSV report')
 
     parser.add_argument('--no-hard-links-mode', action=argparse.BooleanOptionalAction, default=env_no_hard_links_mode, help='Enable mode to check for torrents without hard links')
-    parser.add_argument('--no-hard-links-categories', type=str, default=env_no_hard_links_cats, help='Comma-separated categories for no-hard-links mode')
+    parser.add_argument('--no-hard-links-categories', type=str, default=env_no_hard_links_cats, help='Comma-separated categories for no-hard-links mode; prefix "r:" for regex (e.g. "r:autobrr-.*")')
     parser.add_argument('--external-media-paths', type=str, default=env_ext_media_paths,
                         help='Paths to scan for hardlinks. Supports commas, wildcards (*), and braces ({a,b}). E.g., "/mnt/{movies,tv},/mnt/users/*"')
 
