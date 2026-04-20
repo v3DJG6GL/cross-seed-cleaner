@@ -1914,6 +1914,14 @@ def manual_loop(client, emap):
     if not emap:
         return
 
+    def _delete_and_log(gid):
+        result = client.delete_torrents([t['hash'] for t in emap[gid]], delete_files=True)
+        if result == "dry_run":
+            print(f"{Colors.YELLOW}[DRY RUN] Group {gid} would be deleted (no action taken){Colors.END}")
+        else:
+            print(f"{Colors.GREEN}Group {gid} deleted.{Colors.END}")
+            emap.pop(gid, None)
+
     while True:
         choice = input(f"\n{Colors.BOLD}Manual:{Colors.END} Enter Group ID(s) (e.g. 5,7), 'all', or 'q': ").strip().lower()
         if choice in ['q', 'quit']:
@@ -1922,13 +1930,8 @@ def manual_loop(client, emap):
         if choice == 'all':
             print(f"{Colors.RED}WARNING: You are about to delete ALL {len(emap)} eligible groups.{Colors.END}")
             if input(f"{Colors.BOLD}Type 'YES' to confirm execution: {Colors.END}") == 'YES':
-                for gid, ts in list(emap.items()):
-                    result = client.delete_torrents([t['hash'] for t in ts], delete_files=True)
-                    if result == "dry_run":
-                        print(f"{Colors.YELLOW}[DRY RUN] Group {gid} would be deleted (no action taken){Colors.END}")
-                    else:
-                        print(f"{Colors.GREEN}Group {gid} deleted.{Colors.END}")
-                        emap.pop(gid, None)
+                for gid in list(emap):
+                    _delete_and_log(gid)
                 break
             else:
                 print(f"{Colors.YELLOW}Deletion cancelled.{Colors.END}")
@@ -1951,12 +1954,7 @@ def manual_loop(client, emap):
             if input(f"{Colors.BOLD}Type 'YES' to confirm execution: {Colors.END}") == 'YES':
                 for gid in ids_to_process:
                     if gid in emap:
-                        result = client.delete_torrents([t['hash'] for t in emap[gid]], delete_files=True)
-                        if result == "dry_run":
-                            print(f"{Colors.YELLOW}[DRY RUN] Group {gid} would be deleted (no action taken){Colors.END}")
-                        else:
-                            print(f"{Colors.GREEN}Group {gid} deleted.{Colors.END}")
-                            emap.pop(gid, None)
+                        _delete_and_log(gid)
             else:
                 print(f"{Colors.YELLOW}Deletion cancelled.{Colors.END}")
 
