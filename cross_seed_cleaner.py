@@ -214,18 +214,18 @@ def smart_split_paths(raw_str):
         paths.append("".join(current).strip())
     return [p for p in paths if p]
 
+_BRACE_RE = re.compile(r'\{([^{}]+)\}')
+
 def expand_braces(text):
     """
     Expands bash-style braces into a list of paths.
     Input:  "/data/{a,b}/media"
     Output: ["/data/a/media", "/data/b/media"]
     """
-    # Match innermost {a,b,c}
-    pattern = re.compile(r'\{([^{}]+)\}')
-    if not pattern.search(text):
+    match = _BRACE_RE.search(text)
+    if not match:
         return [text]
 
-    match = pattern.search(text)
     prefix = text[:match.start()]
     suffix = text[match.end():]
     options = match.group(1).split(',')
