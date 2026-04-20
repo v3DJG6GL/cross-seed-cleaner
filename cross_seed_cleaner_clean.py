@@ -1070,12 +1070,6 @@ def print_summary(s):
 
 
 def export_reports(client, all_groups, eligible_ids):
-    from datetime import datetime
-    import json
-    import urllib.parse
-    import os
-    import csv
-
     # --- Helper Functions ---
     def format_duration_days(seconds):
         """Formats seconds into days for dashboard averages"""
