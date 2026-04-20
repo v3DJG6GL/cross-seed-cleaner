@@ -271,9 +271,6 @@ NO_HARD_LINKS_MODE = ARGS.no_hard_links_mode
 NO_HARD_LINKS_CATEGORIES = [c.strip().lower() for c in ARGS.no_hard_links_categories.split(',') if c.strip()] if ARGS.no_hard_links_categories else []
 EXTERNAL_MEDIA_PATHS = smart_split_paths(ARGS.external_media_paths) if ARGS.external_media_paths else []
 
-SCAN_STATS = {'files_scanned': 0, 'unique_inodes': 0, 'scan_duration': 0.0, 'fetch_duration': 0.0, 'group_duration': 0.0, 'analyze_duration': 0.0}
-
-
 SCAN_STATS = {
     'files_scanned': 0,
     'unique_inodes': 0,
@@ -638,7 +635,7 @@ def load_and_group_torrents(client):
     protected_by_external = 0
 
     for identity, group in identity_groups.items():
-        is_external_linked = False   # Initialize default valuec
+        is_external_linked = False
         matched_path = None          # Initialize default value
 
         # Only check if we have inodes and it's an inode-based group
@@ -731,7 +728,6 @@ def load_and_group_torrents(client):
     return final_groups
 
 
-_logged_category_decisions = set()
 
 def category_allowed(cat):
 
