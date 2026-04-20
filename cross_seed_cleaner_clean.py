@@ -479,6 +479,17 @@ def get_representative_inode(path):
 
 
 
+def _parse_inode_identity(identity):
+    """Parse an "inode:{dev}:{ino}" identity string; return (dev, ino) or None."""
+    if not identity.startswith("inode:"):
+        return None
+    try:
+        parts = identity.split(":")
+        return (int(parts[1]), int(parts[2]))
+    except (ValueError, IndexError):
+        return None
+
+
 def get_path_identity(torrent):
     """Generate identity string for grouping torrents by inode match"""
     remote_content_path = torrent.get('content_path', '')
@@ -652,41 +663,33 @@ def load_and_group_torrents(client):
         matched_path = None          # Initialize default value
 
         # Only check if we have inodes and it's an inode-based group
-        if external_inodes and identity.startswith("inode:"):
-             try:
-                parts = identity.split(":")
-                if len(parts) >= 3:
-                    dev = int(parts[1])
-                    ino = int(parts[2])
+        pair = _parse_inode_identity(identity) if external_inodes else None
+        if pair and pair in external_inodes:
+            candidate_path = external_inodes[pair]
 
-                    if (dev, ino) in external_inodes:
-                        candidate_path = external_inodes[(dev, ino)]
+            # Check: Is this "external" path actually one of the torrents in this group?
+            is_self_match = False
+            candidate_norm = os.path.normpath(candidate_path)
 
-                        # Check: Is this "external" path actually one of the torrents in this group?
-                        is_self_match = False
-                        candidate_norm = os.path.normpath(candidate_path)
+            for t in group:
+                local_t_path = apply_path_mapping(t.get('content_path', ''))
+                local_norm = os.path.normpath(local_t_path)
 
-                        for t in group:
-                            local_t_path = apply_path_mapping(t.get('content_path', ''))
-                            local_norm = os.path.normpath(local_t_path)
+                # Check 1: Exact Match
+                if candidate_norm == local_norm:
+                    is_self_match = True
+                    break
 
-                            # Check 1: Exact Match
-                            if candidate_norm == local_norm:
-                                is_self_match = True
-                                break
+                # Check 2: Parent/Child Match
+                if candidate_norm.startswith(local_norm + os.sep):
+                    is_self_match = True
+                    break
 
-                            # Check 2: Parent/Child Match
-                            if candidate_norm.startswith(local_norm + os.sep):
-                                is_self_match = True
-                                break
-
-                        if not is_self_match:
-                            is_external_linked = True
-                            matched_path = candidate_path
-                        else:
-                            debug_log(f"[GROUP]   > Ignoring External Match (Self-Reference): {candidate_path}")
-             except (ValueError, IndexError):
-                 pass
+            if not is_self_match:
+                is_external_linked = True
+                matched_path = candidate_path
+            else:
+                debug_log(f"[GROUP]   > Ignoring External Match (Self-Reference): {candidate_path}")
 
         for t in group:
             t['_external_hardlink'] = is_external_linked
@@ -2176,21 +2179,14 @@ def check_no_hard_links(client):
             continue
 
         is_external_match = False
-        if external_inodes and ident.startswith("inode:"):
-            try:
-                parts = ident.split(":")
-                if len(parts) >= 3:
-                    dev = int(parts[1])
-                    ino = int(parts[2])
-                    if (dev, ino) in external_inodes:
-                        is_external_match = True
-                        debug_log(f"Torrent '{t.get('name')}' saved: Matches external hardlink (Inode {ino})")
-            except ValueError:
-                pass
+        pair = _parse_inode_identity(ident) if external_inodes else None
+        if pair and pair in external_inodes:
+            is_external_match = True
+            debug_log(f"Torrent '{t.get('name')}' saved: Matches external hardlink (Inode {pair[1]})")
 
         t['_external_hardlink'] = is_external_match
         if is_external_match:
-             t['_external_path'] = external_inodes.get((dev, ino))
+             t['_external_path'] = external_inodes[pair]
 
         if is_external_match:
             external_matches_count += 1
