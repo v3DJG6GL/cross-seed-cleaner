@@ -909,15 +909,17 @@ _REASON_HTML_ICON = {
     "CATEGORY_FILTER": "🏷️",
 }
 
-def sort_torrents(o, x, by, order):
+def sort_torrents(original, crossseeds, by, order):
     rev = (order == "desc")
     key_map = {'seeds': '_seeder_count', 'uploaded': 'uploaded', 'added': 'added_on',
                'ratio': 'ratio', 'name': 'name', 'size': 'size', 'time': 'seeding_time'}
-    if by in key_map:
+    if by not in key_map:
+        return [original] + list(crossseeds)
+    if by == 'name':
+        k = lambda t: t.get('name', '').lower()
+    else:
         k = lambda t: t.get(key_map[by], 0)
-        if by == 'name': k = lambda t: t.get('name', '').lower()
-        x.sort(key=k, reverse=rev)
-    return [o] + x
+    return [original] + sorted(crossseeds, key=k, reverse=rev)
 
 def print_header():
     w = 262
