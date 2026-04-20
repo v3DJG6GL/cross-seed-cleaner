@@ -1957,6 +1957,32 @@ def manual_loop(client, emap):
             else:
                 print(f"{Colors.YELLOW}Deletion cancelled.{Colors.END}")
 
+
+def _finalize_deletion(client, emap):
+    """Dispatch to manual loop, live auto-delete with confirm, or dry-run notice."""
+    if MANUAL_MODE:
+        manual_loop(client, emap)
+        return
+    if not emap:
+        print(f"{Colors.GREEN}Nothing to delete.{Colors.END}")
+        return
+    if DRY_RUN:
+        print(f"{Colors.YELLOW}DRY RUN. Use --manual or --delete.{Colors.END}")
+        return
+
+    print(f"\n{Colors.BOLD}{Colors.RED}WARNING: LIVE DELETION MODE IS ACTIVE.{Colors.END}")
+    print(f"{Colors.RED}You are about to PERMANENTLY DELETE {len(emap)} groups.{Colors.END}")
+    confirm = input(f"{Colors.BOLD}Type 'YES' to confirm execution: {Colors.END}")
+
+    if confirm == 'YES':
+        print(f"{Colors.RED}AUTO-DELETING...{Colors.END}")
+        for gid, ts in emap.items():
+            client.delete_torrents([t['hash'] for t in ts])
+            print(f"{Colors.GREEN}Group {gid} deleted.{Colors.END}")
+    else:
+        print(f"{Colors.YELLOW}Deletion cancelled.{Colors.END}")
+
+
 def get_group_sort_key(item):
     data = item[1]['original']
     key = SORT_BY
@@ -2202,25 +2228,7 @@ def check_no_hard_links(client):
     print_summary(stats)
     export_reports(client, all_groups, emap.keys())
 
-    if MANUAL_MODE:
-        manual_loop(client, emap)
-    elif not DRY_RUN and emap:
-        print(f"\n{Colors.BOLD}{Colors.RED}WARNING: LIVE DELETION MODE IS ACTIVE.{Colors.END}")
-        print(f"{Colors.RED}You are about to PERMANENTLY DELETE {len(emap)} groups.{Colors.END}")
-        confirm = input(f"{Colors.BOLD}Type 'YES' to confirm execution: {Colors.END}")
-
-        if confirm == 'YES':
-            print(f"{Colors.RED}AUTO-DELETING...{Colors.END}")
-            for gid, ts in emap.items():
-                client.delete_torrents([t['hash'] for t in ts])
-                print(f"{Colors.GREEN}Group {gid} deleted.{Colors.END}")
-        else:
-            print(f"{Colors.YELLOW}Deletion cancelled.{Colors.END}")
-
-    elif not emap:
-        print(f"{Colors.GREEN}Nothing to delete.{Colors.END}")
-    else:
-        print(f"{Colors.YELLOW}DRY RUN. Use --manual or --delete.{Colors.END}")
+    _finalize_deletion(client, emap)
 
 
 def main():
@@ -2245,25 +2253,8 @@ def main():
     print_summary(stats)
     export_reports(client, all_groups, emap.keys())
 
-    if MANUAL_MODE:
-        manual_loop(client, emap)
-    elif not DRY_RUN and emap:
-        print(f"\n{Colors.BOLD}{Colors.RED}WARNING: LIVE DELETION MODE IS ACTIVE.{Colors.END}")
-        print(f"{Colors.RED}You are about to PERMANENTLY DELETE {len(emap)} groups.{Colors.END}")
-        confirm = input(f"{Colors.BOLD}Type 'YES' to confirm execution: {Colors.END}")
+    _finalize_deletion(client, emap)
 
-        if confirm == 'YES':
-            print(f"{Colors.RED}AUTO-DELETING...{Colors.END}")
-            for gid, ts in emap.items():
-                client.delete_torrents([t['hash'] for t in ts])
-                print(f"{Colors.GREEN}Group {gid} deleted.{Colors.END}")
-        else:
-            print(f"{Colors.YELLOW}Deletion cancelled.{Colors.END}")
-
-    elif not emap:
-        print(f"{Colors.GREEN}Nothing to delete.{Colors.END}")
-    else:
-        print(f"{Colors.YELLOW}DRY RUN. Use --manual or --delete.{Colors.END}")
 
 if __name__ == "__main__":
     main()
