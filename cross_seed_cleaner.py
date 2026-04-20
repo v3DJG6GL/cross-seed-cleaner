@@ -70,7 +70,6 @@ EXTERNAL_MEDIA_PATHS = "/mnt/hdd-pool/userdata/media/{user_1,user_2,user_3}"
 #   "both"  = Must match ALLOWLIST *and* NOT match BLOCKLIST
 #   "none"  = Disable category filtering (process everything)
 CATEGORY_FILTER_MODE = "block"
-_VALID_CATEGORY_FILTER_MODES = {"none", "allow", "block", "both"}
 
 # Sorting for CLI output (CLI Table & Group processing order)
 # Options:
@@ -81,14 +80,12 @@ _VALID_CATEGORY_FILTER_MODES = {"none", "allow", "block", "both"}
 #   "added"    = Date added (useful to see oldest first)
 #   "name"     = Name of torrent
 SORT_BY = "name"
-_VALID_SORT_BY = {"seeders", "seeds", "ratio", "size", "uploaded", "added", "name", "time"}
 
 # Sorting Order
 # Options:
 #   "asc"  = Ascending (Smallest/Oldest first)
 #   "desc" = Descending (Largest/Newest first)
 SORT_ORDER = "asc"
-_VALID_SORT_ORDER = {"asc", "desc"}
 
 # Trackers that report incorrect seeder counts (fallback to peer list counting)
 # Comma-separated domains or regex patterns (e.g., "tracker.bad.com,r:.*\.bad\.net")
@@ -101,7 +98,6 @@ PATH_MAPPINGS = {
     "/media/downloads/torrents": "/mnt/hdd-pool/userdata/media/downloads/torrents",
     "/media/downloads/freeleech": "/mnt/hdd-pool/appdata/qbittorrent/freeleech",
 }
-_SORTED_PATH_MAPPING_PREFIXES = sorted(PATH_MAPPINGS.keys(), key=len, reverse=True)
 
 # Filter Lists. Support exact match or Regex (prefix with 'r:').
 # Examples:
@@ -119,19 +115,23 @@ def str2bool(v):
 
 
 def _validate_config():
-    if CATEGORY_FILTER_MODE.lower() not in _VALID_CATEGORY_FILTER_MODES:
+    valid_category_filter_modes = {"none", "allow", "block", "both"}
+    valid_sort_by = {"seeders", "seeds", "ratio", "size", "uploaded", "added", "name", "time"}
+    valid_sort_order = {"asc", "desc"}
+
+    if CATEGORY_FILTER_MODE.lower() not in valid_category_filter_modes:
         sys.stderr.write(
             f"ERROR: CATEGORY_FILTER_MODE={CATEGORY_FILTER_MODE!r} is invalid. "
-            f"Expected one of {sorted(_VALID_CATEGORY_FILTER_MODES)}.\n"
+            f"Expected one of {sorted(valid_category_filter_modes)}.\n"
         )
         sys.exit(1)
-    if SORT_BY not in _VALID_SORT_BY:
+    if SORT_BY not in valid_sort_by:
         sys.stderr.write(
             f"ERROR: SORT_BY={SORT_BY!r} is invalid. "
-            f"Expected one of {sorted(_VALID_SORT_BY)}.\n"
+            f"Expected one of {sorted(valid_sort_by)}.\n"
         )
         sys.exit(1)
-    if SORT_ORDER not in _VALID_SORT_ORDER:
+    if SORT_ORDER not in valid_sort_order:
         sys.stderr.write(
             f"ERROR: SORT_ORDER={SORT_ORDER!r} is invalid. Expected 'asc' or 'desc'.\n"
         )
@@ -284,6 +284,7 @@ MIN_ORIGINAL_SEED_TIME_DAYS = ARGS.min_days
 MIN_ORIGINAL_SEED_TIME_HOURS = MIN_ORIGINAL_SEED_TIME_DAYS * 24
 MIN_SIZE_GIB = ARGS.min_size_gib
 MIN_SIZE_BYTES = MIN_SIZE_GIB * 1024 * 1024 * 1024
+_SORTED_PATH_MAPPING_PREFIXES = sorted(PATH_MAPPINGS.keys(), key=len, reverse=True)
 DEBUG_MODE = ARGS.debug
 MANUAL_MODE = ARGS.manual
 ELIGIBLE_ONLY = ARGS.eligible_only
