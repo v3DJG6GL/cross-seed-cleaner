@@ -20,31 +20,44 @@ from datetime import datetime
 # ============================================================================
 # 1. SETTINGS (edit these; environment variables and command-line flags override at startup)
 # ============================================================================
-# Connection details for the qBittorrent Web UI. The URL must start with http:// or https:// and include :port if qBittorrent runs on a non-default port. Don't add a trailing slash.
+# Connection details for the qBittorrent Web UI.
+# The URL must start with http:// or https:// and include :port if qBittorrent runs on a non-default port.
+# Don't add a trailing slash.
 QBITTORRENT_HOST = "http://localhost:8080"
 QBITTORRENT_USER = "admin"
 QBITTORRENT_PASS = "password"
 
-# Global safety net: a group is kept (not deleted) if any of its torrents has fewer than X seeders. In No-Hard-Links mode, only the orphan torrent itself is checked.
+# Global safety net: a group is kept (not deleted) if any of its torrents has fewer than X seeders.
+# In No-Hard-Links mode, only the orphan torrent itself is checked.
 MIN_SEEDERS = 4
 
-# Group safety: if a group is made up of X or more torrents in total (Original plus Cross-Seeds), it is kept. E.g. X=6 means groups of 6+ torrents are protected from deletion. This check is skipped in No-Hard-Links mode.
+# Group safety: if a group is made up of X or more torrents in total (Original plus Cross-Seeds), it is kept.
+# E.g. X=6 means groups of 6+ torrents are protected from deletion.
+# This check is skipped in No-Hard-Links mode.
 MAX_TORRENTS_IN_GROUP = 6
 
-# The Original torrent must have been seeding for at least this many days before its cross-seeds can be deleted. Decimal values are supported (e.g. 7.5).
+# The Original torrent must have been seeding for at least this many days before its cross-seeds can be deleted.
+# Decimal values are supported (e.g. 7.5).
 MIN_ORIGINAL_SEED_TIME_DAYS = 365
 
-# The Original torrent must be at least this large (in GiB) before its cross-seeds can be deleted. Decimal values are supported. Set to 0 to turn off the size check.
+# The Original torrent must be at least this large (in GiB) before its cross-seeds can be deleted.
+# Decimal values are supported.
+# Set to 0 to turn off the size check.
 MIN_SIZE_GIB = 15
 
 # Helper flags
 DEBUG_MODE = False                      # Enable verbose logging
-# True = simulate only (nothing is deleted); False = actually delete torrents. The --dry-run / --delete command-line flags override this. In Manual Mode the cleaner always asks you to confirm before deleting, no matter what this is set to.
+# True = simulate only (nothing is deleted); False = actually delete torrents.
+# The --dry-run / --delete command-line flags override this.
+# In Manual Mode the cleaner always asks you to confirm before deleting, no matter what this is set to.
 DRY_RUN = True
-# True = hide non-eligible groups from the CLI output and the HTML report. This does NOT affect the CSV export — the CSV always contains every group.
+# True = hide non-eligible groups from the CLI output and the HTML report.
+# This does NOT affect the CSV export — the CSV always contains every group.
 ELIGIBLE_ONLY = True
 
-# Output filenames. A timestamp is added before the extension (e.g. output.html -> output_2026.04.21_14.30.00.html). Leave empty (or pass an empty string via environment variable / command-line) to turn the export off.
+# Output filenames.
+# A timestamp is added before the extension (e.g. output.html -> output_2026.04.21_14.30.00.html).
+# Leave empty (or pass an empty string via environment variable / command-line) to turn the export off.
 HTML_EXPORT = "output.html"
 CSV_EXPORT = "output.csv"
 
@@ -66,7 +79,8 @@ NO_HARD_LINKS_CATEGORIES = "cross-seed-category,r:autobrr-.*"
 # 4. Mixed — combine any of the above: "/mnt/local/{movies,tv}, /mnt/remote/user_*"
 EXTERNAL_MEDIA_PATHS = "/mnt/hdd-pool/userdata/media/{user_1,user_2,user_3}"
 
-# Category filter mode. Applies to the ORIGINAL torrent's category only.
+# Category filter mode.
+# Applies to the ORIGINAL torrent's category only.
 # Modes:
 #   "allow" = Only process groups where Original matches ALLOWLIST
 #   "block" = Skip groups where Original matches BLOCKLIST
@@ -91,24 +105,31 @@ SORT_BY = "name"
 #   "desc" = Descending (Largest/Newest first)
 SORT_ORDER = "asc"
 
-# Some trackers misreport the seeder count. For trackers listed here, the cleaner estimates the seeder count from the total peer count (seeders + leechers) instead.
-# Patterns are matched against the tracker's domain, with any leading "tracker." or "www." removed. Comma-separated. Each entry is either a plain domain or a regex prefixed with "r:". Regex patterns match from the start of the domain — add "$" at the end to require a full match.
+# Some trackers misreport the seeder count.
+# For trackers listed here, the cleaner estimates the seeder count from the total peer count (seeders + leechers) instead.
+# Patterns are matched against the tracker's domain, with any leading "tracker." or "www." removed.
+# Comma-separated.
+# Each entry is either a plain domain or a regex prefixed with "r:".
+# Regex patterns match from the start of the domain — add "$" at the end to require a full match.
 UNRELIABLE_TRACKERS = "hdts-announce.ru,hd-space.pw,tfa.tf"
 
 # Hardcoded — cannot be overridden by environment variable or command-line.
 # Remap internal (container) paths to host paths so the cleaner can check files on disk.
 # Format: {"Internal Container Path": "Host Path"}
-# If a path starts with more than one listed prefix, the longest one wins. Paths that don't match any prefix are used as-is.
+# If a path starts with more than one listed prefix, the longest one wins.
+# Paths that don't match any prefix are used as-is.
 PATH_MAPPINGS = {
     "/media/downloads/torrents": "/mnt/hdd-pool/userdata/media/downloads/torrents",
     "/media/downloads/freeleech": "/mnt/hdd-pool/appdata/qbittorrent/freeleech",
 }
 
-# Filter Lists. Each entry is either an exact category name or a regex prefixed with "r:".
+# Filter Lists.
+# Each entry is either an exact category name or a regex prefixed with "r:".
 # Examples:
 #   "Movies"       -> Exact match for category "Movies"
 #   "r:.*-4k$"     -> Regex match (matches "Movies-4k", "TV-4k"); also "r:autobrr-.*"
-# Regex patterns match from the start of the category name — add "$" at the end (like in "r:.*-4k$") to require the full name to match. Matching is case-sensitive.
+# Regex patterns match from the start of the category name — add "$" at the end (like in "r:.*-4k$") to require the full name to match.
+# Matching is case-sensitive.
 CATEGORY_ALLOWLIST = ["sonarr-imported", "radarr-imported", "lidarr-imported", "r:.*-allowsuffix$"]
 CATEGORY_BLOCKLIST = ["freeleech-orpheus", "r:.*-blocksuffix$"]
 
