@@ -788,18 +788,36 @@ def category_allowed(cat):
 
 
 
-def format_bytes(b):
-    for u in ['B', 'KiB', 'MiB', 'GiB', 'TiB']:
-        if b < 1024: return f"{b:.2f} {u}"
-        b /= 1024.0
-    return f"{b:.2f} PB"
+def format_size_smart(size_bytes):
+    if size_bytes == 0:
+        return "0 B"
+    units = ("B", "KiB", "MiB", "GiB", "TiB", "PiB")
+    i = 0
+    p = size_bytes
+    while p >= 1024 and i < len(units) - 1:
+        p /= 1024
+        i += 1
+    return f"{p:.2f} {units[i]}"
+
+
+def format_duration(seconds, fmt="d:hh"):
+    """Format seconds as 'd:hh', 'd:hh:mm', or 'days' (e.g. '3.5 days')."""
+    if seconds <= 0:
+        return {"d:hh": "0:00", "d:hh:mm": "0:00:00", "days": "0.0 days"}[fmt]
+    if fmt == "days":
+        return f"{seconds / 86400:.1f} days"
+    _, sec = divmod(int(seconds), 60)
+    h, m = divmod(_, 60)
+    d, h = divmod(h, 24)
+    if fmt == "d:hh":
+        return f"{d}:{h:02d}"
+    if fmt == "d:hh:mm":
+        return f"{d}:{h:02d}:{m:02d}"
+    raise ValueError(f"unknown duration fmt: {fmt!r}")
+
 
 def format_timestamp(ts):
     return datetime.fromtimestamp(ts).strftime("%Y.%m.%d | %H:%M") if ts > 0 else "N/A"
-
-def format_seed_time(s):
-    if s <= 0: return "0:00"
-    return f"{int(s // 86400)}:{int((s % 86400) // 3600):02d}"
 
 def get_tracker_name(client, h):
     domain = get_tracker_domain(client, h)
@@ -1001,9 +1019,9 @@ def print_group(client, orig, xs, num, total):
             f"{Colors.BOLD}[ORPHAN]{Colors.END}" if NO_HARD_LINKS_MODE else (f"{Colors.BOLD}[ORIGINAL]{Colors.END}" if is_orig else f"{Colors.DIM}[CROSS]{Colors.END}"),
             f"{c_seeds}{seeders}{Colors.END}",
             f"{t.get('ratio', 0.0):.2f}",
-            f"{c_size}{format_bytes(size)}{Colors.END}",
-            format_bytes(t.get('uploaded', 0)),
-            f"{c_time}{format_seed_time(seed_time)}{Colors.END}",
+            f"{c_size}{format_size_smart(size)}{Colors.END}",
+            format_size_smart(t.get('uploaded', 0)),
+            f"{c_time}{format_duration(seed_time)}{Colors.END}",
             format_timestamp(t.get('added_on', 0)),
             t['_tracker_cache'][:30],
             f"{c_cat}{t.get('category', '')[:20]}{Colors.END}",
@@ -1015,7 +1033,7 @@ def print_group(client, orig, xs, num, total):
             f"{Colors.BLUE}{Colors.BOLD}[LIBRARY]{Colors.END}",
             f"{Colors.DIM}-{Colors.END}",
             f"{Colors.DIM}-{Colors.END}",
-            f"{Colors.BOLD}{format_bytes(orig.get('size', 0))}{Colors.END}",
+            f"{Colors.BOLD}{format_size_smart(orig.get('size', 0))}{Colors.END}",
             f"{Colors.DIM}-{Colors.END}",
             f"{Colors.DIM}-{Colors.END}",
             f"{Colors.DIM}-{Colors.END}",
@@ -1069,9 +1087,9 @@ def print_summary(s):
     rows.append([b("Torrents to Keep"), f"{Colors.GREEN}{s['torrents_keep']}{Colors.END}"])
 
     # Size Statistics
-    rows.append([b("Total Size Analyzed"), format_bytes(s['size_total'])])
-    rows.append([b("Size to Delete"), f"{Colors.RED}{format_bytes(s['size_del'])} ({p_del:.1f}%){Colors.END}"])
-    rows.append([b("Size to Keep"), f"{Colors.GREEN}{format_bytes(s['size_keep'])} ({p_keep:.1f}%){Colors.END}"])
+    rows.append([b("Total Size Analyzed"), format_size_smart(s['size_total'])])
+    rows.append([b("Size to Delete"), f"{Colors.RED}{format_size_smart(s['size_del'])} ({p_del:.1f}%){Colors.END}"])
+    rows.append([b("Size to Keep"), f"{Colors.GREEN}{format_size_smart(s['size_keep'])} ({p_keep:.1f}%){Colors.END}"])
 
     print()
     w = 262
@@ -1086,38 +1104,6 @@ def print_summary(s):
 
 def export_reports(client, all_groups, eligible_ids):
     # --- Helper Functions ---
-    def format_duration_days(seconds):
-        """Formats seconds into days for dashboard averages"""
-        if seconds <= 0: return "0.0 days"
-        days = seconds / 86400
-        return f"{days:.1f} days"
-
-    def format_duration_ddd_hh_mm(seconds):
-        """Formats seconds into DDD:HH:MM for CSV"""
-        if seconds <= 0: return "0:00:00"
-        m, s = divmod(int(seconds), 60)
-        h, m = divmod(m, 60)
-        d, h = divmod(h, 24)
-        return f"{d}:{h:02d}:{m:02d}"
-
-    def format_duration_ddd_hh(seconds):
-        """Formats seconds into DDD:HH for HTML/CLI match"""
-        if seconds <= 0: return "0:00"
-        m, s = divmod(int(seconds), 60)
-        h, m = divmod(m, 60)
-        d, h = divmod(h, 24)
-        return f"{d}:{h:02d}"
-
-    def format_size_smart(size_bytes):
-        if size_bytes == 0: return "0 B"
-        units = ("B", "KiB", "MiB", "GiB", "TiB", "PiB")
-        i = 0
-        p = size_bytes
-        while p >= 1024 and i < len(units) - 1:
-            p /= 1024
-            i += 1
-        return f"{p:.2f} {units[i]}"
-
     def _mono_block(lines):
         return f"<div style='margin-top:2px; font-family:monospace; font-size:10px; color:#aaa; line-height:1.2; word-break:break-all;'>{'<br>'.join(lines)}</div>"
 
@@ -1260,11 +1246,11 @@ def export_reports(client, all_groups, eligible_ids):
         return stats_dict[key] / stats_dict['count'] if stats_dict['count'] > 0 else 0
 
     avg_all_ratio = get_avg(stats_analyzed, 'ratio')
-    avg_all_time = format_duration_days(get_avg(stats_analyzed, 'time'))
+    avg_all_time = format_duration(get_avg(stats_analyzed, 'time'), "days")
     total_all_up = format_size_smart(stats_analyzed['up'])
 
     avg_del_ratio = get_avg(stats_eligible, 'ratio')
-    avg_del_time = format_duration_days(get_avg(stats_eligible, 'time'))
+    avg_del_time = format_duration(get_avg(stats_eligible, 'time'), "days")
     total_del_up = format_size_smart(stats_eligible['up'])
 
     sorted_trackers = sorted(tracker_stats.keys(), key=lambda k: tracker_stats[k]['total_size'], reverse=True)
@@ -1636,7 +1622,7 @@ def export_reports(client, all_groups, eligible_ids):
                 <td>{t.get('ratio', 0):.2f}</td>
                 <td><span class="{c_size}">{format_size_smart(t_size)}</span></td>
                 <td>{format_size_smart(t.get('uploaded', 0))}</td>
-                <td><span class="{c_time}">{format_duration_ddd_hh(t_time)}</span></td>
+                <td><span class="{c_time}">{format_duration(t_time)}</span></td>
                 <td style="font-size:11px; color:#888;">{added_ts}</td>
                 <td>{_h(tracker_clean)}</td>
                 <td><span class="{c_cat}">{_h(t_cat)}</span></td>
@@ -1888,7 +1874,7 @@ def export_reports(client, all_groups, eligible_ids):
 
                     for t in group_torrents:
                         add_date = format_timestamp(t.get('added_on', 0))
-                        seed_time = format_duration_ddd_hh_mm(t.get('seeding_time', 0))
+                        seed_time = format_duration(t.get('seeding_time', 0), "d:hh:mm")
 
                         writer.writerow({
                             'Group ID': idx,
