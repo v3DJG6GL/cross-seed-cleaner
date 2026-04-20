@@ -2149,25 +2149,24 @@ def check_no_hard_links(client):
 
     all_groups = {t['hash']: {'original': t, 'crossseeds': [], 'name': t['name']} for t in orphans}
 
+    _run_analyze_and_finalize(client, all_groups)
 
+
+def _run_analyze_and_finalize(client, all_groups):
     print(f"{Colors.BOLD}[6/7]{Colors.END} Analyze deletable torrents...")
     t_start = datetime.now()
     emap = {}
-
     for idx, (h, d) in enumerate(sorted(all_groups.items(), key=get_group_sort_key, reverse=(SORT_ORDER == 'desc')), 1):
         elig, ts = print_group(client, d, idx, len(all_groups))
         if elig:
             emap[idx] = ts
-
     SCAN_STATS['analyze_duration'] = (datetime.now() - t_start).total_seconds()
     print(f"{Colors.GREEN}\n  ✓ Analysis complete in {SCAN_STATS['analyze_duration']:.2f}s.{Colors.END}")
 
     print(f"\n{Colors.BOLD}[7/7]{Colors.END} Finalizing & exporting reports...")
-
     stats = calculate_stats(all_groups, emap)
     print_summary(stats)
     export_reports(all_groups, emap.keys())
-
     _finalize_deletion(client, emap)
 
 
@@ -2179,21 +2178,7 @@ def main():
         check_no_hard_links(client)
         return
     all_groups = load_and_group_torrents(client)
-
-    print(f"{Colors.BOLD}[6/7]{Colors.END} Analyze deletable torrents...")
-    t_start = datetime.now()
-    emap = {}
-    for idx, (h, d) in enumerate(sorted(all_groups.items(), key=get_group_sort_key, reverse=(SORT_ORDER == 'desc')), 1):
-        elig, ts = print_group(client, d, idx, len(all_groups))
-        if elig: emap[idx] = ts
-    SCAN_STATS['analyze_duration'] = (datetime.now() - t_start).total_seconds()
-    print(f"{Colors.GREEN}\n  ✓ Analysis complete in {SCAN_STATS['analyze_duration']:.2f}s.{Colors.END}")
-    print(f"\n{Colors.BOLD}[7/7]{Colors.END} Finalizing & exporting reports...")
-    stats = calculate_stats(all_groups, emap)
-    print_summary(stats)
-    export_reports(all_groups, emap.keys())
-
-    _finalize_deletion(client, emap)
+    _run_analyze_and_finalize(client, all_groups)
 
 
 if __name__ == "__main__":
