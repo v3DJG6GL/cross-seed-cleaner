@@ -843,7 +843,6 @@ def print_config():
 
     unreliable_str = ', '.join(UNRELIABLE_TRACKERS) if UNRELIABLE_TRACKERS else 'None'
     no_hard_links_cat = ', '.join(NO_HARD_LINKS_CATEGORIES) if NO_HARD_LINKS_CATEGORIES else 'None'
-    ext_media_str = '\n'.join(EXTERNAL_MEDIA_PATHS) if EXTERNAL_MEDIA_PATHS else 'None' # Display nicely
     cat_allow_str = ', '.join(CATEGORY_ALLOWLIST) if CATEGORY_ALLOWLIST else 'None'
     cat_block_str = ', '.join(CATEGORY_BLOCKLIST) if CATEGORY_BLOCKLIST else 'None'
 
@@ -874,7 +873,7 @@ def print_config():
         [b("Dry Run"), c(DRY_RUN)],
         [b("Debug Mode"), c(DEBUG_MODE)],
         [b("No Hard Links Mode"), c(NO_HARD_LINKS_MODE)],
-        [b("No Hard Links Cat"), c(NO_HARD_LINKS_CATEGORIES)],
+        [b("No Hard Links Cat"), no_hard_links_cat if NO_HARD_LINKS_CATEGORIES else c("None")],
         [b("HTML Export"), c(HTML_EXPORT or "Disabled")],
         [b("CSV Export"), c(CSV_EXPORT or "Disabled")],
     ]
@@ -896,7 +895,7 @@ def print_config():
                 rows.append([label, path])
                 first = False
     else:
-        rows.append([b("Ext Media Paths"), c("None")])
+        rows.append([b("External Media Paths"), c("None")])
 
 
     if PATH_MAPPINGS:
