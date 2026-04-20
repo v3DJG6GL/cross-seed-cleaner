@@ -575,6 +575,7 @@ def is_unreliable_tracker(tracker_domain):
 def get_seeder_count(client, torrent):
 
     tracker_domain = get_tracker_domain(client, torrent)
+    torrent['_tracker_domain'] = tracker_domain
     num_complete = torrent.get('num_complete', 0)
     num_incomplete = torrent.get('num_incomplete', 0)
     name = torrent.get('name', 'Unknown')
@@ -1222,7 +1223,7 @@ def export_reports(all_groups, eligible_ids):
                 stats_eligible['up'] += up
                 stats_eligible['count'] += 1
 
-            domain = _domain_from_tracker_url(t.get('tracker', '')) or "Unknown"
+            domain = t.get('_tracker_domain') or "Unknown"
 
             if domain not in tracker_stats:
                 tracker_stats[domain] = {'total_count': 0, 'total_size': 0, 'del_count': 0, 'del_size': 0}
@@ -1587,7 +1588,7 @@ def export_reports(all_groups, eligible_ids):
                 type_badge = '<span class="type-badge type-cross" style="border:1px solid #555;">CROSS</span>'
 
             added_ts = format_timestamp(t.get('added_on', 0))
-            tracker_clean = _domain_from_tracker_url(t.get('tracker', '')) or "Unknown"
+            tracker_clean = t.get('_tracker_domain') or "Unknown"
 
             cur_seeds = t.get('_seeder_count', t.get('num_complete', 0))
 
@@ -1871,7 +1872,7 @@ def export_reports(all_groups, eligible_ids):
                             'Type': 'ORIGINAL' if t == d['original'] else 'CROSS-SEED',
                             'Name': t.get('name', ''),
                             'Size': format_size_smart(t.get('size', 0)),
-                            'Tracker': _domain_from_tracker_url(t.get('tracker', '')) or "Unknown",
+                            'Tracker': t.get('_tracker_domain') or "Unknown",
                             'Category': t.get('category', ''),
                             'Added': add_date,
                             'Seeding Time': seed_time,
