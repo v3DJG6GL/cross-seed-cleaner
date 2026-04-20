@@ -2095,10 +2095,10 @@ def check_no_hard_links(client):
     t_start = datetime.now()
     print(f"{Colors.BOLD}[5/7]{Colors.END} Filtering torrents for orphans...")
 
-    debug_log(f"[FILTER] Starting analysis of {len(torrents)} torrents against {len(external_inodes)} external inodes...")
+    debug_log(f"[FILTER] Starting analysis of {len(category_torrents)} category torrents against {len(external_inodes)} external inodes...")
 
     identity_map = defaultdict(list)
-    for t in torrents:
+    for t in category_torrents:
         t['_identity'] = get_path_identity(t)
         identity_map[t['_identity']].append(t)
 
