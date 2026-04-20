@@ -530,18 +530,34 @@ _CATEGORY_BLOCKLIST_SPECS = _compile_specs(CATEGORY_BLOCKLIST, "CATEGORY_BLOCKLI
 _UNRELIABLE_TRACKERS_SPECS = _compile_specs(UNRELIABLE_TRACKERS, "UNRELIABLE_TRACKERS")
 _NO_HARD_LINKS_CATEGORY_SPECS = _compile_specs(NO_HARD_LINKS_CATEGORIES, "NO_HARD_LINKS_CATEGORIES")
 
-def get_tracker_domain(client, torrent_hash):
-    """Get the primary tracker domain for a torrent"""
+def _domain_from_tracker_url(url):
+    """Normalize a tracker URL to a display domain, or return None."""
+    if not url or '://' not in url or url.startswith('**'):
+        return None
+    host = urllib.parse.urlparse(url).hostname
+    if not host:
+        return None
+    return host.replace('tracker.', '').replace('www.', '')
+
+
+def get_tracker_domain(client, torrent):
+    """Get the primary tracker domain for a torrent.
+
+    Prefers the URL already on the torrent dict (populated by /torrents/info).
+    Falls back to a per-hash /torrents/trackers lookup only when that field
+    is empty — e.g. immediately after add, before first announce.
+    """
+    domain = _domain_from_tracker_url(torrent.get('tracker', ''))
+    if domain:
+        return domain
     try:
-        trackers = client.get_torrent_trackers(torrent_hash)
+        trackers = client.get_torrent_trackers(torrent['hash'])
         for tracker in trackers:
-            url = tracker.get('url', '')
-            if '://' in url and not url.startswith('**'):
-                domain = url.split('://')[1].split('/')[0].split(':')[0]
-                domain = domain.replace('tracker.', '').replace('www.', '')
+            domain = _domain_from_tracker_url(tracker.get('url', ''))
+            if domain:
                 return domain
     except (urllib.error.URLError, AttributeError, KeyError) as e:
-        debug_log(f"[TRACKER] lookup failed for {torrent_hash}: {e}")
+        debug_log(f"[TRACKER] lookup failed for {torrent.get('hash')}: {e}")
     return None
 
 def is_unreliable_tracker(tracker_domain):
@@ -557,7 +573,7 @@ def is_unreliable_tracker(tracker_domain):
 
 def get_seeder_count(client, torrent):
 
-    tracker_domain = get_tracker_domain(client, torrent['hash'])
+    tracker_domain = get_tracker_domain(client, torrent)
     num_complete = torrent.get('num_complete', 0)
     num_incomplete = torrent.get('num_incomplete', 0)
     name = torrent.get('name', 'Unknown')
@@ -808,8 +824,8 @@ def format_duration(seconds, fmt="d:hh"):
 def format_timestamp(ts):
     return datetime.fromtimestamp(ts).strftime("%Y.%m.%d | %H:%M") if ts > 0 else "N/A"
 
-def get_tracker_name(client, h):
-    domain = get_tracker_domain(client, h)
+def get_tracker_name(client, torrent):
+    domain = get_tracker_domain(client, torrent)
     return domain[:30] if domain else "Unknown"
 
 
@@ -1016,7 +1032,7 @@ def print_group(client, orig, xs, num, total):
 
     for t in sort_torrents(orig, xs, SORT_BY, SORT_ORDER):
         if '_tracker_cache' not in t:
-            t['_tracker_cache'] = get_tracker_name(client, t['hash'])
+            t['_tracker_cache'] = get_tracker_name(client, t)
         is_orig = (t == orig)
         seeders = t.get('_seeder_count', 0)
         size = t.get('size', 0)
@@ -1873,7 +1889,7 @@ def export_reports(client, all_groups, eligible_ids):
                             'Type': 'ORIGINAL' if t == d['original'] else 'CROSS-SEED',
                             'Name': t.get('name', ''),
                             'Size': format_size_smart(t.get('size', 0)),
-                            'Tracker': get_tracker_domain(client, t.get('hash', '')) or "Unknown",
+                            'Tracker': get_tracker_domain(client, t) or "Unknown",
                             'Category': t.get('category', ''),
                             'Added': add_date,
                             'Seeding Time': seed_time,
