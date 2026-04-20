@@ -1014,8 +1014,12 @@ def print_config():
 
 
 
-def print_group(client, orig, xs, num, total):
-    result = evaluate_group({'original': orig, 'crossseeds': xs})
+def print_group(client, d, num, total):
+    orig = d['original']
+    xs = d['crossseeds']
+    if '_evaluation' not in d:
+        d['_evaluation'] = evaluate_group(d)
+    result = d['_evaluation']
     eligible = result['eligible']
     all_t = result['all_torrents']
     is_externally_linked = result['externally_linked']
@@ -1238,7 +1242,9 @@ def export_reports(client, all_groups, eligible_ids):
 
         rejection_reasons = []
         if not is_del_group:
-            for code in evaluate_group(d)['reasons']:
+            if '_evaluation' not in d:
+                d['_evaluation'] = evaluate_group(d)
+            for code in d['_evaluation']['reasons']:
                 rejection_reasons.append({'icon': _REASON_HTML_ICON[code], 'text': _reason_text(code)})
 
         report_rows.append({
@@ -2215,7 +2221,7 @@ def check_no_hard_links(client):
     eligible_torrents = []
 
     for idx, (h, d) in enumerate(sorted(all_groups.items(), key=get_group_sort_key, reverse=(SORT_ORDER == 'desc')), 1):
-        elig, ts = print_group(client, d['original'], d['crossseeds'], idx, len(all_groups))
+        elig, ts = print_group(client, d, idx, len(all_groups))
         if elig:
             emap[idx] = ts
             eligible_torrents.extend(ts)
@@ -2272,7 +2278,7 @@ def main():
     t_start = datetime.now()
     emap = {}
     for idx, (h, d) in enumerate(sorted(all_groups.items(), key=get_group_sort_key, reverse=(SORT_ORDER == 'desc')), 1):
-        elig, ts = print_group(client, d['original'], d['crossseeds'], idx, len(all_groups))
+        elig, ts = print_group(client, d, idx, len(all_groups))
         if elig: emap[idx] = ts
     SCAN_STATS['analyze_duration'] = (datetime.now() - t_start).total_seconds()
     print(f"{Colors.GREEN}\n  ✓ Analysis complete in {SCAN_STATS['analyze_duration']:.2f}s.{Colors.END}")
