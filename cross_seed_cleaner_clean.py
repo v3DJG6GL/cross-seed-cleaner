@@ -240,6 +240,17 @@ def strip_colors(text):
 
 ARGS, DRY_RUN = get_config()
 
+_VENDOR_CHARTJS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'vendor', 'chart.js', 'chart.umd.min.js')
+try:
+    with open(_VENDOR_CHARTJS_PATH, 'r', encoding='utf-8') as _f:
+        CHARTJS_SOURCE = _f.read()
+except FileNotFoundError:
+    sys.stderr.write(
+        f"ERROR: vendored Chart.js not found at {_VENDOR_CHARTJS_PATH}.\n"
+        f"Run from a full checkout of the repository (the vendor/chart.js/ directory must be present).\n"
+    )
+    sys.exit(1)
+
 QBITTORRENT_HOST = ARGS.host
 QBITTORRENT_USER = ARGS.user
 QBITTORRENT_PASS = ARGS.password
@@ -1680,10 +1691,10 @@ def export_reports(client, all_groups, eligible_ids):
     <!DOCTYPE html>
     <html>
     <head>
-        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
+        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
         <title>Cross-Seed Cleaner Report</title>
         <meta charset="UTF-8">
-        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1" integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+        <script>{CHARTJS_SOURCE}</script>
         <style>{css_block}</style>
     </head>
     <body>

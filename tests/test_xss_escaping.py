@@ -104,11 +104,17 @@ class XSSEscapingTest(unittest.TestCase):
 
     def test_no_script_breakout_in_inline_js(self):
         html = self._render()
-        # Extract the inline Chart.js setup block (not the CDN <script src=...> one).
+        # Extract the inline Chart.js setup block (regex anchors on newline after <script>,
+        # which doesn't match the vendored Chart.js bundle's tag — that one is tested below).
         block = re.search(r'<script>\s*\n(.*?)</script>', html, re.DOTALL)
-        self.assertIsNotNone(block, "inline <script> block missing from report")
+        self.assertIsNotNone(block, "inline <script> setup block missing from report")
         inline_js = block.group(1)
         self.assertNotIn("</script>", inline_js, "</script> breakout inside inline JS")
+
+    def test_chartjs_is_vendored_not_cdn(self):
+        html = self._render()
+        self.assertNotIn("cdn.jsdelivr.net", html, "CDN reference leaked into generated report")
+        self.assertIn("/*!\n * Chart.js v4.5.1", html, "vendored Chart.js banner missing")
 
 
 if __name__ == "__main__":
