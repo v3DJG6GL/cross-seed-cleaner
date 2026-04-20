@@ -908,17 +908,28 @@ _REASON_HTML_ICON = {
     "CATEGORY_FILTER": "🏷️",
 }
 
+_SORT_KEY_MAP = {
+    'seeds': '_seeder_count',
+    'seeders': '_seeder_count',
+    'ratio': 'ratio',
+    'size': 'size',
+    'uploaded': 'uploaded',
+    'added': 'added_on',
+    'name': 'name',
+    'time': 'seeding_time',
+}
+
+def _torrent_sort_key(torrent, by):
+    field = _SORT_KEY_MAP[by]
+    if field == 'name':
+        return torrent.get('name', '').lower()
+    return torrent.get(field, 0)
+
 def sort_torrents(original, crossseeds, by, order):
-    rev = (order == "desc")
-    key_map = {'seeds': '_seeder_count', 'uploaded': 'uploaded', 'added': 'added_on',
-               'ratio': 'ratio', 'name': 'name', 'size': 'size', 'time': 'seeding_time'}
-    if by not in key_map:
+    if by not in _SORT_KEY_MAP:
         return [original] + list(crossseeds)
-    if by == 'name':
-        k = lambda t: t.get('name', '').lower()
-    else:
-        k = lambda t: t.get(key_map[by], 0)
-    return [original] + sorted(crossseeds, key=k, reverse=rev)
+    rev = (order == "desc")
+    return [original] + sorted(crossseeds, key=lambda t: _torrent_sort_key(t, by), reverse=rev)
 
 def print_header():
     w = 262
@@ -1987,16 +1998,9 @@ def _finalize_deletion(client, emap):
 
 
 def get_group_sort_key(item):
-    data = item[1]['original']
-    key = SORT_BY
-    val = 0
-    if key == 'added': val = data.get('added_on', 0)
-    elif key == 'size': val = data.get('size', 0)
-    elif key == 'ratio': val = data.get('ratio', 0)
-    elif key == 'uploaded': val = data.get('uploaded', 0)
-    elif key == 'seeds' or key == 'seeders': val = data.get('_seeder_count', 0)
-    elif key == 'name': return data.get('name', '').lower()
-    return val
+    if SORT_BY not in _SORT_KEY_MAP:
+        return 0
+    return _torrent_sort_key(item[1]['original'], SORT_BY)
 
 
 
