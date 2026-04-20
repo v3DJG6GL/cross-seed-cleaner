@@ -262,6 +262,12 @@ def strip_colors(text):
 def bold(text):
     return f"{Colors.BOLD}{text}{Colors.END}"
 
+def html_escape(v):
+    return html.escape("" if v is None else str(v), quote=True)
+
+def js_string(v):
+    return json.dumps(v).replace("</", "<\\/")
+
 ARGS, DRY_RUN = get_config()
 
 QBITTORRENT_HOST = ARGS.host
@@ -1160,11 +1166,8 @@ def export_reports(client, all_groups, eligible_ids):
     def _mono_block(lines):
         return f"<div style='margin-top:2px; font-family:monospace; font-size:10px; color:#aaa; line-height:1.2; word-break:break-all;'>{'<br>'.join(lines)}</div>"
 
-    def _h(v):
-        return html.escape("" if v is None else str(v), quote=True)
-
-    def _js(v):
-        return json.dumps(v).replace("</", "<\\/")
+    _h = html_escape
+    _js = js_string
 
     # --- Data Aggregation ---
     total_groups = len(all_groups)
