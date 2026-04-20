@@ -54,9 +54,6 @@ class XSSEscapingTest(unittest.TestCase):
         self.csc.HTML_EXPORT = os.path.join(self.tmpdir.name, "report.html")
         self.csc.CSV_EXPORT = os.path.join(self.tmpdir.name, "report.csv")
         self.csc.ELIGIBLE_ONLY = False
-        self.csc.SCAN_STATS["total_scanned"] = 2
-        self.csc.SCAN_STATS["eligible_count"] = 0
-        self.csc.SCAN_STATS["errors"] = 0
 
     def _render(self):
         torrent = {
