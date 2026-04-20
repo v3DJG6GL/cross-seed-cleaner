@@ -1588,7 +1588,7 @@ def export_reports(client, all_groups, eligible_ids):
             else:
                 type_badge = '<span class="type-badge type-cross" style="border:1px solid #555;">CROSS</span>'
 
-            added_ts = datetime.fromtimestamp(t.get('added_on', 0)).strftime("%Y.%m.%d | %H:%M")
+            added_ts = format_timestamp(t.get('added_on', 0))
             tracker_clean = _domain_from_tracker_url(t.get('tracker', '')) or "Unknown"
 
             cur_seeds = t.get('_seeder_count', t.get('num_complete', 0))
@@ -1602,20 +1602,9 @@ def export_reports(client, all_groups, eligible_ids):
             t_cat = t.get('category', '')
 
             if is_orig:
-                if t_size >= (MIN_SIZE_GIB * 1024 * 1024 * 1024):
-                    c_size = "text-success"
-                else:
-                    c_size = "text-danger"
-
-                if t_time >= (MIN_ORIGINAL_SEED_TIME_DAYS * 86400):
-                    c_time = "text-success"
-                else:
-                    c_time = "text-danger"
-
-                if category_allowed(t_cat):
-                    c_cat = "text-success"
-                else:
-                    c_cat = "text-danger"
+                c_size = "text-success" if t_size >= MIN_SIZE_BYTES else "text-danger"
+                c_time = "text-success" if t_time >= MIN_ORIGINAL_SEED_TIME_HOURS * 3600 else "text-danger"
+                c_cat = "text-success" if category_allowed(t_cat) else "text-danger"
 
                 if t.get('_path_error'):
                     c_cat = "text-danger"
