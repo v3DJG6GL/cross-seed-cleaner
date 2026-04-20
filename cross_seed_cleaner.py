@@ -662,8 +662,6 @@ def load_and_group_torrents(client):
         sys.stdout.write("\r" + " " * 60 + "\r")
         sys.stdout.flush()
 
-    SCAN_STATS['group_duration'] = (datetime.now() - t_start).total_seconds()
-
     debug_log(f"[GROUP] Processing complete. Created {len(identity_groups)} unique identity groups.")
 
     final_groups = {}
