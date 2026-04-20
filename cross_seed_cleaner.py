@@ -1844,10 +1844,8 @@ def export_reports(client, all_groups, eligible_ids):
             print(f"{Colors.RED}Error exporting HTML: {e}{Colors.END}")
 
     if CSV_EXPORT:
-        if CSV_EXPORT.endswith('.csv'):
-            csv_filename = CSV_EXPORT.replace('.csv', f'_{ts_str}.csv')
-        else:
-            csv_filename = f"{CSV_EXPORT}_{ts_str}.csv"
+        base, ext = os.path.splitext(CSV_EXPORT)
+        csv_filename = f"{base}_{ts_str}{ext or '.csv'}"
 
         print(f"{Colors.BOLD}[INFO]{Colors.END} Exporting CSV report to {csv_filename}...")
         try:
