@@ -262,6 +262,10 @@ def strip_colors(text):
 def bold(text):
     return f"{Colors.BOLD}{text}{Colors.END}"
 
+def _clear_progress_line():
+    sys.stdout.write("\r\033[2K")
+    sys.stdout.flush()
+
 def html_escape(v):
     return html.escape("" if v is None else str(v), quote=True)
 
@@ -645,8 +649,7 @@ def load_and_group_torrents(client):
         t['_seeder_count'] = get_seeder_count(client, t)
 
     if not DEBUG_MODE:
-        sys.stdout.write("\r" + " " * 60 + "\r")
-        sys.stdout.flush()
+        _clear_progress_line()
 
     SCAN_STATS['meta_duration'] = (datetime.now() - t_start).total_seconds()
     print(f"{Colors.GREEN}  ✓ Metadata processed in {SCAN_STATS['meta_duration']:.2f}s.{Colors.END}\n")
@@ -671,8 +674,7 @@ def load_and_group_torrents(client):
         identity_groups[identity].append(t)
 
     if not DEBUG_MODE:
-        sys.stdout.write("\r" + " " * 60 + "\r")
-        sys.stdout.flush()
+        _clear_progress_line()
 
     debug_log(f"[GROUP] Processing complete. Created {len(identity_groups)} unique identity groups.")
 
@@ -2050,8 +2052,7 @@ def scan_external_libraries(paths):
             print(f"{Colors.RED}  ! Error walking {p}: {e}{Colors.END}")
 
     if not DEBUG_MODE:
-        sys.stdout.write("\r" + " " * 60 + "\r")
-        sys.stdout.flush()
+        _clear_progress_line()
 
     duration = (datetime.now() - start_time).total_seconds()
 
@@ -2134,8 +2135,7 @@ def check_no_hard_links(client):
         t['_seeder_count'] = get_seeder_count(client, t)
 
     if not DEBUG_MODE:
-        sys.stdout.write("\r" + " " * 60 + "\r")
-        sys.stdout.flush()
+        _clear_progress_line()
 
     SCAN_STATS['meta_duration'] = (datetime.now() - t_start).total_seconds()
     print(f"{Colors.GREEN}  ✓ Metadata processed in {SCAN_STATS['meta_duration']:.2f}s.{Colors.END}\n")
@@ -2185,8 +2185,7 @@ def check_no_hard_links(client):
         orphans.append(t)
 
     if not DEBUG_MODE:
-        sys.stdout.write("\r" + " " * 60 + "\r")
-        sys.stdout.flush()
+        _clear_progress_line()
     # --------------------------------------------------------
 
     SCAN_STATS['group_duration'] = (datetime.now() - t_start).total_seconds()
