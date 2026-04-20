@@ -463,7 +463,6 @@ def get_representative_inode(path):
         debug_log(f"[GROUP]   > Inode: Winner '{os.path.basename(largest_file)}' ({max_size} bytes) -> {inode}")
         return inode
 
-    # Fallback
     try:
         stat = os.stat(path)
         inode = (stat.st_dev, stat.st_ino)
@@ -500,7 +499,6 @@ def get_path_identity(torrent):
         debug_log(f"[GROUP] '{name}' -> {identity} (Inode Found)")
         return identity
 
-    # Fallback to heuristic
     identity = f"heuristic:{size}:{name}"
     debug_log(f"[GROUP] '{name}' -> {identity} (Heuristic/No File)")
     return identity
@@ -980,11 +978,9 @@ def print_config():
         [bold("CSV Export"), c(CSV_EXPORT or "Disabled")],
     ]
 
-    # Handle Path (Multi-line) to prevent overflow
     if EXTERNAL_MEDIA_PATHS:
         first = True
         for path in EXTERNAL_MEDIA_PATHS:
-            # Wrap long paths to fit column (width 120)
             while len(path) > 118:
                 chunk = path[:118]
                 path = path[118:]
@@ -1677,7 +1673,6 @@ def export_reports(all_groups, eligible_ids):
     <body>
         {html_body}
         <script>
-            // --- Helper: Resizing ---
             const createResizableTable = function(table) {{
                 const cols = table.querySelectorAll('th');
                 [].forEach.call(cols, function(col) {{
@@ -1706,7 +1701,6 @@ def export_reports(all_groups, eligible_ids):
             }};
             createResizableTable(document.getElementById('reportTable'));
 
-            // --- Helper: Sorting by Group (tbody) ---
             let sortDirection = 1;
             let lastSortedCol = -1;
 
@@ -1771,7 +1765,6 @@ def export_reports(all_groups, eligible_ids):
                 groups.forEach(g => table.appendChild(g));
             }}
 
-            // --- Charts ---
             const ctxCount = document.getElementById('countChart').getContext('2d');
             const ctxSize = document.getElementById('sizeChart').getContext('2d');
             const ctxGroup = document.getElementById('groupChart').getContext('2d');
@@ -2012,7 +2005,6 @@ def scan_external_libraries(paths):
             else:
                 final_paths.append(bp)
 
-    # Deduplicate
     final_paths = sorted(set(final_paths))
 
     if not final_paths:
