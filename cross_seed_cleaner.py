@@ -2205,6 +2205,8 @@ def export_reports(sorted_items, eligible_ids):
                     return true;
                 }}
 
+                const getAttr = (el, n) => el.getAttribute('data-sk-' + n) || '';
+
                 function applyFilters() {{
                     const seedsMin = readNum('seedsMin'), seedsMax = readNum('seedsMax');
                     const ratioMin = readNum('ratioMin'), ratioMax = readNum('ratioMax');
@@ -2222,6 +2224,13 @@ def export_reports(sorted_items, eligible_ids):
                     const seededMaxSec = seededMaxD !== null ? seededMaxD * DAY : null;
 
                     const groups = _groupsCache || (_groupsCache = Array.from(document.getElementsByClassName('group-body')));
+
+                    // Detach the table from the DOM so we batch all class-flips into one reflow.
+                    const table = document.getElementById('reportTable');
+                    const parent = table.parentNode;
+                    const nextSib = table.nextSibling;
+                    parent.removeChild(table);
+
                     for (const g of groups) {{
                         if (statusSet.size && !statusSet.has(g.dataset.status)) {{ g.classList.add('filtered-hidden'); continue; }}
                         if (reasonsSet.size) {{
@@ -2232,24 +2241,26 @@ def export_reports(sorted_items, eligible_ids):
 
                         const orig = g.rows[0];
                         if (!orig) {{ g.classList.add('filtered-hidden'); continue; }}
-                        if (!numericInRange(orig.dataset.sk3, ratioMin,   ratioMax))   {{ g.classList.add('filtered-hidden'); continue; }}
-                        if (!numericInRange(orig.dataset.sk4, sizeMinBytes, sizeMaxBytes)) {{ g.classList.add('filtered-hidden'); continue; }}
-                        if (!numericInRange(orig.dataset.sk5, upMinBytes,   upMaxBytes))   {{ g.classList.add('filtered-hidden'); continue; }}
-                        if (!numericInRange(orig.dataset.sk6, seededMinSec, seededMaxSec)) {{ g.classList.add('filtered-hidden'); continue; }}
+                        if (!numericInRange(getAttr(orig, 3), ratioMin,   ratioMax))   {{ g.classList.add('filtered-hidden'); continue; }}
+                        if (!numericInRange(getAttr(orig, 4), sizeMinBytes, sizeMaxBytes)) {{ g.classList.add('filtered-hidden'); continue; }}
+                        if (!numericInRange(getAttr(orig, 5), upMinBytes,   upMaxBytes))   {{ g.classList.add('filtered-hidden'); continue; }}
+                        if (!numericInRange(getAttr(orig, 6), seededMinSec, seededMaxSec)) {{ g.classList.add('filtered-hidden'); continue; }}
 
                         if (trackersSet.size || categoriesSet.size || nameQ || pathQ) {{
                             let ok = false;
                             for (const tr of g.rows) {{
-                                if (trackersSet.size && !trackersSet.has(tr.dataset.sk8)) continue;
-                                if (categoriesSet.size && !categoriesSet.has(tr.dataset.sk9)) continue;
-                                if (nameQ && !(tr.dataset.sk10 || '').includes(nameQ)) continue;
-                                if (pathQ && !(tr.dataset.sk11 || '').includes(pathQ)) continue;
+                                if (trackersSet.size && !trackersSet.has(getAttr(tr, 8))) continue;
+                                if (categoriesSet.size && !categoriesSet.has(getAttr(tr, 9))) continue;
+                                if (nameQ && !getAttr(tr, 10).includes(nameQ)) continue;
+                                if (pathQ && !getAttr(tr, 11).includes(pathQ)) continue;
                                 ok = true; break;
                             }}
                             if (!ok) {{ g.classList.add('filtered-hidden'); continue; }}
                         }}
                         g.classList.remove('filtered-hidden');
                     }}
+
+                    parent.insertBefore(table, nextSib);
                 }}
 
                 window.applyReportFilters = applyFilters;  // in case we want to trigger externally
