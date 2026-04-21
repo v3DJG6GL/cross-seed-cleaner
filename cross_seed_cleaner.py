@@ -1568,6 +1568,7 @@ def export_reports(sorted_items, eligible_ids):
         .filter-range-panel .range-row input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
         .range-clear-btn { margin-top: 6px; background: #333; color: #ddd; border: 1px solid #444; border-radius: 3px; padding: 3px 10px; cursor: pointer; font: 11px system-ui; }
         .range-clear-btn:hover { background: #444; }
+        .range-slider-note { color: #777; font: 11px system-ui; padding: 6px 0; text-align: center; }
         /* Dual-thumb range slider: two stacked <input type=range> elements
            share one visual track. The track and selected segment are drawn
            on the wrapper using two CSS variables (--p1, --p2) updated by JS. */
@@ -1823,6 +1824,7 @@ def export_reports(sorted_items, eligible_ids):
                             <button type="button" class="filter-multi-btn" data-filter-trigger="ratio">Any ▾</button>
                             <div class="filter-multi-panel filter-range-panel" data-range-panel="ratio" data-range-unit="">
                                 <div class="filter-group-label">Ratio (ORIGINAL)</div>
+                                <div class="range-slider" data-slider-for="ratio"></div>
                                 <label class="range-row">Min <input type="number" step="0.01" data-filter="ratioMin"></label>
                                 <label class="range-row">Max <input type="number" step="0.01" data-filter="ratioMax"></label>
                                 <button type="button" class="range-clear-btn" data-range-clear="ratio">Clear</button>
@@ -1892,6 +1894,7 @@ def export_reports(sorted_items, eligible_ids):
     group_idx = 0
     total_torrents = 0
     ds_seeds_min = ds_seeds_max = None
+    ds_ratio_min = ds_ratio_max = None
     ds_size_min = ds_size_max = None
     ds_up_min = ds_up_max = None
     ds_seeded_min = ds_seeded_max = None
@@ -1938,8 +1941,11 @@ def export_reports(sorted_items, eligible_ids):
             zv = t.get('size', 0) or 0
             uv = t.get('uploaded', 0) or 0
             tv = t.get('seeding_time', 0) or 0
+            rv = float(t.get('ratio', 0) or 0)
             if ds_seeds_max  is None or sv > ds_seeds_max:  ds_seeds_max  = sv
             if ds_seeds_min  is None or sv < ds_seeds_min:  ds_seeds_min  = sv
+            if ds_ratio_max  is None or rv > ds_ratio_max:  ds_ratio_max  = rv
+            if ds_ratio_min  is None or rv < ds_ratio_min:  ds_ratio_min  = rv
             if ds_size_max   is None or zv > ds_size_max:   ds_size_max   = zv
             if ds_size_min   is None or zv < ds_size_min:   ds_size_min   = zv
             if ds_up_max     is None or uv > ds_up_max:     ds_up_max     = uv
@@ -2064,6 +2070,8 @@ def export_reports(sorted_items, eligible_ids):
 
     # Coerce dataset bounds to 0 when there were no torrents at all (empty report).
     ds_seeds_min  = ds_seeds_min  or 0; ds_seeds_max  = ds_seeds_max  or 0
+    ds_ratio_min  = ds_ratio_min  if ds_ratio_min  is not None else 0
+    ds_ratio_max  = ds_ratio_max  if ds_ratio_max  is not None else 0
     ds_size_min   = ds_size_min   or 0; ds_size_max   = ds_size_max   or 0
     ds_up_min     = ds_up_min     or 0; ds_up_max     = ds_up_max     or 0
     ds_seeded_min = ds_seeded_min or 0; ds_seeded_max = ds_seeded_max or 0
@@ -2273,6 +2281,7 @@ def export_reports(sorted_items, eligible_ids):
             // and slider thumb values are in GiB (whole-units), filter converts.
             const RANGE_BOUNDS = {{
                 seeds:  [{_js(ds_seeds_min)}, {_js(ds_seeds_max)}, 1],
+                ratio:  [{_js(round(ds_ratio_min, 2))}, {_js(round(ds_ratio_max, 2))}, 0.01],
                 size:   [{_js(round(ds_size_min  / 1073741824, 1))}, {_js(round(ds_size_max  / 1073741824, 1))}, 0.1],
                 up:     [{_js(round(ds_up_min    / 1073741824, 1))}, {_js(round(ds_up_max    / 1073741824, 1))}, 0.1],
                 seeded: [{_js(ds_seeded_min // 86400)}, {_js(ds_seeded_max // 86400)}, 1]
@@ -2465,7 +2474,13 @@ def export_reports(sorted_items, eligible_ids):
                     const bounds = RANGE_BOUNDS[name];
                     if (!bounds) return;
                     const [bmin, bmax, step] = bounds;
-                    if (!(bmax > bmin)) {{ slot.style.display = 'none'; return; }}
+                    if (!(bmax > bmin)) {{
+                        const note = document.createElement('div');
+                        note.className = 'range-slider-note';
+                        note.textContent = (bmax === bmin) ? ('Single value: ' + bmin) : '';
+                        slot.appendChild(note);
+                        return;
+                    }}
                     const panel = slot.closest('.filter-range-panel');
                     const inputs = panel.querySelectorAll('label.range-row input');
                     const inMin = inputs[0], inMax = inputs[1];
