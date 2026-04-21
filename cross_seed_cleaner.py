@@ -340,6 +340,8 @@ if HTML_EXPORT:
     try:
         with open(_VENDOR_CHARTJS_PATH, 'r', encoding='utf-8') as _f:
             CHARTJS_SOURCE = _f.read()
+        CHARTJS_SOURCE = re.sub(r'(?m)^\s*//[#@]\s*sourceMappingURL=.*$', '', CHARTJS_SOURCE)
+        CHARTJS_SOURCE = re.sub(r'/\*[#@]\s*sourceMappingURL=.*?\*/', '', CHARTJS_SOURCE)
     except FileNotFoundError:
         sys.stderr.write(
             f"ERROR: vendored Chart.js not found at {_VENDOR_CHARTJS_PATH}.\n"
@@ -1796,7 +1798,7 @@ def export_reports(sorted_items, eligible_ids):
     <!DOCTYPE html>
     <html>
     <head>
-        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
+        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'">
         <title>Cross-Seed Cleaner Report</title>
         <meta charset="UTF-8">
         <script>{CHARTJS_SOURCE}</script>
