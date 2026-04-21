@@ -1654,14 +1654,14 @@ def export_reports(sorted_items, eligible_ids):
                     <tr>
                         <th onclick="sortTable(0)" style="width:140px">Status<div class="resizer"></div></th>
                         <th onclick="sortTable(1)" style="width:70px">Type<div class="resizer"></div></th>
-                        <th onclick="sortTable(2)" style="width:60px">Seeds<div class="resizer"></div></th>
-                        <th onclick="sortTable(3)" style="width:55px">Ratio<div class="resizer"></div></th>
+                        <th onclick="sortTable(2)" style="width:50px">Seeds<div class="resizer"></div></th>
+                        <th onclick="sortTable(3)" style="width:45px">Ratio<div class="resizer"></div></th>
                         <th onclick="sortTable(4)" style="width:70px">Size<div class="resizer"></div></th>
                         <th onclick="sortTable(5)" style="width:70px">Uploaded<div class="resizer"></div></th>
-                        <th onclick="sortTable(6)" style="width:110px">Seeded (D:H)<div class="resizer"></div></th>
-                        <th onclick="sortTable(7)" style="width:100px">Added<div class="resizer"></div></th>
-                        <th onclick="sortTable(8)" style="width:160px">Tracker<div class="resizer"></div></th>
-                        <th onclick="sortTable(9)" style="width:130px">Category<div class="resizer"></div></th>
+                        <th onclick="sortTable(6)" style="width:95px">Seeded (D:H)<div class="resizer"></div></th>
+                        <th onclick="sortTable(7)" style="width:95px">Added<div class="resizer"></div></th>
+                        <th onclick="sortTable(8)" style="width:110px">Tracker<div class="resizer"></div></th>
+                        <th onclick="sortTable(9)" style="width:110px">Category<div class="resizer"></div></th>
                         <th onclick="sortTable(10)">Name<div class="resizer"></div></th>
                         <th onclick="sortTable(11)">Path<div class="resizer"></div></th>
                     </tr>
@@ -1748,8 +1748,8 @@ def export_reports(sorted_items, eligible_ids):
                 <td style="font-size:11px; color:#888;">{added_ts}</td>
                 <td>{_h(tracker_clean)}</td>
                 <td><span class="{c_cat}">{_h(t_cat)}</span></td>
-                <td class="name-cell" title="{name_h}">{name_h}</td>
-                <td class="path-cell" title="{path_h}">{path_h}</td>
+                <td class="name-cell">{name_h}</td>
+                <td class="path-cell">{path_h}</td>
             </tr>
             """)
 
@@ -1907,10 +1907,22 @@ def export_reports(sorted_items, eligible_ids):
                 tip.id = 'rsnTip';
                 document.body.appendChild(tip);
                 const hide = () => tip.classList.remove('visible');
+
+                const tipTextFor = (el) => {{
+                    if (!el || !el.closest) return '';
+                    const icon = el.closest('.rejection-icon');
+                    if (icon) return icon.getAttribute('data-tip') || '';
+                    const td = el.closest('td');
+                    if (td && td.cellIndex !== 0 && td.scrollWidth > td.clientWidth + 1) {{
+                        return td.textContent.trim();
+                    }}
+                    return '';
+                }};
+
                 document.addEventListener('mouseover', (e) => {{
-                    const el = e.target.closest('.rejection-icon');
-                    if (!el) return;
-                    tip.textContent = el.getAttribute('data-tip') || '';
+                    const text = tipTextFor(e.target);
+                    if (!text) return;
+                    tip.textContent = text;
                     tip.classList.add('visible');
                 }});
                 document.addEventListener('mousemove', (e) => {{
@@ -1923,9 +1935,9 @@ def export_reports(sorted_items, eligible_ids):
                     tip.style.top  = y + 'px';
                 }});
                 document.addEventListener('mouseout', (e) => {{
-                    if (!e.target.closest || !e.target.closest('.rejection-icon')) return;
-                    const next = e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('.rejection-icon');
-                    if (!next) hide();
+                    if (!tipTextFor(e.target)) return;
+                    const next = e.relatedTarget;
+                    if (!next || !tipTextFor(next)) hide();
                 }});
                 window.addEventListener('scroll', hide, true);
             }})();
