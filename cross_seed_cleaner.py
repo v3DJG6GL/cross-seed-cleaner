@@ -1508,6 +1508,8 @@ def export_reports(sorted_items, eligible_ids):
         th.sorted-desc::after { border-top: 6px solid currentColor; }
         td { padding: 8px; border-bottom: 1px solid #2a2a2a; vertical-align: middle; color: #ddd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         tr:hover td { background: #2a2a2a; }
+        tbody.group-body:nth-of-type(even) > tr:not(:hover) > td { background: #242424; }
+        tbody.group-body > tr:last-child > td { border-bottom: 2px solid #444; }
         .resizer { position: absolute; right: 0; top: 0; height: 100%; width: 5px; cursor: col-resize; user-select: none; touch-action: none; }
         .resizer:hover, .resizing { background: #bb86fc; opacity: 0.5; }
         .status-badge { padding: 3px 8px; border-radius: 3px; font-size: 11px; font-weight: bold; text-transform: uppercase; margin-right: 6px; }
