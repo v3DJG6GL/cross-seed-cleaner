@@ -1584,6 +1584,8 @@ def export_reports(sorted_items, eligible_ids):
         .filter-clear-btn:hover { background: #444; }
         .filter-counts { color: #aaa; font-size: 12px; margin-left: 12px; display: inline-block; vertical-align: middle; }
         .filter-counts strong { color: #ddd; font-weight: 600; }
+        .empty-state { display: none; padding: 40px 20px; text-align: center; color: #888; font-size: 13px; border-top: 1px solid #2a2a2a; }
+        .empty-state.shown { display: block; }
         .resizer { position: absolute; right: 0; top: 0; height: 100%; width: 5px; cursor: col-resize; user-select: none; touch-action: none; }
         .resizer:hover, .resizing { background: #bb86fc; opacity: 0.5; }
         .status-badge { padding: 3px 8px; border-radius: 3px; font-size: 11px; font-weight: bold; text-transform: uppercase; margin-right: 6px; }
@@ -2003,6 +2005,7 @@ def export_reports(sorted_items, eligible_ids):
 
     html_parts.append("""
                 </div>
+                <div id="emptyState" class="empty-state">No groups match the current filters.</div>
             </div>
             </div>
         </div>
@@ -2496,8 +2499,8 @@ def export_reports(sorted_items, eligible_ids):
                 }}
 
                 const filterCountsEl = document.getElementById('filterCounts');
+                const emptyStateEl = document.getElementById('emptyState');
                 function updateFilterCounts() {{
-                    if (!filterCountsEl) return;
                     const groups = _groupsCache;
                     let visG, visT;
                     if (!groups || !_lastHidden) {{
@@ -2510,9 +2513,17 @@ def export_reports(sorted_items, eligible_ids):
                             visT += parseInt(groups[i].dataset.rowCount, 10) || 0;
                         }}
                     }}
-                    filterCountsEl.innerHTML =
-                        'Showing <strong>' + visG + '</strong> / ' + TOTAL_GROUPS + ' groups · ' +
-                        '<strong>' + visT + '</strong> / ' + TOTAL_TORRENTS + ' torrents';
+                    if (filterCountsEl) {{
+                        filterCountsEl.innerHTML =
+                            'Showing <strong>' + visG + '</strong> / ' + TOTAL_GROUPS + ' groups · ' +
+                            '<strong>' + visT + '</strong> / ' + TOTAL_TORRENTS + ' torrents';
+                    }}
+                    if (emptyStateEl) {{
+                        // Show the empty-state placeholder when filters narrow to zero
+                        // groups. Also keeps the table-container tall enough that
+                        // popovers anchored to the filter row have somewhere to render.
+                        emptyStateEl.classList.toggle('shown', visG === 0 && TOTAL_GROUPS > 0);
+                    }}
                 }}
                 updateFilterCounts();
 
