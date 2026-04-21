@@ -2511,12 +2511,17 @@ def export_reports(sorted_items, eligible_ids):
                 const clearBtn = document.getElementById('filterClearBtn');
                 if (clearBtn) {{
                     clearBtn.addEventListener('click', () => {{
-                        document.querySelectorAll('.filter-row input').forEach(i => {{
-                            if (i.type === 'checkbox') i.checked = false; else i.value = '';
+                        // Walk both contexts: inline filter-row inputs (Name, Path)
+                        // and the multi-select / range / date inputs that have been
+                        // portaled to <body> via document.body.appendChild(targetPanel).
+                        document.querySelectorAll('.filter-row input, .filter-multi-panel input').forEach(i => {{
+                            if (i.type === 'checkbox')   i.checked = false;
+                            else if (i.type !== 'range') i.value = '';   // sliders reset via slot._reset()
                         }});
                         statusSet.clear(); reasonsSet.clear();
                         trackersSet.clear(); categoriesSet.clear();
                         document.querySelectorAll('.filter-multi-btn').forEach(b => {{ b.textContent = 'Any ▾'; b.title = ''; }});
+                        document.querySelectorAll('.range-slider').forEach(slot => {{ if (slot._reset) slot._reset(); }});
                         applyFilters();
                     }});
                 }}
