@@ -947,13 +947,13 @@ def evaluate_group(d):
 
 
 def _reason_text(code):
-    if code == "EXTERNAL_LINK": return "External Hardlink Found"
-    if code == "PATH_ERROR": return "Path Error"
-    if code == "LOW_SEEDS": return f"Low Seeds < {MIN_SEEDERS}"
-    if code == "SMALL_SIZE": return f"Small Size < {MIN_SIZE_GIB}GiB"
-    if code == "LOW_TIME": return f"Low Time < {MIN_ORIGINAL_SEED_TIME_DAYS}d"
-    if code == "TOO_MANY": return f"> {MAX_TORRENTS_IN_GROUP} items"
-    if code == "CATEGORY_FILTER": return "Category Filter"
+    if code == "EXTERNAL_LINK": return "Hardlinked to external library"
+    if code == "PATH_ERROR": return "Path error — could not verify hardlinks"
+    if code == "LOW_SEEDS": return f"Low seeder count (< {MIN_SEEDERS})"
+    if code == "SMALL_SIZE": return f"Small size (< {MIN_SIZE_GIB} GiB)"
+    if code == "LOW_TIME": return f"Short seed time (< {MIN_ORIGINAL_SEED_TIME_DAYS} days)"
+    if code == "TOO_MANY": return f"Large group (≥ {MAX_TORRENTS_IN_GROUP} items)"
+    if code == "CATEGORY_FILTER": return "Category not in cleanup allowlist"
     return code
 
 
@@ -1466,8 +1466,25 @@ def export_reports(sorted_items, eligible_ids):
         .text-danger { color: #ff5252 !important; font-weight: bold; }
         .text-success { color: #4caf50 !important; }
         .status-container { display: flex; align-items: center; }
-        .rejection-icon { cursor: help; margin-left: 2px; font-size: 14px; opacity: 0.8; }
+        .rejection-icon { cursor: default; margin-left: 2px; font-size: 14px; opacity: 0.8; }
         .rejection-icon:hover { opacity: 1; }
+        #rsnTip {
+            position: fixed;
+            pointer-events: none;
+            background: rgba(0,0,0,0.85);
+            color: #fff;
+            font: 500 12px system-ui, -apple-system, "Segoe UI", sans-serif;
+            padding: 6px 10px;
+            border-radius: 6px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.1s ease;
+            z-index: 9999;
+            left: 0;
+            top: 0;
+        }
+        #rsnTip.visible { opacity: 1; }
     """
 
     html_parts = [f"""
@@ -1629,7 +1646,7 @@ def export_reports(sorted_items, eligible_ids):
             reasons = row.get('reasons', [])
             if reasons:
                 reasons_html = "".join(
-                    f'<span class="rejection-icon" title="{_h(r["text"])}">{_h(r["icon"])}</span>'
+                    f'<span class="rejection-icon" data-tip="{_h(r["text"])}">{_h(r["icon"])}</span>'
                     for r in reasons
                 )
 
@@ -1832,6 +1849,34 @@ def export_reports(sorted_items, eligible_ids):
 
                 groups.forEach(g => table.appendChild(g));
             }}
+
+            (function initReasonTooltip() {{
+                const tip = document.createElement('div');
+                tip.id = 'rsnTip';
+                document.body.appendChild(tip);
+                const hide = () => tip.classList.remove('visible');
+                document.addEventListener('mouseover', (e) => {{
+                    const el = e.target.closest('.rejection-icon');
+                    if (!el) return;
+                    tip.textContent = el.getAttribute('data-tip') || '';
+                    tip.classList.add('visible');
+                }});
+                document.addEventListener('mousemove', (e) => {{
+                    if (!tip.classList.contains('visible')) return;
+                    const pad = 12, w = tip.offsetWidth, h = tip.offsetHeight;
+                    let x = e.clientX + pad, y = e.clientY + pad;
+                    if (x + w > window.innerWidth - 4)  x = e.clientX - w - pad;
+                    if (y + h > window.innerHeight - 4) y = e.clientY - h - pad;
+                    tip.style.left = x + 'px';
+                    tip.style.top  = y + 'px';
+                }});
+                document.addEventListener('mouseout', (e) => {{
+                    if (!e.target.closest || !e.target.closest('.rejection-icon')) return;
+                    const next = e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('.rejection-icon');
+                    if (!next) hide();
+                }});
+                window.addEventListener('scroll', hide, true);
+            }})();
 
             const ctxCount = document.getElementById('countChart').getContext('2d');
             const ctxSize = document.getElementById('sizeChart').getContext('2d');
