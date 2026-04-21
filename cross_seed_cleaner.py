@@ -1825,7 +1825,15 @@ def export_reports(sorted_items, eligible_ids):
                                 <button type="button" class="range-clear-btn" data-range-clear="seeded">Clear</button>
                             </div>
                         </div>
-                        <div class="fcell" data-col="7"></div>
+                        <div class="fcell" data-col="7">
+                            <button type="button" class="filter-multi-btn" data-filter-trigger="added">Any ▾</button>
+                            <div class="filter-multi-panel filter-range-panel" data-range-panel="added" data-range-unit="date">
+                                <div class="filter-group-label">Added (ORIGINAL)</div>
+                                <label class="range-row">From <input type="date" data-filter="addedFrom"></label>
+                                <label class="range-row">To <input type="date" data-filter="addedTo"></label>
+                                <button type="button" class="range-clear-btn" data-range-clear="added">Clear</button>
+                            </div>
+                        </div>
                         <div class="fcell" data-col="8">
                             <button type="button" class="filter-multi-btn" data-filter="tracker">Any ▾</button>
                             <div class="filter-multi-panel" data-filter-panel="tracker"></div>
@@ -2324,11 +2332,13 @@ def export_reports(sorted_items, eligible_ids):
                     const inputs = panel.querySelectorAll('input');
                     const minV = inputs[0] && inputs[0].value.trim();
                     const maxV = inputs[1] && inputs[1].value.trim();
+                    const isDate = panel.getAttribute('data-range-unit') === 'date';
+                    const sep = isDate ? ' … ' : '–';
                     let label;
                     if (!minV && !maxV)        label = 'Any';
-                    else if (minV && !maxV)    label = '≥ ' + minV;
-                    else if (!minV && maxV)    label = '≤ ' + maxV;
-                    else                       label = minV + '–' + maxV;
+                    else if (minV && !maxV)    label = (isDate ? 'from ' : '≥ ') + minV;
+                    else if (!minV && maxV)    label = (isDate ? 'to '   : '≤ ') + maxV;
+                    else                       label = minV + sep + maxV;
                     btn.textContent = label + ' ▾';
                     btn.title = (minV || maxV) ? (label + ' (' + name + ')') : '';
                 }}
@@ -2388,12 +2398,25 @@ def export_reports(sorted_items, eligible_ids):
                 const getAttr = (el, n) => el.getAttribute('data-sk-' + n) || '';
                 let _lastHidden = null;  // Uint8Array: 1 = hidden last pass, 0 = visible
 
+                function readDateSec(name) {{
+                    // <input type="date">.valueAsNumber gives ms since epoch at UTC midnight,
+                    // or NaN when empty.
+                    const el = inputs[name];
+                    if (!el || !el.value) return null;
+                    const ms = el.valueAsNumber;
+                    return Number.isFinite(ms) ? Math.floor(ms / 1000) : null;
+                }}
+
                 function applyFilters() {{
                     const seedsMin = readNum('seedsMin'), seedsMax = readNum('seedsMax');
                     const ratioMin = readNum('ratioMin'), ratioMax = readNum('ratioMax');
                     const sizeMinB = readNum('sizeMin'), sizeMaxB = readNum('sizeMax');
                     const upMinB   = readNum('upMin'),   upMaxB   = readNum('upMax');
                     const seededMinD = readNum('seededMin'), seededMaxD = readNum('seededMax');
+                    let addedFromSec = readDateSec('addedFrom');
+                    let addedToSec   = readDateSec('addedTo');
+                    // Inclusive end-of-day for "to" date so picking 2024-03-05 also includes events on that day.
+                    if (addedToSec !== null) addedToSec += 86400 - 1;
                     const nameQ = readText('name');
                     const pathQ = readText('path');
 
@@ -2436,7 +2459,8 @@ def export_reports(sorted_items, eligible_ids):
                         if (!hide && (ratioMin !== null || ratioMax !== null
                                       || sizeMinBytes !== null || sizeMaxBytes !== null
                                       || upMinBytes !== null || upMaxBytes !== null
-                                      || seededMinSec !== null || seededMaxSec !== null)) {{
+                                      || seededMinSec !== null || seededMaxSec !== null
+                                      || addedFromSec !== null || addedToSec !== null)) {{
                             const rows = groupRows(g);
                             const orig = rows[0];
                             if (!orig) hide = true;
@@ -2445,6 +2469,7 @@ def export_reports(sorted_items, eligible_ids):
                                 else if (!numericInRange(getAttr(orig, 4), sizeMinBytes, sizeMaxBytes)) hide = true;
                                 else if (!numericInRange(getAttr(orig, 5), upMinBytes,   upMaxBytes))   hide = true;
                                 else if (!numericInRange(getAttr(orig, 6), seededMinSec, seededMaxSec)) hide = true;
+                                else if (!numericInRange(getAttr(orig, 7), addedFromSec, addedToSec))   hide = true;
                             }}
                         }}
 
