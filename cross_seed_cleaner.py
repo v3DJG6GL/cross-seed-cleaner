@@ -1469,6 +1469,9 @@ def export_reports(sorted_items, eligible_ids):
         table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; table-layout: fixed; }
         th { text-align: left; padding: 12px 8px; background: #252525; color: #aaa; font-weight: 600; border-bottom: 2px solid #333; position: sticky; top: 0; white-space: nowrap; cursor: pointer; user-select: none; }
         th:hover { color: #fff; background: #333; }
+        th.sorted-asc::after, th.sorted-desc::after { margin-left: 4px; font-size: 10px; opacity: 0.9; color: #4caf50; }
+        th.sorted-asc::after  { content: "▲"; }
+        th.sorted-desc::after { content: "▼"; }
         td { padding: 8px; border-bottom: 1px solid #2a2a2a; vertical-align: middle; color: #ddd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         tr:hover td { background: #2a2a2a; }
         .resizer { position: absolute; right: 0; top: 0; height: 100%; width: 5px; cursor: col-resize; user-select: none; touch-action: none; }
@@ -1824,6 +1827,12 @@ def export_reports(sorted_items, eligible_ids):
 
                 if (n !== lastSortedCol) {{ sortDirection = 1; lastSortedCol = n; }}
                 else {{ sortDirection *= -1; }}
+
+                const headers = table.tHead.rows[0].cells;
+                for (let i = 0; i < headers.length; i++) {{
+                    headers[i].classList.remove('sorted-asc', 'sorted-desc');
+                }}
+                headers[n].classList.add(sortDirection > 0 ? 'sorted-asc' : 'sorted-desc');
 
                 const isNum = !!NUMERIC_SK[n];
                 const keyAttr = 'data-sk-' + n;
