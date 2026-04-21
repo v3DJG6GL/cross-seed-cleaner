@@ -2039,7 +2039,7 @@ def export_reports(sorted_items, eligible_ids):
 
         external_path = d['original'].get('_external_path')
         if external_path:
-            ext_status_cell = f'<div class="status-container"><span class="status-badge status-keep">KEEP</span>{reasons_html}</div>'
+            ext_status_cell = f'<div class="status-container">{badge_html}{reasons_html}</div>'
 
             orig_size = d['original'].get('size', 0)
             ext_sk = _sort_attrs(

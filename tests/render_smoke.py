@@ -199,8 +199,11 @@ def gen_group(rng, idx, kind):
         # Also stamp _external_path so the EXT row renders.
         original["_external_path"] = f"/mnt/library/{primary_cat}/{name}"
     elif rng.random() < 0.04:
-        # Sprinkle EXT rows on a few "normal" groups so the EXT branch shows even
-        # without the EXTERNAL_LINK rejection reason.
+        # Sprinkle EXT rows on a few "normal" groups. In production
+        # _external_path and _external_hardlink are always set together
+        # (cross_seed_cleaner.py:770-774), so pair them here too — an EXT
+        # row implies the group is KEPT for EXTERNAL_LINK.
+        original["_external_hardlink"] = True
         original["_external_path"] = f"/mnt/library/{primary_cat}/{name}"
 
     return (f"g{idx}", {"original": original, "crossseeds": crossseeds})
