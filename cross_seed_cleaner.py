@@ -2510,11 +2510,17 @@ def export_reports(sorted_items, eligible_ids):
                     }};
                     refreshTrack();
 
+                    // Half-step tolerance for "is this slider at the bound?" — without it
+                    // a step=0.1 value like 0.3 round-trips through parseFloat as
+                    // 0.30000000000000004, breaks the equality check, and the filter
+                    // activates with that slightly-bigger min, silently excluding rows
+                    // whose value is exactly 0.3.
+                    const eps = step / 2;
                     const slidersToInputs = () => {{
                         const lo = Math.min(parseFloat(sMin.value), parseFloat(sMax.value));
                         const hi = Math.max(parseFloat(sMin.value), parseFloat(sMax.value));
-                        inMin.value = (lo === bmin) ? '' : lo;
-                        inMax.value = (hi === bmax) ? '' : hi;
+                        inMin.value = (Math.abs(lo - bmin) < eps) ? '' : lo;
+                        inMax.value = (Math.abs(hi - bmax) < eps) ? '' : hi;
                         refreshTrack();
                         updateRangeBtnLabel(name);
                         debounceApply();
