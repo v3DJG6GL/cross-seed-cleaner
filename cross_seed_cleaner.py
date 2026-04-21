@@ -1476,7 +1476,10 @@ def export_reports(sorted_items, eligible_ids):
         .metric-item { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; }
         .metric-val { font-weight: bold; color: #fff; }
 
-        .table-container { overflow-x: auto; }
+        /* Note: overflow:visible (not auto) so .grid-head's position:sticky
+           anchors to the viewport, not to this container. When the column
+           total exceeds viewport width the BODY scrolls horizontally. */
+        .table-container { overflow: visible; }
 
         /* Grid-based "table": divs all the way down so off-screen groups can use
            content-visibility:auto, which is forbidden on real <tbody>/<tr>/<td>. */
