@@ -1481,7 +1481,7 @@ def export_reports(sorted_items, eligible_ids):
         /* Grid-based "table": divs all the way down so off-screen groups can use
            content-visibility:auto, which is forbidden on real <tbody>/<tr>/<td>. */
         .grid-report {
-            --cols: 140px 70px 75px 70px 90px 90px 100px 125px 140px 140px 350px 500px;
+            --cols: 140px 70px 75px 70px 90px 90px 100px 100px 140px 140px 350px 500px;
             width: max-content; min-width: 100%;
             font-size: 13px;
         }
