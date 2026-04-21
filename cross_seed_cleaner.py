@@ -443,6 +443,17 @@ class QBittorrentClient:
     def get_torrents(self):
         return self._request('torrents/info') or []
 
+    def iter_torrents(self, batch_size=1000):
+        offset = 0
+        while True:
+            batch = self._request('torrents/info', params={'limit': batch_size, 'offset': offset}) or []
+            if not batch:
+                return
+            yield batch
+            if len(batch) < batch_size:
+                return
+            offset += len(batch)
+
     def get_torrent_trackers(self, torrent_hash):
         return self._request('torrents/trackers', params={'hash': torrent_hash}) or []
 
@@ -643,7 +654,17 @@ def _fetch_and_filter_torrents(client):
     """[1/7] fetch + [2/7] category-filter. Returns list of torrents that passed."""
     t_start = datetime.now()
     print(f"{Colors.BOLD}[1/7]{Colors.END} Fetching torrents...")
-    torrents = client.get_torrents()
+
+    torrents = []
+    for batch in client.iter_torrents(batch_size=1000):
+        torrents.extend(batch)
+        if not DEBUG_MODE:
+            sys.stdout.write(f"\r{Colors.DIM}  ... Fetched {len(torrents)} torrents...{Colors.END}")
+            sys.stdout.flush()
+
+    if not DEBUG_MODE:
+        _clear_progress_line()
+
     SCAN_STATS['fetch_duration'] = (datetime.now() - t_start).total_seconds()
     print(f"{Colors.GREEN}  ✓ Fetching complete in {SCAN_STATS['fetch_duration']:.2f}s.{Colors.END}")
     print(f"{Colors.GREEN}  ✓ Found {len(torrents)} torrents.{Colors.END}\n")
