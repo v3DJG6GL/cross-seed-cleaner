@@ -1738,18 +1738,18 @@ def export_reports(sorted_items, eligible_ids):
             <div id="reportTable" class="grid-report">
                 <div class="grid-head">
                     <div class="grid-row grid-headrow">
-                        <div class="hcell" data-col="0" onclick="sortTable(0)">Status<div class="resizer"></div></div>
-                        <div class="hcell" data-col="1" onclick="sortTable(1)">Type<div class="resizer"></div></div>
-                        <div class="hcell" data-col="2" onclick="sortTable(2)">Seeds<div class="resizer"></div></div>
-                        <div class="hcell" data-col="3" onclick="sortTable(3)">Ratio<div class="resizer"></div></div>
-                        <div class="hcell" data-col="4" onclick="sortTable(4)">Size<div class="resizer"></div></div>
-                        <div class="hcell" data-col="5" onclick="sortTable(5)">Uploaded<div class="resizer"></div></div>
-                        <div class="hcell" data-col="6" onclick="sortTable(6)">Seeded (D:H)<div class="resizer"></div></div>
-                        <div class="hcell" data-col="7" onclick="sortTable(7)">Added<div class="resizer"></div></div>
-                        <div class="hcell" data-col="8" onclick="sortTable(8)">Tracker<div class="resizer"></div></div>
-                        <div class="hcell" data-col="9" onclick="sortTable(9)">Category<div class="resizer"></div></div>
-                        <div class="hcell" data-col="10" onclick="sortTable(10)">Name<div class="resizer"></div></div>
-                        <div class="hcell" data-col="11" onclick="sortTable(11)">Path<div class="resizer"></div></div>
+                        <div class="hcell" data-col="0">Status<div class="resizer"></div></div>
+                        <div class="hcell" data-col="1">Type<div class="resizer"></div></div>
+                        <div class="hcell" data-col="2">Seeds<div class="resizer"></div></div>
+                        <div class="hcell" data-col="3">Ratio<div class="resizer"></div></div>
+                        <div class="hcell" data-col="4">Size<div class="resizer"></div></div>
+                        <div class="hcell" data-col="5">Uploaded<div class="resizer"></div></div>
+                        <div class="hcell" data-col="6">Seeded (D:H)<div class="resizer"></div></div>
+                        <div class="hcell" data-col="7">Added<div class="resizer"></div></div>
+                        <div class="hcell" data-col="8">Tracker<div class="resizer"></div></div>
+                        <div class="hcell" data-col="9">Category<div class="resizer"></div></div>
+                        <div class="hcell" data-col="10">Name<div class="resizer"></div></div>
+                        <div class="hcell" data-col="11">Path<div class="resizer"></div></div>
                     </div>
                     <div class="grid-row grid-filterrow filter-row">
                         <div class="fcell" data-col="0">
@@ -1792,8 +1792,8 @@ def export_reports(sorted_items, eligible_ids):
 
     if initial_sort_col >= 0 and initial_sort_class:
         html_parts[0] = html_parts[0].replace(
-            f'<div class="hcell" data-col="{initial_sort_col}" onclick="sortTable({initial_sort_col})"',
-            f'<div class="hcell {initial_sort_class}" data-col="{initial_sort_col}" onclick="sortTable({initial_sort_col})"',
+            f'<div class="hcell" data-col="{initial_sort_col}"',
+            f'<div class="hcell {initial_sort_class}" data-col="{initial_sort_col}"',
             1,
         )
 
@@ -2081,6 +2081,18 @@ def export_reports(sorted_items, eligible_ids):
 
                 bodyParent.insertBefore(body, bodyNextSib);
             }}
+
+            // Wire header click → sortTable via addEventListener instead of an
+            // inline onclick attribute. Inline event handlers depend on the
+            // global lookup chain at click time and have failed under stricter
+            // CSP and on file:// origins (e.g. kio-fuse SMB mounts).
+            document.querySelectorAll('.grid-headrow > .hcell').forEach((h) => {{
+                h.addEventListener('click', (e) => {{
+                    if (e.target.classList.contains('resizer')) return;
+                    const c = parseInt(h.getAttribute('data-col'), 10);
+                    if (Number.isFinite(c)) sortTable(c);
+                }});
+            }});
 
             (function initReasonTooltip() {{
                 const tip = document.createElement('div');
