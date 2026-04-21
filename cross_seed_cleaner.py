@@ -1801,28 +1801,33 @@ def export_reports(sorted_items, eligible_ids):
                     return 0;
                 }};
 
-                groups.sort((a, b) => {{
-                    const valA = getVal(a, n);
-                    const valB = getVal(b, n);
+                const compare = (valA, valB, idx) => {{
+                    if (idx === 4 || idx === 5) return parseSize(valA) - parseSize(valB);
+                    if (idx === 6) return parseTime(valA) - parseTime(valB);
+                    if (idx === 2 || idx === 3) return parseFloat(valA) - parseFloat(valB);
+                    return valA.localeCompare(valB, undefined, {{numeric: true, sensitivity: 'base'}});
+                }};
 
-                    // 1. Size Columns (4: Size, 5: Uploaded)
-                    if (n === 4 || n === 5) {{
-                        return (parseSize(valA) - parseSize(valB)) * sortDirection;
+                const cellVal = (row, idx) => (row && row.cells[idx]) ? row.cells[idx].innerText.trim() : "";
+                const isExtRow = (row) => cellVal(row, 1) === "EXT";
+
+                groups.sort((a, b) => compare(getVal(a, n), getVal(b, n), n) * sortDirection);
+
+                groups.forEach(grp => {{
+                    const allRows = Array.from(grp.rows);
+                    if (allRows.length <= 2) return;
+                    const original = allRows[0];
+                    const trailing = [];
+                    let endIdx = allRows.length;
+                    while (endIdx > 1 && isExtRow(allRows[endIdx - 1])) {{
+                        trailing.unshift(allRows[endIdx - 1]);
+                        endIdx--;
                     }}
-
-                    // 2. Duration Column (6: Seeded)
-                    if (n === 6) {{
-                        return (parseTime(valA) - parseTime(valB)) * sortDirection;
-                    }}
-
-                    // 3. Pure Numeric Columns (2: Seeds, 3: Ratio)
-                    if (n === 2 || n === 3) {{
-                         return (parseFloat(valA) - parseFloat(valB)) * sortDirection;
-                    }}
-
-                    // 4. Default: String Sort (Name, Category, Tracker, etc.)
-                    // Use localeCompare for correct alphabetical sorting
-                    return valA.localeCompare(valB, undefined, {{numeric: true, sensitivity: 'base'}}) * sortDirection;
+                    const middle = allRows.slice(1, endIdx);
+                    middle.sort((a, b) => compare(cellVal(a, n), cellVal(b, n), n) * sortDirection);
+                    grp.appendChild(original);
+                    middle.forEach(r => grp.appendChild(r));
+                    trailing.forEach(r => grp.appendChild(r));
                 }});
 
                 groups.forEach(g => table.appendChild(g));
