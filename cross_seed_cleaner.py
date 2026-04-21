@@ -1477,10 +1477,22 @@ def export_reports(sorted_items, eligible_ids):
         .metric-val { font-weight: bold; color: #fff; }
 
         .table-container { overflow: visible; }
-        table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; table-layout: fixed; }
-        th { text-align: left; padding: 12px 8px; background: #252525; color: #aaa; font-weight: 600; border-bottom: 2px solid #333; position: sticky; top: 0; z-index: 2; white-space: nowrap; cursor: pointer; user-select: none; }
-        th:hover { color: #fff; background: #333; }
-        th.sorted-asc::after, th.sorted-desc::after {
+
+        /* Grid-based "table": divs all the way down so off-screen groups can use
+           content-visibility:auto, which is forbidden on real <tbody>/<tr>/<td>. */
+        .grid-report { --cols: 140px 70px 75px 70px 90px 90px 100px 95px 140px 140px 1fr 1fr; font-size: 13px; }
+        .grid-row    { display: grid; grid-template-columns: var(--cols); align-items: stretch; }
+        .cell        { padding: 8px; border-bottom: 1px solid #2a2a2a; color: #ddd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; }
+        .grid-head   { position: sticky; top: 0; z-index: 3; }
+        .hcell {
+            position: relative;
+            padding: 12px 8px; background: #252525; color: #aaa; font-weight: 600;
+            border-bottom: 2px solid #333; cursor: pointer; user-select: none;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            display: flex; align-items: center;
+        }
+        .hcell:hover { color: #fff; background: #333; }
+        .hcell.sorted-asc::after, .hcell.sorted-desc::after {
             content: "";
             display: inline-block;
             width: 0;
@@ -1491,25 +1503,21 @@ def export_reports(sorted_items, eligible_ids):
             border-right: 5px solid transparent;
             opacity: 0.9;
         }
-        th.sorted-asc::after  { border-bottom: 6px solid currentColor; }
-        th.sorted-desc::after { border-top: 6px solid currentColor; }
-        td { padding: 8px; border-bottom: 1px solid #2a2a2a; vertical-align: middle; color: #ddd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        tr:hover td { background: #2a2a2a; }
-        tbody.group-even > tr:not(:hover) > td { background: #242424; }
-        tbody.group-body > tr:last-child > td { border-bottom: 2px solid #444; }
-        .filtered-hidden { display: none; }
+        .hcell.sorted-asc::after  { border-bottom: 6px solid currentColor; }
+        .hcell.sorted-desc::after { border-top: 6px solid currentColor; }
+        .grid-row:hover > .cell { background: #2a2a2a; }
+        .group { content-visibility: auto; contain-intrinsic-size: auto 80px; }
+        .group.group-even .grid-row:not(:hover) > .cell { background: #242424; }
+        .group .grid-row:last-child > .cell { border-bottom: 2px solid #444; }
+        .group.filtered-hidden, .grid-row.filtered-hidden { display: none; }
 
-        thead tr.filter-row th {
-            position: sticky;
-            top: 47px;
-            z-index: 2;
+        .grid-filterrow .fcell {
             background: #1a1a1a;
             padding: 4px 6px;
-            font-weight: normal;
             border-bottom: 1px solid #333;
             cursor: default;
+            display: flex; align-items: center;
         }
-        thead tr.filter-row th:hover { background: #1a1a1a; }
         .filter-row input[type="number"],
         .filter-row input[type="text"],
         .filter-row .filter-multi-btn {
@@ -1723,24 +1731,24 @@ def export_reports(sorted_items, eligible_ids):
                 <button type="button" id="filterClearBtn" class="filter-clear-btn">Clear all filters</button>
             </div>
             <div class="table-container">
-            <table id="reportTable">
-                <thead>
-                    <tr>
-                        <th onclick="sortTable(0)" style="width:140px">Status<div class="resizer"></div></th>
-                        <th onclick="sortTable(1)" style="width:70px">Type<div class="resizer"></div></th>
-                        <th onclick="sortTable(2)" style="width:75px">Seeds<div class="resizer"></div></th>
-                        <th onclick="sortTable(3)" style="width:70px">Ratio<div class="resizer"></div></th>
-                        <th onclick="sortTable(4)" style="width:90px">Size<div class="resizer"></div></th>
-                        <th onclick="sortTable(5)" style="width:90px">Uploaded<div class="resizer"></div></th>
-                        <th onclick="sortTable(6)" style="width:100px">Seeded (D:H)<div class="resizer"></div></th>
-                        <th onclick="sortTable(7)" style="width:95px">Added<div class="resizer"></div></th>
-                        <th onclick="sortTable(8)" style="width:140px">Tracker<div class="resizer"></div></th>
-                        <th onclick="sortTable(9)" style="width:140px">Category<div class="resizer"></div></th>
-                        <th onclick="sortTable(10)">Name<div class="resizer"></div></th>
-                        <th onclick="sortTable(11)">Path<div class="resizer"></div></th>
-                    </tr>
-                    <tr class="filter-row">
-                        <th data-col="0">
+            <div id="reportTable" class="grid-report">
+                <div class="grid-head">
+                    <div class="grid-row grid-headrow">
+                        <div class="hcell" data-col="0" onclick="sortTable(0)">Status<div class="resizer"></div></div>
+                        <div class="hcell" data-col="1" onclick="sortTable(1)">Type<div class="resizer"></div></div>
+                        <div class="hcell" data-col="2" onclick="sortTable(2)">Seeds<div class="resizer"></div></div>
+                        <div class="hcell" data-col="3" onclick="sortTable(3)">Ratio<div class="resizer"></div></div>
+                        <div class="hcell" data-col="4" onclick="sortTable(4)">Size<div class="resizer"></div></div>
+                        <div class="hcell" data-col="5" onclick="sortTable(5)">Uploaded<div class="resizer"></div></div>
+                        <div class="hcell" data-col="6" onclick="sortTable(6)">Seeded (D:H)<div class="resizer"></div></div>
+                        <div class="hcell" data-col="7" onclick="sortTable(7)">Added<div class="resizer"></div></div>
+                        <div class="hcell" data-col="8" onclick="sortTable(8)">Tracker<div class="resizer"></div></div>
+                        <div class="hcell" data-col="9" onclick="sortTable(9)">Category<div class="resizer"></div></div>
+                        <div class="hcell" data-col="10" onclick="sortTable(10)">Name<div class="resizer"></div></div>
+                        <div class="hcell" data-col="11" onclick="sortTable(11)">Path</div>
+                    </div>
+                    <div class="grid-row grid-filterrow filter-row">
+                        <div class="fcell" data-col="0">
                             <button type="button" class="filter-multi-btn" data-filter="status">Any ▾</button>
                             <div class="filter-multi-panel" data-filter-panel="status">
                                 <div class="filter-group-label">Status</div>
@@ -1755,32 +1763,33 @@ def export_reports(sorted_items, eligible_ids):
                                 <label><input type="checkbox" value="PATH_ERROR" data-filter-reason>⚠️ Path error</label>
                                 <label><input type="checkbox" value="CATEGORY_FILTER" data-filter-reason>🏷️ Category filter</label>
                             </div>
-                        </th>
-                        <th data-col="1"></th>
-                        <th data-col="2"><div class="filter-range" title="min / max seeds (group worst)"><input type="number" data-filter="seedsMin" placeholder="≥"><input type="number" data-filter="seedsMax" placeholder="≤"></div></th>
-                        <th data-col="3"><div class="filter-range" title="min / max ratio (ORIGINAL)"><input type="number" step="0.01" data-filter="ratioMin" placeholder="≥"><input type="number" step="0.01" data-filter="ratioMax" placeholder="≤"></div></th>
-                        <th data-col="4"><div class="filter-range" title="min / max size in GiB (ORIGINAL)"><input type="number" step="0.1" data-filter="sizeMin" placeholder="≥ GiB"><input type="number" step="0.1" data-filter="sizeMax" placeholder="≤"></div></th>
-                        <th data-col="5"><div class="filter-range" title="min / max uploaded in GiB (ORIGINAL)"><input type="number" step="0.1" data-filter="upMin" placeholder="≥ GiB"><input type="number" step="0.1" data-filter="upMax" placeholder="≤"></div></th>
-                        <th data-col="6"><div class="filter-range" title="min / max seeded in days (ORIGINAL)"><input type="number" data-filter="seededMin" placeholder="≥ d"><input type="number" data-filter="seededMax" placeholder="≤"></div></th>
-                        <th data-col="7"></th>
-                        <th data-col="8">
+                        </div>
+                        <div class="fcell" data-col="1"></div>
+                        <div class="fcell" data-col="2"><div class="filter-range" title="min / max seeds (group worst)"><input type="number" data-filter="seedsMin" placeholder="≥"><input type="number" data-filter="seedsMax" placeholder="≤"></div></div>
+                        <div class="fcell" data-col="3"><div class="filter-range" title="min / max ratio (ORIGINAL)"><input type="number" step="0.01" data-filter="ratioMin" placeholder="≥"><input type="number" step="0.01" data-filter="ratioMax" placeholder="≤"></div></div>
+                        <div class="fcell" data-col="4"><div class="filter-range" title="min / max size in GiB (ORIGINAL)"><input type="number" step="0.1" data-filter="sizeMin" placeholder="≥ GiB"><input type="number" step="0.1" data-filter="sizeMax" placeholder="≤"></div></div>
+                        <div class="fcell" data-col="5"><div class="filter-range" title="min / max uploaded in GiB (ORIGINAL)"><input type="number" step="0.1" data-filter="upMin" placeholder="≥ GiB"><input type="number" step="0.1" data-filter="upMax" placeholder="≤"></div></div>
+                        <div class="fcell" data-col="6"><div class="filter-range" title="min / max seeded in days (ORIGINAL)"><input type="number" data-filter="seededMin" placeholder="≥ d"><input type="number" data-filter="seededMax" placeholder="≤"></div></div>
+                        <div class="fcell" data-col="7"></div>
+                        <div class="fcell" data-col="8">
                             <button type="button" class="filter-multi-btn" data-filter="tracker">Any ▾</button>
                             <div class="filter-multi-panel" data-filter-panel="tracker"></div>
-                        </th>
-                        <th data-col="9">
+                        </div>
+                        <div class="fcell" data-col="9">
                             <button type="button" class="filter-multi-btn" data-filter="category">Any ▾</button>
                             <div class="filter-multi-panel" data-filter-panel="category"></div>
-                        </th>
-                        <th data-col="10"><input type="text" data-filter="name" placeholder="search name"></th>
-                        <th data-col="11"><input type="text" data-filter="path" placeholder="search path"></th>
-                    </tr>
-                </thead>
+                        </div>
+                        <div class="fcell" data-col="10"><input type="text" data-filter="name" placeholder="search name"></div>
+                        <div class="fcell" data-col="11"><input type="text" data-filter="path" placeholder="search path"></div>
+                    </div>
+                </div>
+                <div class="grid-body">
     """]
 
     if initial_sort_col >= 0 and initial_sort_class:
         html_parts[0] = html_parts[0].replace(
-            f'onclick="sortTable({initial_sort_col})"',
-            f'onclick="sortTable({initial_sort_col})" class="{initial_sort_class}"',
+            f'<div class="hcell" data-col="{initial_sort_col}" onclick="sortTable({initial_sort_col})"',
+            f'<div class="hcell {initial_sort_class}" data-col="{initial_sort_col}" onclick="sortTable({initial_sort_col})"',
             1,
         )
 
@@ -1813,9 +1822,24 @@ def export_reports(sorted_items, eligible_ids):
         status_attr = 'delete' if is_del_group else 'keep'
         reason_codes = ' '.join(r['code'] for r in row.get('reasons', []))
         min_seeds = min(t.get('_seeder_count', 0) for t in torrents_to_list)
+
+        # Pre-compute one lowercased searchable blob per group so the JS filter
+        # can do a single dataset.search.includes(q) instead of walking rows.
+        search_tokens = []
+        for t in torrents_to_list:
+            search_tokens.append(t.get('name', '').lower())
+            search_tokens.append(t.get('content_path', '').lower())
+            search_tokens.append((t.get('_tracker_domain') or '').lower())
+            search_tokens.append((t.get('category') or '').lower())
+        ext_path_for_search = d['original'].get('_external_path')
+        if ext_path_for_search:
+            search_tokens.append(ext_path_for_search.lower())
+        search_blob = _h(' '.join(search_tokens))
+
         html_parts.append(
-            f'<tbody class="{group_class}" data-status="{status_attr}" '
-            f'data-reasons="{_h(reason_codes)}" data-seeds-min="{min_seeds}">'
+            f'<div class="{group_class}" data-status="{status_attr}" '
+            f'data-reasons="{_h(reason_codes)}" data-seeds-min="{min_seeds}" '
+            f'data-search="{search_blob}">'
         )
 
         for i, t in enumerate(torrents_to_list):
@@ -1863,20 +1887,20 @@ def export_reports(sorted_items, eligible_ids):
                 tracker_clean, t_cat, t_name, t_path,
             )
             html_parts.append(f"""
-            <tr{sk}>
-                <td>{status_cell_content}</td>
-                <td>{type_badge}</td>
-                <td><span class="{c_seeds}">{cur_seeds}</span></td>
-                <td>{t.get('ratio', 0):.2f}</td>
-                <td><span class="{c_size}">{format_size_smart(t_size)}</span></td>
-                <td>{format_size_smart(t.get('uploaded', 0))}</td>
-                <td><span class="{c_time}">{format_duration(t_time)}</span></td>
-                <td style="font-size:11px; color:#888;">{added_ts}</td>
-                <td>{_h(tracker_clean)}</td>
-                <td><span class="{c_cat}">{_h(t_cat)}</span></td>
-                <td class="name-cell">{name_h}</td>
-                <td class="path-cell">{path_h}</td>
-            </tr>
+            <div class="grid-row"{sk}>
+                <div class="cell">{status_cell_content}</div>
+                <div class="cell">{type_badge}</div>
+                <div class="cell"><span class="{c_seeds}">{cur_seeds}</span></div>
+                <div class="cell">{t.get('ratio', 0):.2f}</div>
+                <div class="cell"><span class="{c_size}">{format_size_smart(t_size)}</span></div>
+                <div class="cell">{format_size_smart(t.get('uploaded', 0))}</div>
+                <div class="cell"><span class="{c_time}">{format_duration(t_time)}</span></div>
+                <div class="cell" style="font-size:11px; color:#888;">{added_ts}</div>
+                <div class="cell">{_h(tracker_clean)}</div>
+                <div class="cell"><span class="{c_cat}">{_h(t_cat)}</span></div>
+                <div class="cell name-cell">{name_h}</div>
+                <div class="cell path-cell">{path_h}</div>
+            </div>
             """)
 
         external_path = d['original'].get('_external_path')
@@ -1891,27 +1915,28 @@ def export_reports(sorted_items, eligible_ids):
             )
 
             html_parts.append(f"""
-            <tr{ext_sk}>
-                <td>{ext_status_cell}</td>
-                <td><span class="type-badge" style="color:#aaa; border:1px solid #555;">EXT</span></td>
-                <td style="text-align:center; color:#555;">-</td>
-                <td style="text-align:center; color:#555;">-</td>
-                <td><span class="text-success">{format_size_smart(orig_size)}</span></td>
-                <td style="text-align:center; color:#555;">-</td>
-                <td style="text-align:center; color:#555;">-</td>
-                <td style="text-align:center; color:#555;">-</td>
-                <td style="text-align:center; color:#555;">-</td>
-                <td><span style="color:#2196f3;">External Library</span></td>
-                <td class="name-cell" style="color:#2196f3; font-style:italic;">{_h(d['original'].get('name', ''))}</td>
-                <td class="path-cell">{_h(external_path)}</td>
-            </tr>
+            <div class="grid-row"{ext_sk}>
+                <div class="cell">{ext_status_cell}</div>
+                <div class="cell"><span class="type-badge" style="color:#aaa; border:1px solid #555;">EXT</span></div>
+                <div class="cell" style="text-align:center; color:#555; justify-content:center;">-</div>
+                <div class="cell" style="text-align:center; color:#555; justify-content:center;">-</div>
+                <div class="cell"><span class="text-success">{format_size_smart(orig_size)}</span></div>
+                <div class="cell" style="text-align:center; color:#555; justify-content:center;">-</div>
+                <div class="cell" style="text-align:center; color:#555; justify-content:center;">-</div>
+                <div class="cell" style="text-align:center; color:#555; justify-content:center;">-</div>
+                <div class="cell" style="text-align:center; color:#555; justify-content:center;">-</div>
+                <div class="cell"><span style="color:#2196f3;">External Library</span></div>
+                <div class="cell name-cell" style="color:#2196f3; font-style:italic;">{_h(d['original'].get('name', ''))}</div>
+                <div class="cell path-cell">{_h(external_path)}</div>
+            </div>
             """)
 
 
-        html_parts.append("</tbody>")
+        html_parts.append("</div>")
 
     html_parts.append("""
-            </table>
+                </div>
+            </div>
             </div>
         </div>
     </div>
@@ -1932,22 +1957,41 @@ def export_reports(sorted_items, eligible_ids):
         {html_body}
         <script>
             const createResizableTable = function(table) {{
-                const cols = table.querySelectorAll('th');
-                [].forEach.call(cols, function(col) {{
+                const headCells = Array.from(table.querySelectorAll('.grid-headrow > .hcell'));
+                if (!headCells.length) return;
+                const readCols = () => {{
+                    const v = getComputedStyle(table).getPropertyValue('--cols').trim();
+                    return v.split(/\\s+/).filter(Boolean);
+                }};
+                let cols = readCols();
+                headCells.forEach((col, idx) => {{
                     const resizer = col.querySelector('.resizer');
                     if (!resizer) return;
                     let x = 0; let w = 0;
                     const mouseDownHandler = function(e) {{
                         x = e.clientX;
-                        const styles = window.getComputedStyle(col);
-                        w = parseInt(styles.width, 10);
+                        cols = readCols();
+                        // Lock 1fr columns to their measured pixel width before resizing,
+                        // otherwise the grid won't honor a px change next to fr units.
+                        cols = cols.map((c, i) => {{
+                            if (c.endsWith('fr')) {{
+                                const measured = headCells[i].getBoundingClientRect().width;
+                                return Math.round(measured) + 'px';
+                            }}
+                            return c;
+                        }});
+                        w = parseInt(cols[idx], 10) || col.getBoundingClientRect().width;
                         document.addEventListener('mousemove', mouseMoveHandler);
                         document.addEventListener('mouseup', mouseUpHandler);
                         resizer.classList.add('resizing');
+                        e.stopPropagation();
+                        e.preventDefault();
                     }};
                     const mouseMoveHandler = function(e) {{
                         const dx = e.clientX - x;
-                        col.style.width = (w + dx) + 'px';
+                        const next = Math.max(30, w + dx);
+                        cols[idx] = next + 'px';
+                        table.style.setProperty('--cols', cols.join(' '));
                     }};
                     const mouseUpHandler = function() {{
                         document.removeEventListener('mousemove', mouseMoveHandler);
@@ -1955,6 +1999,9 @@ def export_reports(sorted_items, eligible_ids):
                         resizer.classList.remove('resizing');
                     }};
                     resizer.addEventListener('mousedown', mouseDownHandler);
+                    // Resizer is inside the header cell which has onclick=sortTable —
+                    // swallow clicks on the grip so dragging doesn't also trigger sort.
+                    resizer.addEventListener('click', (e) => e.stopPropagation());
                 }});
             }};
             createResizableTable(document.getElementById('reportTable'));
@@ -1966,15 +2013,16 @@ def export_reports(sorted_items, eligible_ids):
 
             function sortTable(n) {{
                 const table = document.getElementById("reportTable");
+                const body = table.querySelector('.grid-body');
 
                 if (n !== lastSortedCol) {{ sortDirection = 1; lastSortedCol = n; }}
                 else {{ sortDirection *= -1; }}
 
-                const headers = table.tHead.rows[0].cells;
+                const headers = table.querySelectorAll('.grid-headrow > .hcell');
                 for (let i = 0; i < headers.length; i++) {{
                     headers[i].classList.remove('sorted-asc', 'sorted-desc');
                 }}
-                headers[n].classList.add(sortDirection > 0 ? 'sorted-asc' : 'sorted-desc');
+                if (headers[n]) headers[n].classList.add(sortDirection > 0 ? 'sorted-asc' : 'sorted-desc');
 
                 const isNum = !!NUMERIC_SK[n];
                 const keyAttr = 'data-sk-' + n;
@@ -1988,18 +2036,20 @@ def export_reports(sorted_items, eligible_ids):
                     ? (a, b) => a - b
                     : (a, b) => a < b ? -1 : a > b ? 1 : 0;
 
-                const groups = Array.from(table.getElementsByClassName("group-body"));
+                const groups = Array.from(body.getElementsByClassName("group"));
+                const groupRows = (g) => Array.from(g.children).filter(c => c.classList.contains('grid-row'));
                 const outerKey = new Map();
-                groups.forEach(g => outerKey.set(g, keyOf(g.rows[0])));
+                groups.forEach(g => outerKey.set(g, keyOf(groupRows(g)[0])));
 
-                const parent = table.parentNode;
-                const nextSib = table.nextSibling;
-                parent.removeChild(table);
+                // Detach the body during the reorder so we get one reflow at the end.
+                const bodyParent = body.parentNode;
+                const bodyNextSib = body.nextSibling;
+                bodyParent.removeChild(body);
 
                 groups.sort((a, b) => cmp(outerKey.get(a), outerKey.get(b)) * sortDirection);
 
                 groups.forEach(grp => {{
-                    const allRows = Array.from(grp.rows);
+                    const allRows = groupRows(grp);
                     if (allRows.length <= 2) return;
                     const original = allRows[0];
                     const trailing = [];
@@ -2021,11 +2071,11 @@ def export_reports(sorted_items, eligible_ids):
                     grp.appendChild(frag);
                 }});
 
-                const tblFrag = document.createDocumentFragment();
-                groups.forEach(g => tblFrag.appendChild(g));
-                table.appendChild(tblFrag);
+                const bodyFrag = document.createDocumentFragment();
+                groups.forEach(g => bodyFrag.appendChild(g));
+                body.appendChild(bodyFrag);
 
-                parent.insertBefore(table, nextSib);
+                bodyParent.insertBefore(body, bodyNextSib);
             }}
 
             (function initReasonTooltip() {{
@@ -2223,6 +2273,7 @@ def export_reports(sorted_items, eligible_ids):
                 }}
 
                 const getAttr = (el, n) => el.getAttribute('data-sk-' + n) || '';
+                let _lastHidden = null;  // Uint8Array: 1 = hidden last pass, 0 = visible
 
                 function applyFilters() {{
                     const seedsMin = readNum('seedsMin'), seedsMax = readNum('seedsMax');
@@ -2240,35 +2291,68 @@ def export_reports(sorted_items, eligible_ids):
                     const seededMinSec = seededMinD !== null ? seededMinD * DAY : null;
                     const seededMaxSec = seededMaxD !== null ? seededMaxD * DAY : null;
 
-                    const groups = _groupsCache || (_groupsCache = Array.from(document.getElementsByClassName('group-body')));
+                    const groups = _groupsCache || (_groupsCache = Array.from(document.getElementsByClassName('group')));
+                    if (!_lastHidden || _lastHidden.length !== groups.length) {{
+                        _lastHidden = new Uint8Array(groups.length);
+                    }}
 
-                    for (const g of groups) {{
-                        if (statusSet.size && !statusSet.has(g.dataset.status)) {{ g.classList.add('filtered-hidden'); continue; }}
-                        if (reasonsSet.size) {{
-                            const gr = (g.dataset.reasons || '').split(/\\s+/).filter(Boolean);
-                            if (!gr.some(r => reasonsSet.has(r))) {{ g.classList.add('filtered-hidden'); continue; }}
+                    const needsRowScan = trackersSet.size || categoriesSet.size;
+                    const groupRows = (g) => {{
+                        const out = [];
+                        for (const c of g.children) if (c.classList && c.classList.contains('grid-row')) out.push(c);
+                        return out;
+                    }};
+
+                    for (let i = 0; i < groups.length; i++) {{
+                        const g = groups[i];
+                        let hide = false;
+
+                        if (statusSet.size && !statusSet.has(g.dataset.status)) hide = true;
+                        else if (reasonsSet.size) {{
+                            const gr = (g.dataset.reasons || '').split(/\\s+/);
+                            let any = false;
+                            for (const r of gr) if (r && reasonsSet.has(r)) {{ any = true; break; }}
+                            if (!any) hide = true;
                         }}
-                        if (!numericInRange(g.dataset.seedsMin, seedsMin, seedsMax)) {{ g.classList.add('filtered-hidden'); continue; }}
 
-                        const orig = g.rows[0];
-                        if (!orig) {{ g.classList.add('filtered-hidden'); continue; }}
-                        if (!numericInRange(getAttr(orig, 3), ratioMin,   ratioMax))   {{ g.classList.add('filtered-hidden'); continue; }}
-                        if (!numericInRange(getAttr(orig, 4), sizeMinBytes, sizeMaxBytes)) {{ g.classList.add('filtered-hidden'); continue; }}
-                        if (!numericInRange(getAttr(orig, 5), upMinBytes,   upMaxBytes))   {{ g.classList.add('filtered-hidden'); continue; }}
-                        if (!numericInRange(getAttr(orig, 6), seededMinSec, seededMaxSec)) {{ g.classList.add('filtered-hidden'); continue; }}
+                        if (!hide && !numericInRange(g.dataset.seedsMin, seedsMin, seedsMax)) hide = true;
 
-                        if (trackersSet.size || categoriesSet.size || nameQ || pathQ) {{
+                        if (!hide && nameQ && !g.dataset.search.includes(nameQ)) hide = true;
+                        if (!hide && pathQ && !g.dataset.search.includes(pathQ)) hide = true;
+
+                        if (!hide && (ratioMin !== null || ratioMax !== null
+                                      || sizeMinBytes !== null || sizeMaxBytes !== null
+                                      || upMinBytes !== null || upMaxBytes !== null
+                                      || seededMinSec !== null || seededMaxSec !== null)) {{
+                            const rows = groupRows(g);
+                            const orig = rows[0];
+                            if (!orig) hide = true;
+                            else {{
+                                if (!numericInRange(getAttr(orig, 3), ratioMin,    ratioMax))    hide = true;
+                                else if (!numericInRange(getAttr(orig, 4), sizeMinBytes, sizeMaxBytes)) hide = true;
+                                else if (!numericInRange(getAttr(orig, 5), upMinBytes,   upMaxBytes))   hide = true;
+                                else if (!numericInRange(getAttr(orig, 6), seededMinSec, seededMaxSec)) hide = true;
+                            }}
+                        }}
+
+                        if (!hide && needsRowScan) {{
                             let ok = false;
-                            for (const tr of g.rows) {{
+                            for (const tr of groupRows(g)) {{
                                 if (trackersSet.size && !trackersSet.has(getAttr(tr, 8))) continue;
                                 if (categoriesSet.size && !categoriesSet.has(getAttr(tr, 9))) continue;
-                                if (nameQ && !getAttr(tr, 10).includes(nameQ)) continue;
-                                if (pathQ && !getAttr(tr, 11).includes(pathQ)) continue;
                                 ok = true; break;
                             }}
-                            if (!ok) {{ g.classList.add('filtered-hidden'); continue; }}
+                            if (!ok) hide = true;
                         }}
-                        g.classList.remove('filtered-hidden');
+
+                        // Skip the DOM mutation when the visibility state is unchanged.
+                        const prev = _lastHidden[i];
+                        const next = hide ? 1 : 0;
+                        if (prev !== next) {{
+                            if (hide) g.classList.add('filtered-hidden');
+                            else      g.classList.remove('filtered-hidden');
+                            _lastHidden[i] = next;
+                        }}
                     }}
                 }}
 
