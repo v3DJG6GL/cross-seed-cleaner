@@ -1232,6 +1232,22 @@ def export_reports(sorted_items, eligible_ids):
     _h = html_escape
     _js = js_string
 
+    _SORT_COL_MAP = {
+        "seeders": 2, "seeds": 2,
+        "ratio": 3,
+        "size": 4,
+        "uploaded": 5,
+        "time": 6,
+        "added": 7,
+        "name": 10,
+    }
+    initial_sort_col = _SORT_COL_MAP.get(SORT_BY, -1)
+    initial_sort_dir = 1 if SORT_ORDER == "asc" else -1
+    initial_sort_class = (
+        ("sorted-asc" if initial_sort_dir > 0 else "sorted-desc")
+        if initial_sort_col >= 0 else ""
+    )
+
     def _sk_lower(v):
         return _h((v or '').lower())
 
@@ -1670,6 +1686,13 @@ def export_reports(sorted_items, eligible_ids):
                 </thead>
     """]
 
+    if initial_sort_col >= 0 and initial_sort_class:
+        html_parts[0] = html_parts[0].replace(
+            f'onclick="sortTable({initial_sort_col})"',
+            f'onclick="sortTable({initial_sort_col})" class="{initial_sort_class}"',
+            1,
+        )
+
     for row in report_rows:
         if ELIGIBLE_ONLY and not row['is_del']:
             continue
@@ -1835,8 +1858,8 @@ def export_reports(sorted_items, eligible_ids):
             }};
             createResizableTable(document.getElementById('reportTable'));
 
-            let sortDirection = 1;
-            let lastSortedCol = -1;
+            let sortDirection = {initial_sort_dir};
+            let lastSortedCol = {initial_sort_col};
 
             const NUMERIC_SK = {{2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1}};
 
