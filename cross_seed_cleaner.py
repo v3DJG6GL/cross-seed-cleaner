@@ -1568,6 +1568,34 @@ def export_reports(sorted_items, eligible_ids):
         .filter-range-panel .range-row input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
         .range-clear-btn { margin-top: 6px; background: #333; color: #ddd; border: 1px solid #444; border-radius: 3px; padding: 3px 10px; cursor: pointer; font: 11px system-ui; }
         .range-clear-btn:hover { background: #444; }
+        /* Dual-thumb range slider: two stacked <input type=range> elements
+           share one visual track. The track and selected segment are drawn
+           on the wrapper using two CSS variables (--p1, --p2) updated by JS. */
+        .range-slider { position: relative; height: 22px; margin: 4px 2px 8px; --p1: 0%; --p2: 100%; }
+        .range-slider::before {
+            content: ""; position: absolute; left: 0; right: 0; top: 50%;
+            transform: translateY(-50%); height: 4px; border-radius: 2px;
+            background: linear-gradient(to right,
+                #333 0,           #333 var(--p1),
+                #4caf50 var(--p1),#4caf50 var(--p2),
+                #333 var(--p2),   #333 100%);
+        }
+        .range-slider input[type="range"] {
+            position: absolute; left: 0; top: 0; width: 100%; height: 22px;
+            margin: 0; padding: 0; background: transparent;
+            -webkit-appearance: none; appearance: none; pointer-events: none;
+        }
+        .range-slider input[type="range"]::-webkit-slider-runnable-track { background: transparent; height: 22px; border: 0; }
+        .range-slider input[type="range"]::-moz-range-track { background: transparent; height: 22px; border: 0; }
+        .range-slider input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; pointer-events: auto;
+            width: 14px; height: 14px; border-radius: 50%; background: #ddd;
+            border: 2px solid #4caf50; cursor: pointer; margin-top: 0;
+        }
+        .range-slider input[type="range"]::-moz-range-thumb {
+            pointer-events: auto; width: 14px; height: 14px; border-radius: 50%;
+            background: #ddd; border: 2px solid #4caf50; cursor: pointer;
+        }
         .filter-group-label { color: #888; font: 11px system-ui; text-transform: uppercase; letter-spacing: 0.5px; padding: 4px 2px 2px; border-top: 1px solid #333; margin-top: 4px; }
         .filter-multi-panel > .filter-group-label:first-child { border-top: 0; margin-top: 0; }
         .filter-clear-btn {
@@ -1785,6 +1813,7 @@ def export_reports(sorted_items, eligible_ids):
                             <button type="button" class="filter-multi-btn" data-filter-trigger="seeds">Any ▾</button>
                             <div class="filter-multi-panel filter-range-panel" data-range-panel="seeds" data-range-unit="">
                                 <div class="filter-group-label">Seeds (worst across group)</div>
+                                <div class="range-slider" data-slider-for="seeds"></div>
                                 <label class="range-row">Min <input type="number" data-filter="seedsMin"></label>
                                 <label class="range-row">Max <input type="number" data-filter="seedsMax"></label>
                                 <button type="button" class="range-clear-btn" data-range-clear="seeds">Clear</button>
@@ -1803,6 +1832,7 @@ def export_reports(sorted_items, eligible_ids):
                             <button type="button" class="filter-multi-btn" data-filter-trigger="size">Any ▾</button>
                             <div class="filter-multi-panel filter-range-panel" data-range-panel="size" data-range-unit="GiB">
                                 <div class="filter-group-label">Size (ORIGINAL, GiB)</div>
+                                <div class="range-slider" data-slider-for="size"></div>
                                 <label class="range-row">Min <input type="number" step="0.1" data-filter="sizeMin"> GiB</label>
                                 <label class="range-row">Max <input type="number" step="0.1" data-filter="sizeMax"> GiB</label>
                                 <button type="button" class="range-clear-btn" data-range-clear="size">Clear</button>
@@ -1812,6 +1842,7 @@ def export_reports(sorted_items, eligible_ids):
                             <button type="button" class="filter-multi-btn" data-filter-trigger="up">Any ▾</button>
                             <div class="filter-multi-panel filter-range-panel" data-range-panel="up" data-range-unit="GiB">
                                 <div class="filter-group-label">Uploaded (ORIGINAL, GiB)</div>
+                                <div class="range-slider" data-slider-for="up"></div>
                                 <label class="range-row">Min <input type="number" step="0.1" data-filter="upMin"> GiB</label>
                                 <label class="range-row">Max <input type="number" step="0.1" data-filter="upMax"> GiB</label>
                                 <button type="button" class="range-clear-btn" data-range-clear="up">Clear</button>
@@ -1821,6 +1852,7 @@ def export_reports(sorted_items, eligible_ids):
                             <button type="button" class="filter-multi-btn" data-filter-trigger="seeded">Any ▾</button>
                             <div class="filter-multi-panel filter-range-panel" data-range-panel="seeded" data-range-unit="d">
                                 <div class="filter-group-label">Seeded (ORIGINAL, days)</div>
+                                <div class="range-slider" data-slider-for="seeded"></div>
                                 <label class="range-row">Min <input type="number" data-filter="seededMin"> d</label>
                                 <label class="range-row">Max <input type="number" data-filter="seededMax"> d</label>
                                 <button type="button" class="range-clear-btn" data-range-clear="seeded">Clear</button>
@@ -1859,6 +1891,10 @@ def export_reports(sorted_items, eligible_ids):
 
     group_idx = 0
     total_torrents = 0
+    ds_seeds_max = 0
+    ds_size_max = 0
+    ds_up_max = 0
+    ds_seeded_max = 0
     for row in report_rows:
         if ELIGIBLE_ONLY and not row['is_del']:
             continue
@@ -1890,12 +1926,22 @@ def export_reports(sorted_items, eligible_ids):
 
         # Pre-compute one lowercased searchable blob per group so the JS filter
         # can do a single dataset.search.includes(q) instead of walking rows.
+        # While we're walking, also accumulate dataset min/max bounds for the
+        # per-column range sliders (Seeds/Size/Uploaded/Seeded).
         search_tokens = []
         for t in torrents_to_list:
             search_tokens.append(t.get('name', '').lower())
             search_tokens.append(t.get('content_path', '').lower())
             search_tokens.append((t.get('_tracker_domain') or '').lower())
             search_tokens.append((t.get('category') or '').lower())
+            sv = t.get('_seeder_count', 0) or 0
+            zv = t.get('size', 0) or 0
+            uv = t.get('uploaded', 0) or 0
+            tv = t.get('seeding_time', 0) or 0
+            if sv > ds_seeds_max:  ds_seeds_max  = sv
+            if zv > ds_size_max:   ds_size_max   = zv
+            if uv > ds_up_max:     ds_up_max     = uv
+            if tv > ds_seeded_max: ds_seeded_max = tv
         ext_path_for_search = d['original'].get('_external_path')
         if ext_path_for_search:
             search_tokens.append(ext_path_for_search.lower())
@@ -2212,6 +2258,15 @@ def export_reports(sorted_items, eligible_ids):
             const UNIQUE_CATEGORIES = {_js(sorted(unique_categories))};
             const TOTAL_GROUPS = {_js(group_idx)};
             const TOTAL_TORRENTS = {_js(total_torrents)};
+            // Slider bounds: [min, max, step, displayConverter] per range filter.
+            // Size/Uploaded show GiB but the data-sk attrs are bytes — input values
+            // and slider thumb values are in GiB (whole-units), filter converts.
+            const RANGE_BOUNDS = {{
+                seeds:  [0, {_js(ds_seeds_max)}, 1],
+                size:   [0, {_js(round(ds_size_max  / 1073741824, 1))}, 0.1],
+                up:     [0, {_js(round(ds_up_max    / 1073741824, 1))}, 0.1],
+                seeded: [0, {_js(ds_seeded_max // 86400)}, 1]
+            }};
 
             (function initFilters() {{
                 const GIB = 1073741824;
@@ -2373,16 +2428,80 @@ def export_reports(sorted_items, eligible_ids):
 
                 document.querySelectorAll('.filter-range-panel').forEach(panel => {{
                     const name = panel.getAttribute('data-range-panel');
-                    panel.querySelectorAll('input').forEach(inp => {{
+                    // Plain inputs (Min/Max <input type=number/date>): keep label in sync.
+                    panel.querySelectorAll('label.range-row input').forEach(inp => {{
                         inp.addEventListener('input', () => updateRangeBtnLabel(name));
                     }});
                     const clr = panel.querySelector('.range-clear-btn');
                     if (clr) clr.addEventListener('click', () => {{
                         panel.querySelectorAll('input').forEach(i => {{ i.value = ''; }});
+                        const slider = panel.querySelector('.range-slider');
+                        if (slider && slider._reset) slider._reset();
                         updateRangeBtnLabel(name);
                         applyFilters();
                     }});
                 }});
+
+                // Dual-thumb range sliders for the four bounded numeric ranges.
+                // The actual filter values stay in the existing Min/Max inputs;
+                // the slider just provides a visual control that two-way-binds
+                // to those inputs (and clamps to the dataset min/max).
+                function wireRangeSlider(slot) {{
+                    const name = slot.getAttribute('data-slider-for');
+                    const bounds = RANGE_BOUNDS[name];
+                    if (!bounds) return;
+                    const [bmin, bmax, step] = bounds;
+                    if (!(bmax > bmin)) {{ slot.style.display = 'none'; return; }}
+                    const panel = slot.closest('.filter-range-panel');
+                    const inputs = panel.querySelectorAll('label.range-row input');
+                    const inMin = inputs[0], inMax = inputs[1];
+
+                    const sMin = document.createElement('input');
+                    const sMax = document.createElement('input');
+                    [sMin, sMax].forEach(s => {{
+                        s.type = 'range'; s.min = bmin; s.max = bmax; s.step = step;
+                    }});
+                    sMin.value = bmin; sMax.value = bmax;
+                    slot.appendChild(sMin); slot.appendChild(sMax);
+
+                    const span = bmax - bmin;
+                    const pct = (v) => ((v - bmin) / span) * 100;
+                    const refreshTrack = () => {{
+                        const lo = Math.min(parseFloat(sMin.value), parseFloat(sMax.value));
+                        const hi = Math.max(parseFloat(sMin.value), parseFloat(sMax.value));
+                        slot.style.setProperty('--p1', pct(lo) + '%');
+                        slot.style.setProperty('--p2', pct(hi) + '%');
+                    }};
+                    refreshTrack();
+
+                    const slidersToInputs = () => {{
+                        const lo = Math.min(parseFloat(sMin.value), parseFloat(sMax.value));
+                        const hi = Math.max(parseFloat(sMin.value), parseFloat(sMax.value));
+                        inMin.value = (lo === bmin) ? '' : lo;
+                        inMax.value = (hi === bmax) ? '' : hi;
+                        refreshTrack();
+                        updateRangeBtnLabel(name);
+                        debounceApply();
+                    }};
+                    sMin.addEventListener('input', slidersToInputs);
+                    sMax.addEventListener('input', slidersToInputs);
+
+                    const inputsToSliders = () => {{
+                        const lo = inMin.value === '' ? bmin : parseFloat(inMin.value);
+                        const hi = inMax.value === '' ? bmax : parseFloat(inMax.value);
+                        if (Number.isFinite(lo)) sMin.value = Math.max(bmin, Math.min(bmax, lo));
+                        if (Number.isFinite(hi)) sMax.value = Math.max(bmin, Math.min(bmax, hi));
+                        refreshTrack();
+                    }};
+                    inMin.addEventListener('input', inputsToSliders);
+                    inMax.addEventListener('input', inputsToSliders);
+
+                    slot._reset = () => {{
+                        sMin.value = bmin; sMax.value = bmax;
+                        refreshTrack();
+                    }};
+                }}
+                document.querySelectorAll('.range-slider').forEach(wireRangeSlider);
 
                 // Clear all
                 const clearBtn = document.getElementById('filterClearBtn');
