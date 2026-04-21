@@ -1465,13 +1465,13 @@ def export_reports(sorted_items, eligible_ids):
         .metric-item { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; }
         .metric-val { font-weight: bold; color: #fff; }
 
-        .table-container { overflow-x: auto; }
+        .table-container { overflow: visible; }
         table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; table-layout: fixed; }
-        th { text-align: left; padding: 12px 8px; background: #252525; color: #aaa; font-weight: 600; border-bottom: 2px solid #333; position: sticky; top: 0; white-space: nowrap; cursor: pointer; user-select: none; }
+        th { text-align: left; padding: 12px 8px; background: #252525; color: #aaa; font-weight: 600; border-bottom: 2px solid #333; position: sticky; top: 0; z-index: 2; white-space: nowrap; cursor: pointer; user-select: none; }
         th:hover { color: #fff; background: #333; }
-        th.sorted-asc::after, th.sorted-desc::after { margin-left: 4px; font-size: 10px; opacity: 0.9; color: #4caf50; }
-        th.sorted-asc::after  { content: "▲"; }
-        th.sorted-desc::after { content: "▼"; }
+        th.sorted-asc::after, th.sorted-desc::after { margin-left: 4px; font-size: 12px; opacity: 0.9; color: #4caf50; }
+        th.sorted-asc::after  { content: "↑"; }
+        th.sorted-desc::after { content: "↓"; }
         td { padding: 8px; border-bottom: 1px solid #2a2a2a; vertical-align: middle; color: #ddd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         tr:hover td { background: #2a2a2a; }
         .resizer { position: absolute; right: 0; top: 0; height: 100%; width: 5px; cursor: col-resize; user-select: none; touch-action: none; }
@@ -1638,11 +1638,11 @@ def export_reports(sorted_items, eligible_ids):
                     <tr>
                         <th onclick="sortTable(0)" style="width:140px">Status<div class="resizer"></div></th>
                         <th onclick="sortTable(1)" style="width:70px">Type<div class="resizer"></div></th>
-                        <th onclick="sortTable(2)" style="width:40px">Seeds<div class="resizer"></div></th>
-                        <th onclick="sortTable(3)" style="width:35px">Ratio<div class="resizer"></div></th>
+                        <th onclick="sortTable(2)" style="width:60px">Seeds<div class="resizer"></div></th>
+                        <th onclick="sortTable(3)" style="width:55px">Ratio<div class="resizer"></div></th>
                         <th onclick="sortTable(4)" style="width:70px">Size<div class="resizer"></div></th>
                         <th onclick="sortTable(5)" style="width:70px">Uploaded<div class="resizer"></div></th>
-                        <th onclick="sortTable(6)" style="width:80px">Seeded (D:H)<div class="resizer"></div></th>
+                        <th onclick="sortTable(6)" style="width:110px">Seeded (D:H)<div class="resizer"></div></th>
                         <th onclick="sortTable(7)" style="width:100px">Added<div class="resizer"></div></th>
                         <th onclick="sortTable(8)" style="width:160px">Tracker<div class="resizer"></div></th>
                         <th onclick="sortTable(9)" style="width:130px">Category<div class="resizer"></div></th>
