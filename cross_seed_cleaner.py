@@ -1800,7 +1800,7 @@ def export_reports(sorted_items, eligible_ids):
 
         d = row['data']
         is_del_group = row['is_del']
-        group_class = "group-body group-even" if group_idx % 2 == 1 else "group-body"
+        group_class = "group group-even" if group_idx % 2 == 1 else "group"
         group_idx += 1
 
         status_class = "status-delete" if is_del_group else "status-keep"
