@@ -1927,31 +1927,38 @@ def export_reports(sorted_items, eligible_ids):
         reason_codes = ' '.join(r['code'] for r in row.get('reasons', []))
         min_seeds = min(t.get('_seeder_count', 0) for t in torrents_to_list)
 
+        # Slider bounds must reflect what the FILTER actually compares against,
+        # not every individual torrent in the dataset. Otherwise an extreme
+        # cross-seed value pushes the slider's bound to a number no original
+        # ever reaches → boundary positions silently exclude rows.
+        #   Seeds filter reads the per-group worst (data-seeds-min) → bound source = min_seeds.
+        #   Ratio/Size/Uploaded/Seeded filters read getAttr(orig, N) → bound source = original only.
+        orig_t = d['original']
+        rv = float(orig_t.get('ratio', 0) or 0)
+        zv = orig_t.get('size', 0) or 0
+        uv = orig_t.get('uploaded', 0) or 0
+        tv = orig_t.get('seeding_time', 0) or 0
+        if ds_seeds_max  is None or min_seeds > ds_seeds_max:  ds_seeds_max  = min_seeds
+        if ds_seeds_min  is None or min_seeds < ds_seeds_min:  ds_seeds_min  = min_seeds
+        if ds_ratio_max  is None or rv > ds_ratio_max:         ds_ratio_max  = rv
+        if ds_ratio_min  is None or rv < ds_ratio_min:         ds_ratio_min  = rv
+        if ds_size_max   is None or zv > ds_size_max:          ds_size_max   = zv
+        if ds_size_min   is None or zv < ds_size_min:          ds_size_min   = zv
+        if ds_up_max     is None or uv > ds_up_max:            ds_up_max     = uv
+        if ds_up_min     is None or uv < ds_up_min:            ds_up_min     = uv
+        if ds_seeded_max is None or tv > ds_seeded_max:        ds_seeded_max = tv
+        if ds_seeded_min is None or tv < ds_seeded_min:        ds_seeded_min = tv
+
         # Pre-compute one lowercased searchable blob per group so the JS filter
         # can do a single dataset.search.includes(q) instead of walking rows.
-        # While we're walking, also accumulate dataset min/max bounds for the
-        # per-column range sliders (Seeds/Size/Uploaded/Seeded).
+        # The search legitimately scans every torrent (cross-seeds may have
+        # different names/paths, and the user expects search to find them).
         search_tokens = []
         for t in torrents_to_list:
             search_tokens.append(t.get('name', '').lower())
             search_tokens.append(t.get('content_path', '').lower())
             search_tokens.append((t.get('_tracker_domain') or '').lower())
             search_tokens.append((t.get('category') or '').lower())
-            sv = t.get('_seeder_count', 0) or 0
-            zv = t.get('size', 0) or 0
-            uv = t.get('uploaded', 0) or 0
-            tv = t.get('seeding_time', 0) or 0
-            rv = float(t.get('ratio', 0) or 0)
-            if ds_seeds_max  is None or sv > ds_seeds_max:  ds_seeds_max  = sv
-            if ds_seeds_min  is None or sv < ds_seeds_min:  ds_seeds_min  = sv
-            if ds_ratio_max  is None or rv > ds_ratio_max:  ds_ratio_max  = rv
-            if ds_ratio_min  is None or rv < ds_ratio_min:  ds_ratio_min  = rv
-            if ds_size_max   is None or zv > ds_size_max:   ds_size_max   = zv
-            if ds_size_min   is None or zv < ds_size_min:   ds_size_min   = zv
-            if ds_up_max     is None or uv > ds_up_max:     ds_up_max     = uv
-            if ds_up_min     is None or uv < ds_up_min:     ds_up_min     = uv
-            if ds_seeded_max is None or tv > ds_seeded_max: ds_seeded_max = tv
-            if ds_seeded_min is None or tv < ds_seeded_min: ds_seeded_min = tv
         ext_path_for_search = d['original'].get('_external_path')
         if ext_path_for_search:
             search_tokens.append(ext_path_for_search.lower())
