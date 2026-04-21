@@ -1552,7 +1552,6 @@ def export_reports(sorted_items, eligible_ids):
             padding: 6px;
             z-index: 100;
             min-width: 180px;
-            max-height: 300px;
             overflow-y: auto;
             display: none;
             box-shadow: 0 4px 10px rgba(0,0,0,0.5);
@@ -2288,10 +2287,33 @@ def export_reports(sorted_items, eligible_ids):
                     const btn = panel._anchorBtn;
                     if (!btn) return;
                     const rect = btn.getBoundingClientRect();
+                    const margin = 4;
+                    const spaceBelow = window.innerHeight - rect.bottom - margin;
+                    const spaceAbove = rect.top - margin;
+                    // Clear caps before measuring natural height.
+                    panel.style.maxHeight = '';
+                    panel.style.top = '';
+                    const desired = panel.offsetHeight;
+                    const openUp  = (spaceBelow < desired) && (spaceAbove > spaceBelow);
+                    const cap     = Math.max(120, openUp ? spaceAbove : spaceBelow);
+                    panel.style.maxHeight = cap + 'px';
                     panel.style.left = rect.left + 'px';
-                    panel.style.top = rect.bottom + 'px';
                     panel.style.minWidth = rect.width + 'px';
+                    if (openUp) {{
+                        panel.style.top = (rect.top - Math.min(desired, cap) - 2) + 'px';
+                    }} else {{
+                        panel.style.top = rect.bottom + 'px';
+                    }}
                 }}
+
+                // Map every trigger button to its panel ONCE — needed because we
+                // portal panels to <body> on first open, after which
+                // btn.nextElementSibling no longer points at the panel.
+                const _btnPanel = new WeakMap();
+                document.querySelectorAll('.filter-multi-btn').forEach(btn => {{
+                    const p = btn.nextElementSibling;
+                    if (p && p.classList.contains('filter-multi-panel')) _btnPanel.set(btn, p);
+                }});
 
                 // Multi-select dropdown open/close
                 document.addEventListener('click', (e) => {{
@@ -2299,17 +2321,20 @@ def export_reports(sorted_items, eligible_ids):
                     if (e.target.closest('.filter-multi-panel')) return;
 
                     const btn = e.target.closest('.filter-multi-btn');
+                    const targetPanel = btn ? _btnPanel.get(btn) : null;
                     document.querySelectorAll('.filter-multi-panel.open').forEach(p => {{
-                        if (!btn || p !== btn.nextElementSibling) p.classList.remove('open');
+                        if (p !== targetPanel) p.classList.remove('open');
                     }});
-                    if (btn) {{
-                        const panel = btn.nextElementSibling;
-                        if (panel && panel.classList.contains('filter-multi-panel')) {{
-                            panel.classList.toggle('open');
-                            if (panel.classList.contains('open')) {{
-                                panel._anchorBtn = btn;
-                                positionPanel(panel);
+                    if (btn && targetPanel) {{
+                        targetPanel.classList.toggle('open');
+                        if (targetPanel.classList.contains('open')) {{
+                            // Portal: move to <body> so ancestor overflow can't clip
+                            // the popover. Idempotent — no-op if already there.
+                            if (targetPanel.parentNode !== document.body) {{
+                                document.body.appendChild(targetPanel);
                             }}
+                            targetPanel._anchorBtn = btn;
+                            positionPanel(targetPanel);
                         }}
                         e.stopPropagation();
                     }}
