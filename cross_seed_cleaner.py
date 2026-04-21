@@ -1001,9 +1001,11 @@ def sort_torrents(original, crossseeds, by, order):
 def print_header():
     w = 262
     title = "CROSS-SEED CLEANER v2026.04.21"
-    pad = (w - len(title)) // 2
+    inner = w - 2 - len(title)
+    left = inner // 2
+    right = inner - left
     print(f"\n{Colors.BOLD}{Colors.CYAN}{'═' * w}{Colors.END}")
-    print(f"{Colors.BOLD}{Colors.CYAN}║{' ' * pad}{title}{' ' * pad}║{Colors.END}")
+    print(f"{Colors.BOLD}{Colors.CYAN}║{' ' * left}{title}{' ' * right}║{Colors.END}")
     print(f"{Colors.BOLD}{Colors.CYAN}{'═' * w}{Colors.END}\n")
 
 
@@ -1208,8 +1210,12 @@ def print_summary(s):
 
     print()
     w = 262
+    title = "SUMMARY & STATISTICS"
+    inner = w - 2 - len(title)
+    left = inner // 2
+    right = inner - left
     print(f"\n{Colors.BOLD}{Colors.CYAN}{'═' * w}{Colors.END}")
-    print(f"{Colors.BOLD}{Colors.CYAN}║{' ' * ((w-21)//2)}SUMMARY & STATISTICS{' ' * ((w-21)//2)}║{Colors.END}")
+    print(f"{Colors.BOLD}{Colors.CYAN}║{' ' * left}{title}{' ' * right}║{Colors.END}")
     print(f"{Colors.BOLD}{Colors.CYAN}{'═' * w}{Colors.END}\n")
 
     Table.render([f"{Colors.BOLD}Metric{Colors.END}", f"{Colors.BOLD}Value{Colors.END}"], rows, [40, 105])
