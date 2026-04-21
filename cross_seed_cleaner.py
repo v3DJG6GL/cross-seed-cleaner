@@ -1561,6 +1561,14 @@ def export_reports(sorted_items, eligible_ids):
         .filter-multi-panel label { display: block; padding: 3px 2px; cursor: pointer; color: #ddd; font: 12px system-ui, sans-serif; white-space: nowrap; }
         .filter-multi-panel label:hover { background: #2a2a2a; }
         .filter-multi-panel input[type="checkbox"] { margin-right: 6px; vertical-align: middle; }
+        .filter-range-panel { min-width: 200px; padding: 8px; }
+        .filter-range-panel .range-row { display: flex; align-items: center; gap: 6px; padding: 3px 0; color: #ddd; font: 12px system-ui, sans-serif; }
+        .filter-range-panel .range-row input { flex: 1; min-width: 0; background: #0f0f0f; color: #ddd; border: 1px solid #333; border-radius: 3px; padding: 4px 6px; font: 12px system-ui; }
+        .filter-range-panel .range-row input::-webkit-inner-spin-button,
+        .filter-range-panel .range-row input::-webkit-outer-spin-button { -webkit-appearance: none; appearance: none; margin: 0; }
+        .filter-range-panel .range-row input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+        .range-clear-btn { margin-top: 6px; background: #333; color: #ddd; border: 1px solid #444; border-radius: 3px; padding: 3px 10px; cursor: pointer; font: 11px system-ui; }
+        .range-clear-btn:hover { background: #444; }
         .filter-group-label { color: #888; font: 11px system-ui; text-transform: uppercase; letter-spacing: 0.5px; padding: 4px 2px 2px; border-top: 1px solid #333; margin-top: 4px; }
         .filter-multi-panel > .filter-group-label:first-child { border-top: 0; margin-top: 0; }
         .filter-clear-btn {
@@ -1772,11 +1780,51 @@ def export_reports(sorted_items, eligible_ids):
                             </div>
                         </div>
                         <div class="fcell" data-col="1"></div>
-                        <div class="fcell" data-col="2"><div class="filter-range" title="min / max seeds (group worst)"><input type="number" data-filter="seedsMin" placeholder="≥"><input type="number" data-filter="seedsMax" placeholder="≤"></div></div>
-                        <div class="fcell" data-col="3"><div class="filter-range" title="min / max ratio (ORIGINAL)"><input type="number" step="0.01" data-filter="ratioMin" placeholder="≥"><input type="number" step="0.01" data-filter="ratioMax" placeholder="≤"></div></div>
-                        <div class="fcell" data-col="4"><div class="filter-range" title="min / max size in GiB (ORIGINAL)"><input type="number" step="0.1" data-filter="sizeMin" placeholder="≥ GiB"><input type="number" step="0.1" data-filter="sizeMax" placeholder="≤"></div></div>
-                        <div class="fcell" data-col="5"><div class="filter-range" title="min / max uploaded in GiB (ORIGINAL)"><input type="number" step="0.1" data-filter="upMin" placeholder="≥ GiB"><input type="number" step="0.1" data-filter="upMax" placeholder="≤"></div></div>
-                        <div class="fcell" data-col="6"><div class="filter-range" title="min / max seeded in days (ORIGINAL)"><input type="number" data-filter="seededMin" placeholder="≥ d"><input type="number" data-filter="seededMax" placeholder="≤"></div></div>
+                        <div class="fcell" data-col="2">
+                            <button type="button" class="filter-multi-btn" data-filter-trigger="seeds">Any ▾</button>
+                            <div class="filter-multi-panel filter-range-panel" data-range-panel="seeds" data-range-unit="">
+                                <div class="filter-group-label">Seeds (worst across group)</div>
+                                <label class="range-row">Min <input type="number" data-filter="seedsMin"></label>
+                                <label class="range-row">Max <input type="number" data-filter="seedsMax"></label>
+                                <button type="button" class="range-clear-btn" data-range-clear="seeds">Clear</button>
+                            </div>
+                        </div>
+                        <div class="fcell" data-col="3">
+                            <button type="button" class="filter-multi-btn" data-filter-trigger="ratio">Any ▾</button>
+                            <div class="filter-multi-panel filter-range-panel" data-range-panel="ratio" data-range-unit="">
+                                <div class="filter-group-label">Ratio (ORIGINAL)</div>
+                                <label class="range-row">Min <input type="number" step="0.01" data-filter="ratioMin"></label>
+                                <label class="range-row">Max <input type="number" step="0.01" data-filter="ratioMax"></label>
+                                <button type="button" class="range-clear-btn" data-range-clear="ratio">Clear</button>
+                            </div>
+                        </div>
+                        <div class="fcell" data-col="4">
+                            <button type="button" class="filter-multi-btn" data-filter-trigger="size">Any ▾</button>
+                            <div class="filter-multi-panel filter-range-panel" data-range-panel="size" data-range-unit="GiB">
+                                <div class="filter-group-label">Size (ORIGINAL, GiB)</div>
+                                <label class="range-row">Min <input type="number" step="0.1" data-filter="sizeMin"> GiB</label>
+                                <label class="range-row">Max <input type="number" step="0.1" data-filter="sizeMax"> GiB</label>
+                                <button type="button" class="range-clear-btn" data-range-clear="size">Clear</button>
+                            </div>
+                        </div>
+                        <div class="fcell" data-col="5">
+                            <button type="button" class="filter-multi-btn" data-filter-trigger="up">Any ▾</button>
+                            <div class="filter-multi-panel filter-range-panel" data-range-panel="up" data-range-unit="GiB">
+                                <div class="filter-group-label">Uploaded (ORIGINAL, GiB)</div>
+                                <label class="range-row">Min <input type="number" step="0.1" data-filter="upMin"> GiB</label>
+                                <label class="range-row">Max <input type="number" step="0.1" data-filter="upMax"> GiB</label>
+                                <button type="button" class="range-clear-btn" data-range-clear="up">Clear</button>
+                            </div>
+                        </div>
+                        <div class="fcell" data-col="6">
+                            <button type="button" class="filter-multi-btn" data-filter-trigger="seeded">Any ▾</button>
+                            <div class="filter-multi-panel filter-range-panel" data-range-panel="seeded" data-range-unit="d">
+                                <div class="filter-group-label">Seeded (ORIGINAL, days)</div>
+                                <label class="range-row">Min <input type="number" data-filter="seededMin"> d</label>
+                                <label class="range-row">Max <input type="number" data-filter="seededMax"> d</label>
+                                <button type="button" class="range-clear-btn" data-range-clear="seeded">Clear</button>
+                            </div>
+                        </div>
                         <div class="fcell" data-col="7"></div>
                         <div class="fcell" data-col="8">
                             <button type="button" class="filter-multi-btn" data-filter="tracker">Any ▾</button>
@@ -2256,14 +2304,46 @@ def export_reports(sorted_items, eligible_ids):
                     }}
                 }});
 
-                // Text/number inputs
+                // Text/number/date inputs
                 let debounceTimer = null;
                 const debounceApply = () => {{
                     clearTimeout(debounceTimer);
                     debounceTimer = setTimeout(applyFilters, 120);
                 }};
-                document.querySelectorAll('.filter-row input[type="number"], .filter-row input[type="text"]').forEach(inp => {{
+                document.querySelectorAll('.filter-row input[type="number"], .filter-row input[type="text"], .filter-row input[type="date"]').forEach(inp => {{
                     inp.addEventListener('input', debounceApply);
+                }});
+
+                // Range popovers: keep the trigger button label in sync with the
+                // min/max values inside the panel (Any / ≥N / ≤M / N–M).
+                function updateRangeBtnLabel(name) {{
+                    const panel = document.querySelector('[data-range-panel="' + name + '"]');
+                    if (!panel) return;
+                    const btn = panel.previousElementSibling;
+                    if (!btn) return;
+                    const inputs = panel.querySelectorAll('input');
+                    const minV = inputs[0] && inputs[0].value.trim();
+                    const maxV = inputs[1] && inputs[1].value.trim();
+                    let label;
+                    if (!minV && !maxV)        label = 'Any';
+                    else if (minV && !maxV)    label = '≥ ' + minV;
+                    else if (!minV && maxV)    label = '≤ ' + maxV;
+                    else                       label = minV + '–' + maxV;
+                    btn.textContent = label + ' ▾';
+                    btn.title = (minV || maxV) ? (label + ' (' + name + ')') : '';
+                }}
+
+                document.querySelectorAll('.filter-range-panel').forEach(panel => {{
+                    const name = panel.getAttribute('data-range-panel');
+                    panel.querySelectorAll('input').forEach(inp => {{
+                        inp.addEventListener('input', () => updateRangeBtnLabel(name));
+                    }});
+                    const clr = panel.querySelector('.range-clear-btn');
+                    if (clr) clr.addEventListener('click', () => {{
+                        panel.querySelectorAll('input').forEach(i => {{ i.value = ''; }});
+                        updateRangeBtnLabel(name);
+                        applyFilters();
+                    }});
                 }});
 
                 // Clear all
@@ -2275,7 +2355,7 @@ def export_reports(sorted_items, eligible_ids):
                         }});
                         statusSet.clear(); reasonsSet.clear();
                         trackersSet.clear(); categoriesSet.clear();
-                        document.querySelectorAll('.filter-multi-btn').forEach(b => b.textContent = 'Any ▾');
+                        document.querySelectorAll('.filter-multi-btn').forEach(b => {{ b.textContent = 'Any ▾'; b.title = ''; }});
                         applyFilters();
                     }});
                 }}
