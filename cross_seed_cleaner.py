@@ -1475,9 +1475,19 @@ def export_reports(sorted_items, eligible_ids):
         table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; table-layout: fixed; }
         th { text-align: left; padding: 12px 8px; background: #252525; color: #aaa; font-weight: 600; border-bottom: 2px solid #333; position: sticky; top: 0; z-index: 2; white-space: nowrap; cursor: pointer; user-select: none; }
         th:hover { color: #fff; background: #333; }
-        th.sorted-asc::after, th.sorted-desc::after { margin-left: 4px; font-size: 12px; opacity: 0.9; color: #4caf50; }
-        th.sorted-asc::after  { content: "↑"; }
-        th.sorted-desc::after { content: "↓"; }
+        th.sorted-asc::after, th.sorted-desc::after {
+            content: "";
+            display: inline-block;
+            width: 0;
+            height: 0;
+            margin-left: 6px;
+            vertical-align: middle;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            opacity: 0.9;
+        }
+        th.sorted-asc::after  { border-bottom: 6px solid currentColor; }
+        th.sorted-desc::after { border-top: 6px solid currentColor; }
         td { padding: 8px; border-bottom: 1px solid #2a2a2a; vertical-align: middle; color: #ddd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         tr:hover td { background: #2a2a2a; }
         .resizer { position: absolute; right: 0; top: 0; height: 100%; width: 5px; cursor: col-resize; user-select: none; touch-action: none; }
