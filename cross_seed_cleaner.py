@@ -93,10 +93,13 @@ EXTERNAL_MEDIA_PATHS = "/mnt/hdd-pool/userdata/media/{user_1,user_2,user_3}"
 
 
 # ─── CATEGORY FILTERING ────────────────────────────────────────────────────
-# CATEGORY_FILTER_MODE applies to the ORIGINAL torrent's category only. Choose one:
-#   "allow" = Only process groups where Original matches ALLOWLIST
-#   "block" = Skip groups where Original matches BLOCKLIST
-#   "both"  = Must match ALLOWLIST *and* NOT match BLOCKLIST
+# CATEGORY_FILTER_MODE applies to *any* torrent in a hardlink group. If any
+# member of the group is blocked (or not in the allowlist), the whole group
+# is kept — avoids deleting allowed partners of a protected torrent.
+# Choose one:
+#   "allow" = Only process groups where every member matches ALLOWLIST
+#   "block" = Skip groups where any member matches BLOCKLIST
+#   "both"  = Every member must match ALLOWLIST and none may match BLOCKLIST
 #   "none"  = Disable category filtering (process everything)
 CATEGORY_FILTER_MODE = "block"
 
@@ -643,9 +646,9 @@ def get_seeder_count(client, torrent):
         return num_complete
 
 def _fetch_and_filter_torrents(client):
-    """[1/7] fetch + [2/7] category-filter. Returns list of torrents that passed."""
+    """[1/6] fetch torrents. Category filtering is now done per-group in evaluate_group()."""
     t_start = datetime.now()
-    print(f"{Colors.BOLD}[1/7]{Colors.END} Fetching torrents...")
+    print(f"{Colors.BOLD}[1/6]{Colors.END} Fetching torrents...")
 
     result = {}
     def _worker():
@@ -666,48 +669,29 @@ def _fetch_and_filter_torrents(client):
     torrents = result.get('torrents', [])
 
     SCAN_STATS['fetch_duration'] = (datetime.now() - t_start).total_seconds()
+    SCAN_STATS['filter_duration'] = 0.0
     print(f"{Colors.GREEN}  ✓ Fetching complete in {SCAN_STATS['fetch_duration']:.2f}s.{Colors.END}")
     print(f"{Colors.GREEN}  ✓ Found {len(torrents)} torrents.{Colors.END}\n")
-
-    t_start = datetime.now()
-    print(f"{Colors.BOLD}[2/7]{Colors.END} Filtering torrents by category...")
-    debug_log(f"[FILTER] Applying filters to {len(torrents)} torrents...")
-
-    filtered = []
-    skipped = 0
-    for t in torrents:
-        cat = t.get('category', '')
-        name = t.get('name', 'Unknown')
-        if category_allowed(cat):
-            filtered.append(t)
-            debug_log(f"[FILTER] + Allowed '{name}' (Category: '{cat}')")
-        else:
-            skipped += 1
-            debug_log(f"[FILTER] - Blocked '{name}' (Category: '{cat}')")
-
-    SCAN_STATS['filter_duration'] = (datetime.now() - t_start).total_seconds()
-    print(f"{Colors.GREEN}  ✓ Filtering complete in {SCAN_STATS['filter_duration']:.2f}s.{Colors.END}")
-    print(f"{Colors.GREEN}  ✓ Kept {len(filtered)} torrents ({skipped} skipped).{Colors.END}\n")
-    return filtered
+    return torrents
 
 
 def _scan_external_libs_phase():
-    """[3/7] scan configured external paths; returns {(dev,ino): path} dict."""
+    """[2/6] scan configured external paths; returns {(dev,ino): path} dict."""
     t_start = datetime.now()
     external_inodes = {}
     if EXTERNAL_MEDIA_PATHS:
-        print(f"{Colors.BOLD}[3/7]{Colors.END} Scanning external libraries...")
+        print(f"{Colors.BOLD}[2/6]{Colors.END} Scanning external libraries...")
         external_inodes = scan_external_libraries(EXTERNAL_MEDIA_PATHS)
     else:
-        print(f"{Colors.BOLD}[3/7]{Colors.END} Skipping external libraries scan (Not Configured)...")
+        print(f"{Colors.BOLD}[2/6]{Colors.END} Skipping external libraries scan (Not Configured)...")
     SCAN_STATS['scan_duration'] = (datetime.now() - t_start).total_seconds()
     return external_inodes
 
 
 def _fetch_seeders_phase(client, torrents):
-    """[4/7] populate _seeder_count on each torrent."""
+    """[3/6] populate _seeder_count on each torrent."""
     t_start = datetime.now()
-    print(f"{Colors.BOLD}[4/7]{Colors.END} Fetching seeders...")
+    print(f"{Colors.BOLD}[3/6]{Colors.END} Fetching seeders...")
 
     total = len(torrents)
     for idx, t in enumerate(torrents, 1):
@@ -731,7 +715,7 @@ def load_and_group_torrents(client):
 
 
     t_start = datetime.now()
-    print(f"{Colors.BOLD}[5/7]{Colors.END} Grouping torrents by matching inodes...")
+    print(f"{Colors.BOLD}[4/6]{Colors.END} Grouping torrents by matching inodes...")
 
     debug_log(f"[GROUP] Starting identity check for {len(torrents)} torrents...")
 
@@ -929,7 +913,7 @@ def evaluate_group(d):
 
     size_ok = orig.get('size', 0) >= MIN_SIZE_BYTES
     time_ok = orig.get('seeding_time', 0) >= MIN_ORIGINAL_SEED_TIME_HOURS * 3600
-    cat_ok = category_allowed(orig.get('category', ''))
+    cat_ok = all(category_allowed(t.get('category', '')) for t in all_t)
 
     reasons = []
     if externally_linked: reasons.append("EXTERNAL_LINK")
@@ -1127,16 +1111,14 @@ def print_group(client, d, num, total):
         size = t.get('size', 0)
         seed_time = t.get('seeding_time', 0)
         c_seeds = Colors.GREEN if seeders >= MIN_SEEDERS else Colors.RED
-        c_size = Colors.END; c_time = Colors.END; c_cat = Colors.END
+        c_size = Colors.END; c_time = Colors.END
+        c_cat = Colors.GREEN if category_allowed(t.get('category', '')) else Colors.RED
 
         if is_orig:
             c_size = Colors.GREEN if size >= MIN_SIZE_BYTES else Colors.RED
             c_time = Colors.GREEN if seed_time >= (MIN_ORIGINAL_SEED_TIME_HOURS * 3600) else Colors.RED
-            if NO_HARD_LINKS_MODE:
-                cat_bad = t.get('_path_error') or not category_allowed(t.get('category', ''))
-            else:
-                cat_bad = not category_allowed(orig.get('category', ''))
-            c_cat = Colors.RED if cat_bad else Colors.GREEN
+            if NO_HARD_LINKS_MODE and t.get('_path_error'):
+                c_cat = Colors.RED
 
         name_str = t.get('name', '')[:105]
 
@@ -1584,7 +1566,6 @@ def export_reports(sorted_items, eligible_ids):
                     <span class="stat-label">Execution Times</span>
                     <div style="font-size: 11px; color: #aaa; margin-top: 4px; text-align: left; padding-left: 20px;">
                         <div>• Fetching torrents: <span style="color:#fff; float:right">{SCAN_STATS.get('fetch_duration', 0):.2f}s</span></div>
-                        <div>• Filtering categories: <span style="color:#fff; float:right">{SCAN_STATS.get('filter_duration', 0):.2f}s</span></div>
                         <div>• Scanning external libs: <span style="color:#fff; float:right">{SCAN_STATS.get('scan_duration', 0):.2f}s</span></div>
                         <div>• Fetching seeders: <span style="color:#fff; float:right">{SCAN_STATS.get('meta_duration', 0):.2f}s</span></div>
                         <div>• {filtering_orphans_grouping_torrents_label}: <span style="color:#fff; float:right">{SCAN_STATS.get('group_duration', 0):.2f}s</span></div>
@@ -1744,10 +1725,11 @@ def export_reports(sorted_items, eligible_ids):
             t_time = t.get('seeding_time', 0)
             t_cat = t.get('category', '')
 
+            c_cat = "text-success" if category_allowed(t_cat) else "text-danger"
+
             if is_orig:
                 c_size = "text-success" if t_size >= MIN_SIZE_BYTES else "text-danger"
                 c_time = "text-success" if t_time >= MIN_ORIGINAL_SEED_TIME_HOURS * 3600 else "text-danger"
-                c_cat = "text-success" if category_allowed(t_cat) else "text-danger"
 
                 if t.get('_path_error'):
                     c_cat = "text-danger"
@@ -2285,7 +2267,7 @@ def check_no_hard_links(client):
     _fetch_seeders_phase(client, category_torrents)
 
     t_start = datetime.now()
-    print(f"{Colors.BOLD}[5/7]{Colors.END} Filtering torrents for orphans...")
+    print(f"{Colors.BOLD}[4/6]{Colors.END} Filtering torrents for orphans...")
 
     debug_log(f"[FILTER] Starting analysis of {len(torrents)} torrents against {len(external_inodes)} external inodes...")
 
@@ -2347,7 +2329,7 @@ def check_no_hard_links(client):
 def _run_analyze_and_finalize(client, all_groups):
     sorted_items = sorted(all_groups.items(), key=get_group_sort_key, reverse=(SORT_ORDER == 'desc'))
 
-    print(f"{Colors.BOLD}[6/7]{Colors.END} Analyze deletable torrents...")
+    print(f"{Colors.BOLD}[5/6]{Colors.END} Analyze deletable torrents...")
     t_start = datetime.now()
     emap = {}
     for idx, (h, d) in enumerate(sorted_items, 1):
@@ -2357,7 +2339,7 @@ def _run_analyze_and_finalize(client, all_groups):
     SCAN_STATS['analyze_duration'] = (datetime.now() - t_start).total_seconds()
     print(f"{Colors.GREEN}\n  ✓ Analysis complete in {SCAN_STATS['analyze_duration']:.2f}s.{Colors.END}")
 
-    print(f"\n{Colors.BOLD}[7/7]{Colors.END} Finalizing & exporting reports...")
+    print(f"\n{Colors.BOLD}[6/6]{Colors.END} Finalizing & exporting reports...")
     stats = calculate_stats(all_groups, emap)
     print_summary(stats)
     export_reports(sorted_items, emap.keys())
