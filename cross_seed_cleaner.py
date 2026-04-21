@@ -1476,11 +1476,15 @@ def export_reports(sorted_items, eligible_ids):
         .metric-item { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; }
         .metric-val { font-weight: bold; color: #fff; }
 
-        .table-container { overflow: visible; }
+        .table-container { overflow-x: auto; }
 
         /* Grid-based "table": divs all the way down so off-screen groups can use
            content-visibility:auto, which is forbidden on real <tbody>/<tr>/<td>. */
-        .grid-report { --cols: 140px 70px 75px 70px 90px 90px 100px 125px 140px 140px 1fr 1fr; font-size: 13px; }
+        .grid-report {
+            --cols: 140px 70px 75px 70px 90px 90px 100px 125px 140px 140px 350px 500px;
+            width: max-content; min-width: 100%;
+            font-size: 13px;
+        }
         .grid-row    { display: grid; grid-template-columns: var(--cols); align-items: stretch; }
         .cell        { padding: 8px; border-bottom: 1px solid #2a2a2a; color: #ddd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; }
         .grid-head   { position: sticky; top: 0; z-index: 3; }
@@ -1745,7 +1749,7 @@ def export_reports(sorted_items, eligible_ids):
                         <div class="hcell" data-col="8" onclick="sortTable(8)">Tracker<div class="resizer"></div></div>
                         <div class="hcell" data-col="9" onclick="sortTable(9)">Category<div class="resizer"></div></div>
                         <div class="hcell" data-col="10" onclick="sortTable(10)">Name<div class="resizer"></div></div>
-                        <div class="hcell" data-col="11" onclick="sortTable(11)">Path</div>
+                        <div class="hcell" data-col="11" onclick="sortTable(11)">Path<div class="resizer"></div></div>
                     </div>
                     <div class="grid-row grid-filterrow filter-row">
                         <div class="fcell" data-col="0">
