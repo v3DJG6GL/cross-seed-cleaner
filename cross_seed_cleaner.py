@@ -1495,7 +1495,7 @@ def export_reports(sorted_items, eligible_ids):
         th.sorted-desc::after { border-top: 6px solid currentColor; }
         td { padding: 8px; border-bottom: 1px solid #2a2a2a; vertical-align: middle; color: #ddd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         tr:hover td { background: #2a2a2a; }
-        tbody.group-body:nth-of-type(even) > tr:not(:hover) > td { background: #242424; }
+        tbody.group-even > tr:not(:hover) > td { background: #242424; }
         tbody.group-body > tr:last-child > td { border-bottom: 2px solid #444; }
         .filtered-hidden { display: none; }
 
@@ -1784,12 +1784,15 @@ def export_reports(sorted_items, eligible_ids):
             1,
         )
 
+    group_idx = 0
     for row in report_rows:
         if ELIGIBLE_ONLY and not row['is_del']:
             continue
 
         d = row['data']
         is_del_group = row['is_del']
+        group_class = "group-body group-even" if group_idx % 2 == 1 else "group-body"
+        group_idx += 1
 
         status_class = "status-delete" if is_del_group else "status-keep"
         status_text = "DELETE" if is_del_group else "KEEP"
@@ -1811,7 +1814,7 @@ def export_reports(sorted_items, eligible_ids):
         reason_codes = ' '.join(r['code'] for r in row.get('reasons', []))
         min_seeds = min(t.get('_seeder_count', 0) for t in torrents_to_list)
         html_parts.append(
-            f'<tbody class="group-body" data-status="{status_attr}" '
+            f'<tbody class="{group_class}" data-status="{status_attr}" '
             f'data-reasons="{_h(reason_codes)}" data-seeds-min="{min_seeds}">'
         )
 
@@ -2042,18 +2045,20 @@ def export_reports(sorted_items, eligible_ids):
                     return '';
                 }};
 
+                let tipW = 0, tipH = 0;
                 document.addEventListener('mouseover', (e) => {{
                     const text = tipTextFor(e.target);
                     if (!text) return;
                     tip.textContent = text;
                     tip.classList.add('visible');
+                    tipW = tip.offsetWidth; tipH = tip.offsetHeight;
                 }});
                 document.addEventListener('mousemove', (e) => {{
                     if (!tip.classList.contains('visible')) return;
-                    const pad = 12, w = tip.offsetWidth, h = tip.offsetHeight;
+                    const pad = 12;
                     let x = e.clientX + pad, y = e.clientY + pad;
-                    if (x + w > window.innerWidth - 4)  x = e.clientX - w - pad;
-                    if (y + h > window.innerHeight - 4) y = e.clientY - h - pad;
+                    if (x + tipW > window.innerWidth - 4)  x = e.clientX - tipW - pad;
+                    if (y + tipH > window.innerHeight - 4) y = e.clientY - tipH - pad;
                     tip.style.left = x + 'px';
                     tip.style.top  = y + 'px';
                 }});
@@ -2137,8 +2142,20 @@ def export_reports(sorted_items, eligible_ids):
                     btn.textContent = n === 0 ? 'Any ▾' : n + ' selected ▾';
                 }}
 
+                function positionPanel(panel) {{
+                    const btn = panel._anchorBtn;
+                    if (!btn) return;
+                    const rect = btn.getBoundingClientRect();
+                    panel.style.left = rect.left + 'px';
+                    panel.style.top = rect.bottom + 'px';
+                    panel.style.minWidth = rect.width + 'px';
+                }}
+
                 // Multi-select dropdown open/close
                 document.addEventListener('click', (e) => {{
+                    // Clicks *inside* an open panel (e.g. checkboxes) must not close it.
+                    if (e.target.closest('.filter-multi-panel')) return;
+
                     const btn = e.target.closest('.filter-multi-btn');
                     document.querySelectorAll('.filter-multi-panel.open').forEach(p => {{
                         if (!btn || p !== btn.nextElementSibling) p.classList.remove('open');
@@ -2147,10 +2164,10 @@ def export_reports(sorted_items, eligible_ids):
                         const panel = btn.nextElementSibling;
                         if (panel && panel.classList.contains('filter-multi-panel')) {{
                             panel.classList.toggle('open');
-                            const rect = btn.getBoundingClientRect();
-                            panel.style.left = rect.left + 'px';
-                            panel.style.top = rect.bottom + 'px';
-                            panel.style.minWidth = rect.width + 'px';
+                            if (panel.classList.contains('open')) {{
+                                panel._anchorBtn = btn;
+                                positionPanel(panel);
+                            }}
                         }}
                         e.stopPropagation();
                     }}
@@ -2255,11 +2272,13 @@ def export_reports(sorted_items, eligible_ids):
                     }}
                 }}
 
-                // Close any open dropdown panel on scroll — panels are position:fixed
-                // and would otherwise stay put while the sticky button scrolls away.
-                window.addEventListener('scroll', () => {{
-                    document.querySelectorAll('.filter-multi-panel.open').forEach(p => p.classList.remove('open'));
-                }}, true);
+                // Re-anchor any open dropdown panel on scroll/resize — panels are
+                // position:fixed and would otherwise drift away from their sticky button.
+                const reanchorOpenPanels = () => {{
+                    document.querySelectorAll('.filter-multi-panel.open').forEach(positionPanel);
+                }};
+                window.addEventListener('scroll', reanchorOpenPanels, true);
+                window.addEventListener('resize', reanchorOpenPanels);
 
                 window.applyReportFilters = applyFilters;  // in case we want to trigger externally
             }})();
