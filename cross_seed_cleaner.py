@@ -1224,6 +1224,25 @@ def export_reports(sorted_items, eligible_ids):
     _h = html_escape
     _js = js_string
 
+    def _sk_lower(v):
+        return _h((v or '').lower())
+
+    def _sort_attrs(status_text, type_text, seeds, ratio, size, uploaded, seeded, added, tracker, category, name, path):
+        return (
+            f' data-sk-0="{_sk_lower(status_text)}"'
+            f' data-sk-1="{_sk_lower(type_text)}"'
+            f' data-sk-2="{int(seeds or 0)}"'
+            f' data-sk-3="{float(ratio or 0):.4f}"'
+            f' data-sk-4="{int(size or 0)}"'
+            f' data-sk-5="{int(uploaded or 0)}"'
+            f' data-sk-6="{int(seeded or 0)}"'
+            f' data-sk-7="{int(added or 0)}"'
+            f' data-sk-8="{_sk_lower(tracker)}"'
+            f' data-sk-9="{_sk_lower(category)}"'
+            f' data-sk-10="{_sk_lower(name)}"'
+            f' data-sk-11="{_sk_lower(path)}"'
+        )
+
     total_groups = len(sorted_items)
     del_groups_count = len(eligible_ids)
     keep_groups_count = total_groups - del_groups_count
@@ -1687,10 +1706,19 @@ def export_reports(sorted_items, eligible_ids):
                 if t.get('_path_error'):
                     c_cat = "text-danger"
 
-            name_h = _h(t.get('name', ''))
-            path_h = _h(t.get('content_path', ''))
+            t_name = t.get('name', '')
+            t_path = t.get('content_path', '')
+            name_h = _h(t_name)
+            path_h = _h(t_path)
+            type_text = ('ORPHAN' if (is_orig and len(d['crossseeds']) == 0)
+                         else 'ORIGINAL' if is_orig else 'CROSS')
+            sk = _sort_attrs(
+                status_text, type_text, cur_seeds, t.get('ratio', 0),
+                t_size, t.get('uploaded', 0), t_time, t.get('added_on', 0),
+                tracker_clean, t_cat, t_name, t_path,
+            )
             html_parts.append(f"""
-            <tr>
+            <tr{sk}>
                 <td>{status_cell_content}</td>
                 <td>{type_badge}</td>
                 <td><span class="{c_seeds}">{cur_seeds}</span></td>
@@ -1711,9 +1739,14 @@ def export_reports(sorted_items, eligible_ids):
             ext_status_cell = f'<div class="status-container"><span class="status-badge status-keep">KEEP</span>{reasons_html}</div>'
 
             orig_size = d['original'].get('size', 0)
+            ext_sk = _sort_attrs(
+                'KEEP', 'EXT', 0, 0, orig_size, 0, 0, 0,
+                '', 'external library',
+                d['original'].get('name', ''), external_path,
+            )
 
             html_parts.append(f"""
-            <tr>
+            <tr{ext_sk}>
                 <td>{ext_status_cell}</td>
                 <td><span class="type-badge" style="color:#aaa; border:1px solid #555;">EXT</span></td>
                 <td style="text-align:center; color:#555;">-</td>
@@ -1784,51 +1817,35 @@ def export_reports(sorted_items, eligible_ids):
             let sortDirection = 1;
             let lastSortedCol = -1;
 
+            const NUMERIC_SK = {{2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1}};
+
             function sortTable(n) {{
                 const table = document.getElementById("reportTable");
+
+                if (n !== lastSortedCol) {{ sortDirection = 1; lastSortedCol = n; }}
+                else {{ sortDirection *= -1; }}
+
+                const isNum = !!NUMERIC_SK[n];
+                const keyAttr = 'data-sk-' + n;
+                const keyOf = (row) => {{
+                    if (!row) return isNum ? 0 : '';
+                    const v = row.getAttribute(keyAttr);
+                    if (v === null) return isNum ? 0 : '';
+                    return isNum ? parseFloat(v) : v;
+                }};
+                const cmp = isNum
+                    ? (a, b) => a - b
+                    : (a, b) => a < b ? -1 : a > b ? 1 : 0;
+
                 const groups = Array.from(table.getElementsByClassName("group-body"));
+                const outerKey = new Map();
+                groups.forEach(g => outerKey.set(g, keyOf(g.rows[0])));
 
-                // Reset direction if clicking a new column
-                if (n !== lastSortedCol) {{
-                    sortDirection = 1;
-                    lastSortedCol = n;
-                }} else {{
-                    sortDirection *= -1;
-                }}
+                const parent = table.parentNode;
+                const nextSib = table.nextSibling;
+                parent.removeChild(table);
 
-                const getVal = (grp, idx) => {{
-                    const firstRow = grp.rows[0];
-                    if (!firstRow) return "";
-                    return firstRow.cells[idx].innerText.trim();
-                }};
-
-                const parseSize = (s) => {{
-                    const match = s.match(/^([\\d\\.]+)\\s*(B|KiB|MiB|GiB|TiB|PiB)$/i);
-                    if (!match) return 0;
-                    const v = parseFloat(match[1]);
-                    const u = match[2].toLowerCase();
-                    const mul = {{ 'b': 1, 'kib': 1024, 'mib': 1048576, 'gib': 1.073741824e+09, 'tib': 1.099511627776e+12, 'pib': 1.125899906842624e+15 }};
-                    return v * (mul[u] || 1);
-                }};
-
-                const parseTime = (s) => {{
-                    if (!s.includes(':')) return 0;
-                    const parts = s.split(':').map(Number);
-                    if (parts.length === 2) return (parts[0] * 24) + parts[1];
-                    return 0;
-                }};
-
-                const compare = (valA, valB, idx) => {{
-                    if (idx === 4 || idx === 5) return parseSize(valA) - parseSize(valB);
-                    if (idx === 6) return parseTime(valA) - parseTime(valB);
-                    if (idx === 2 || idx === 3) return parseFloat(valA) - parseFloat(valB);
-                    return valA.localeCompare(valB, undefined, {{numeric: true, sensitivity: 'base'}});
-                }};
-
-                const cellVal = (row, idx) => (row && row.cells[idx]) ? row.cells[idx].innerText.trim() : "";
-                const isExtRow = (row) => cellVal(row, 1) === "EXT";
-
-                groups.sort((a, b) => compare(getVal(a, n), getVal(b, n), n) * sortDirection);
+                groups.sort((a, b) => cmp(outerKey.get(a), outerKey.get(b)) * sortDirection);
 
                 groups.forEach(grp => {{
                     const allRows = Array.from(grp.rows);
@@ -1836,18 +1853,28 @@ def export_reports(sorted_items, eligible_ids):
                     const original = allRows[0];
                     const trailing = [];
                     let endIdx = allRows.length;
-                    while (endIdx > 1 && isExtRow(allRows[endIdx - 1])) {{
+                    while (endIdx > 1 && allRows[endIdx - 1].getAttribute('data-sk-1') === 'ext') {{
                         trailing.unshift(allRows[endIdx - 1]);
                         endIdx--;
                     }}
                     const middle = allRows.slice(1, endIdx);
-                    middle.sort((a, b) => compare(cellVal(a, n), cellVal(b, n), n) * sortDirection);
-                    grp.appendChild(original);
-                    middle.forEach(r => grp.appendChild(r));
-                    trailing.forEach(r => grp.appendChild(r));
+                    if (middle.length > 1) {{
+                        const midKey = new Map();
+                        middle.forEach(r => midKey.set(r, keyOf(r)));
+                        middle.sort((a, b) => cmp(midKey.get(a), midKey.get(b)) * sortDirection);
+                    }}
+                    const frag = document.createDocumentFragment();
+                    frag.appendChild(original);
+                    middle.forEach(r => frag.appendChild(r));
+                    trailing.forEach(r => frag.appendChild(r));
+                    grp.appendChild(frag);
                 }});
 
-                groups.forEach(g => table.appendChild(g));
+                const tblFrag = document.createDocumentFragment();
+                groups.forEach(g => tblFrag.appendChild(g));
+                table.appendChild(tblFrag);
+
+                parent.insertBefore(table, nextSib);
             }}
 
             (function initReasonTooltip() {{
