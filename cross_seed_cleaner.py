@@ -1891,10 +1891,10 @@ def export_reports(sorted_items, eligible_ids):
 
     group_idx = 0
     total_torrents = 0
-    ds_seeds_max = 0
-    ds_size_max = 0
-    ds_up_max = 0
-    ds_seeded_max = 0
+    ds_seeds_min = ds_seeds_max = None
+    ds_size_min = ds_size_max = None
+    ds_up_min = ds_up_max = None
+    ds_seeded_min = ds_seeded_max = None
     for row in report_rows:
         if ELIGIBLE_ONLY and not row['is_del']:
             continue
@@ -1938,10 +1938,14 @@ def export_reports(sorted_items, eligible_ids):
             zv = t.get('size', 0) or 0
             uv = t.get('uploaded', 0) or 0
             tv = t.get('seeding_time', 0) or 0
-            if sv > ds_seeds_max:  ds_seeds_max  = sv
-            if zv > ds_size_max:   ds_size_max   = zv
-            if uv > ds_up_max:     ds_up_max     = uv
-            if tv > ds_seeded_max: ds_seeded_max = tv
+            if ds_seeds_max  is None or sv > ds_seeds_max:  ds_seeds_max  = sv
+            if ds_seeds_min  is None or sv < ds_seeds_min:  ds_seeds_min  = sv
+            if ds_size_max   is None or zv > ds_size_max:   ds_size_max   = zv
+            if ds_size_min   is None or zv < ds_size_min:   ds_size_min   = zv
+            if ds_up_max     is None or uv > ds_up_max:     ds_up_max     = uv
+            if ds_up_min     is None or uv < ds_up_min:     ds_up_min     = uv
+            if ds_seeded_max is None or tv > ds_seeded_max: ds_seeded_max = tv
+            if ds_seeded_min is None or tv < ds_seeded_min: ds_seeded_min = tv
         ext_path_for_search = d['original'].get('_external_path')
         if ext_path_for_search:
             search_tokens.append(ext_path_for_search.lower())
@@ -2057,6 +2061,12 @@ def export_reports(sorted_items, eligible_ids):
     </div>
     """)
     html_body = "".join(html_parts)
+
+    # Coerce dataset bounds to 0 when there were no torrents at all (empty report).
+    ds_seeds_min  = ds_seeds_min  or 0; ds_seeds_max  = ds_seeds_max  or 0
+    ds_size_min   = ds_size_min   or 0; ds_size_max   = ds_size_max   or 0
+    ds_up_min     = ds_up_min     or 0; ds_up_max     = ds_up_max     or 0
+    ds_seeded_min = ds_seeded_min or 0; ds_seeded_max = ds_seeded_max or 0
 
     full_html = f"""
     <!DOCTYPE html>
@@ -2262,10 +2272,10 @@ def export_reports(sorted_items, eligible_ids):
             // Size/Uploaded show GiB but the data-sk attrs are bytes — input values
             // and slider thumb values are in GiB (whole-units), filter converts.
             const RANGE_BOUNDS = {{
-                seeds:  [0, {_js(ds_seeds_max)}, 1],
-                size:   [0, {_js(round(ds_size_max  / 1073741824, 1))}, 0.1],
-                up:     [0, {_js(round(ds_up_max    / 1073741824, 1))}, 0.1],
-                seeded: [0, {_js(ds_seeded_max // 86400)}, 1]
+                seeds:  [{_js(ds_seeds_min)}, {_js(ds_seeds_max)}, 1],
+                size:   [{_js(round(ds_size_min  / 1073741824, 1))}, {_js(round(ds_size_max  / 1073741824, 1))}, 0.1],
+                up:     [{_js(round(ds_up_min    / 1073741824, 1))}, {_js(round(ds_up_max    / 1073741824, 1))}, 0.1],
+                seeded: [{_js(ds_seeded_min // 86400)}, {_js(ds_seeded_max // 86400)}, 1]
             }};
 
             (function initFilters() {{
