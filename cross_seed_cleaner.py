@@ -2225,12 +2225,6 @@ def export_reports(sorted_items, eligible_ids):
 
                     const groups = _groupsCache || (_groupsCache = Array.from(document.getElementsByClassName('group-body')));
 
-                    // Detach the table from the DOM so we batch all class-flips into one reflow.
-                    const table = document.getElementById('reportTable');
-                    const parent = table.parentNode;
-                    const nextSib = table.nextSibling;
-                    parent.removeChild(table);
-
                     for (const g of groups) {{
                         if (statusSet.size && !statusSet.has(g.dataset.status)) {{ g.classList.add('filtered-hidden'); continue; }}
                         if (reasonsSet.size) {{
@@ -2259,9 +2253,13 @@ def export_reports(sorted_items, eligible_ids):
                         }}
                         g.classList.remove('filtered-hidden');
                     }}
-
-                    parent.insertBefore(table, nextSib);
                 }}
+
+                // Close any open dropdown panel on scroll — panels are position:fixed
+                // and would otherwise stay put while the sticky button scrolls away.
+                window.addEventListener('scroll', () => {{
+                    document.querySelectorAll('.filter-multi-panel.open').forEach(p => p.classList.remove('open'));
+                }}, true);
 
                 window.applyReportFilters = applyFilters;  // in case we want to trigger externally
             }})();
