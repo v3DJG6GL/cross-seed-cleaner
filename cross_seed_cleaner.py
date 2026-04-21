@@ -1543,7 +1543,7 @@ def export_reports(sorted_items, eligible_ids):
         .filter-range { display: flex; gap: 3px; }
         .filter-range input { width: 50%; padding: 3px 4px; min-width: 0; text-align: center; }
         .filter-range input::placeholder { color: #555; }
-        .filter-multi-btn { text-align: left; cursor: pointer; }
+        .filter-multi-btn { text-align: left; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .filter-multi-panel {
             position: fixed;
             background: #1e1e1e;
@@ -2186,9 +2186,17 @@ def export_reports(sorted_items, eligible_ids):
                 function updateBtnLabel(panel, targetSet) {{
                     const btn = panel.previousElementSibling;
                     if (!btn) return;
-                    if (targetSet.size === 0) btn.textContent = 'Any ▾';
-                    else if (targetSet.size === 1) btn.textContent = Array.from(targetSet)[0].slice(0, 12) + ' ▾';
-                    else btn.textContent = targetSet.size + ' selected ▾';
+                    if (targetSet.size === 0) {{
+                        btn.textContent = 'Any ▾';
+                        btn.title = '';
+                    }} else if (targetSet.size === 1) {{
+                        const v = Array.from(targetSet)[0];
+                        btn.textContent = v + ' ▾';
+                        btn.title = v;            // hover shows full text when ellipsised
+                    }} else {{
+                        btn.textContent = targetSet.size + ' selected ▾';
+                        btn.title = Array.from(targetSet).join(', ');
+                    }}
                 }}
 
                 populateDropdown(document.querySelector('[data-filter-panel="tracker"]'), UNIQUE_TRACKERS, trackersSet);
