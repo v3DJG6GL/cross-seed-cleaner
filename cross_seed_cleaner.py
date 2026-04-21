@@ -1574,6 +1574,8 @@ def export_reports(sorted_items, eligible_ids):
             font: 11px system-ui;
         }
         .filter-clear-btn:hover { background: #444; }
+        .filter-counts { color: #aaa; font-size: 12px; margin-left: 12px; display: inline-block; vertical-align: middle; }
+        .filter-counts strong { color: #ddd; font-weight: 600; }
         .resizer { position: absolute; right: 0; top: 0; height: 100%; width: 5px; cursor: col-resize; user-select: none; touch-action: none; }
         .resizer:hover, .resizing { background: #bb86fc; opacity: 0.5; }
         .status-badge { padding: 3px 8px; border-radius: 3px; font-size: 11px; font-weight: bold; text-transform: uppercase; margin-right: 6px; }
@@ -1733,6 +1735,7 @@ def export_reports(sorted_items, eligible_ids):
         <div class="card">
             <div style="margin-bottom: 10px;">
                 <button type="button" id="filterClearBtn" class="filter-clear-btn">Clear all filters</button>
+                <span id="filterCounts" class="filter-counts"></span>
             </div>
             <div class="table-container">
             <div id="reportTable" class="grid-report">
@@ -1798,6 +1801,7 @@ def export_reports(sorted_items, eligible_ids):
         )
 
     group_idx = 0
+    total_torrents = 0
     for row in report_rows:
         if ELIGIBLE_ONLY and not row['is_del']:
             continue
@@ -1840,10 +1844,13 @@ def export_reports(sorted_items, eligible_ids):
             search_tokens.append(ext_path_for_search.lower())
         search_blob = _h(' '.join(search_tokens))
 
+        row_count = len(torrents_to_list) + (1 if ext_path_for_search else 0)
+        total_torrents += row_count
+
         html_parts.append(
             f'<div class="{group_class}" data-status="{status_attr}" '
             f'data-reasons="{_h(reason_codes)}" data-seeds-min="{min_seeds}" '
-            f'data-search="{search_blob}">'
+            f'data-row-count="{row_count}" data-search="{search_blob}">'
         )
 
         for i, t in enumerate(torrents_to_list):
@@ -2145,6 +2152,8 @@ def export_reports(sorted_items, eligible_ids):
 
             const UNIQUE_TRACKERS = {_js(sorted(unique_trackers))};
             const UNIQUE_CATEGORIES = {_js(sorted(unique_categories))};
+            const TOTAL_GROUPS = {_js(group_idx)};
+            const TOTAL_TORRENTS = {_js(total_torrents)};
 
             (function initFilters() {{
                 const GIB = 1073741824;
@@ -2370,7 +2379,29 @@ def export_reports(sorted_items, eligible_ids):
                             _lastHidden[i] = next;
                         }}
                     }}
+                    updateFilterCounts();
                 }}
+
+                const filterCountsEl = document.getElementById('filterCounts');
+                function updateFilterCounts() {{
+                    if (!filterCountsEl) return;
+                    const groups = _groupsCache;
+                    let visG, visT;
+                    if (!groups || !_lastHidden) {{
+                        visG = TOTAL_GROUPS; visT = TOTAL_TORRENTS;
+                    }} else {{
+                        visG = 0; visT = 0;
+                        for (let i = 0; i < groups.length; i++) {{
+                            if (_lastHidden[i]) continue;
+                            visG++;
+                            visT += parseInt(groups[i].dataset.rowCount, 10) || 0;
+                        }}
+                    }}
+                    filterCountsEl.innerHTML =
+                        'Showing <strong>' + visG + '</strong> / ' + TOTAL_GROUPS + ' groups · ' +
+                        '<strong>' + visT + '</strong> / ' + TOTAL_TORRENTS + ' torrents';
+                }}
+                updateFilterCounts();
 
                 // Re-anchor any open dropdown panel on scroll/resize — panels are
                 // position:fixed and would otherwise drift away from their sticky button.
