@@ -2297,7 +2297,7 @@ def export_reports(sorted_items, eligible_ids):
                 }}
 
                 function updateBtnLabel(panel, targetSet) {{
-                    const btn = panel.previousElementSibling;
+                    const btn = panel._anchorBtn;   // Set at init; survives portaling to <body>.
                     if (!btn) return;
                     if (targetSet.size === 0) {{
                         btn.textContent = 'Any ▾';
@@ -2367,7 +2367,10 @@ def export_reports(sorted_items, eligible_ids):
                 const _btnPanel = new WeakMap();
                 document.querySelectorAll('.filter-multi-btn').forEach(btn => {{
                     const p = btn.nextElementSibling;
-                    if (p && p.classList.contains('filter-multi-panel')) _btnPanel.set(btn, p);
+                    if (p && p.classList.contains('filter-multi-panel')) {{
+                        _btnPanel.set(btn, p);
+                        p._anchorBtn = btn;   // Reverse pointer; survives portaling to <body>.
+                    }}
                 }});
 
                 // Multi-select dropdown open/close
@@ -2410,9 +2413,10 @@ def export_reports(sorted_items, eligible_ids):
                 function updateRangeBtnLabel(name) {{
                     const panel = document.querySelector('[data-range-panel="' + name + '"]');
                     if (!panel) return;
-                    const btn = panel.previousElementSibling;
+                    const btn = panel._anchorBtn;   // Set at init; survives portaling to <body>.
                     if (!btn) return;
-                    const inputs = panel.querySelectorAll('input');
+                    // Only the row inputs — exclude slider thumbs (data-slider).
+                    const inputs = panel.querySelectorAll('label.range-row input');
                     const minV = inputs[0] && inputs[0].value.trim();
                     const maxV = inputs[1] && inputs[1].value.trim();
                     const isDate = panel.getAttribute('data-range-unit') === 'date';
