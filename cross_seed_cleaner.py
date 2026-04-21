@@ -13,6 +13,7 @@ import argparse
 import csv
 import glob
 import html
+import threading
 from collections import defaultdict
 from datetime import datetime
 
@@ -443,17 +444,6 @@ class QBittorrentClient:
     def get_torrents(self):
         return self._request('torrents/info') or []
 
-    def iter_torrents(self, batch_size=1000):
-        offset = 0
-        while True:
-            batch = self._request('torrents/info', params={'limit': batch_size, 'offset': offset}) or []
-            if not batch:
-                return
-            yield batch
-            if len(batch) < batch_size:
-                return
-            offset += len(batch)
-
     def get_torrent_trackers(self, torrent_hash):
         return self._request('torrents/trackers', params={'hash': torrent_hash}) or []
 
@@ -655,15 +645,23 @@ def _fetch_and_filter_torrents(client):
     t_start = datetime.now()
     print(f"{Colors.BOLD}[1/7]{Colors.END} Fetching torrents...")
 
-    torrents = []
-    for batch in client.iter_torrents(batch_size=1000):
-        torrents.extend(batch)
-        if not DEBUG_MODE:
-            sys.stdout.write(f"\r{Colors.DIM}  ... Fetched {len(torrents)} torrents...{Colors.END}")
-            sys.stdout.flush()
+    result = {}
+    def _worker():
+        result['torrents'] = client.get_torrents()
+    thr = threading.Thread(target=_worker, daemon=True)
+    thr.start()
 
     if not DEBUG_MODE:
+        while thr.is_alive():
+            elapsed = (datetime.now() - t_start).total_seconds()
+            sys.stdout.write(f"\r{Colors.DIM}  ... Fetching torrents... {elapsed:.1f}s elapsed{Colors.END}")
+            sys.stdout.flush()
+            thr.join(timeout=0.3)
         _clear_progress_line()
+    else:
+        thr.join()
+
+    torrents = result.get('torrents', [])
 
     SCAN_STATS['fetch_duration'] = (datetime.now() - t_start).total_seconds()
     print(f"{Colors.GREEN}  ✓ Fetching complete in {SCAN_STATS['fetch_duration']:.2f}s.{Colors.END}")
