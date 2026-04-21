@@ -1253,6 +1253,9 @@ def export_reports(sorted_items, eligible_ids):
     del_groups_count = len(eligible_ids)
     keep_groups_count = total_groups - del_groups_count
 
+    unique_trackers = set()
+    unique_categories = set()
+
     total_size = 0
     del_size = 0
     keep_size = 0
@@ -1311,6 +1314,8 @@ def export_reports(sorted_items, eligible_ids):
                 stats_eligible['count'] += 1
 
             domain = t.get('_tracker_domain') or "Unknown"
+            unique_trackers.add(domain.lower())
+            unique_categories.add((t.get('category', '') or '').lower())
 
             if domain not in tracker_stats:
                 tracker_stats[domain] = {'total_count': 0, 'total_size': 0, 'del_count': 0, 'del_size': 0}
@@ -1326,7 +1331,7 @@ def export_reports(sorted_items, eligible_ids):
             if '_evaluation' not in d:
                 d['_evaluation'] = evaluate_group(d)
             for code in d['_evaluation']['reasons']:
-                rejection_reasons.append({'icon': _REASON_HTML_ICON[code], 'text': _reason_text(code)})
+                rejection_reasons.append({'code': code, 'icon': _REASON_HTML_ICON[code], 'text': _reason_text(code)})
 
         report_rows.append({
             'idx': idx,
@@ -1492,6 +1497,65 @@ def export_reports(sorted_items, eligible_ids):
         tr:hover td { background: #2a2a2a; }
         tbody.group-body:nth-of-type(even) > tr:not(:hover) > td { background: #242424; }
         tbody.group-body > tr:last-child > td { border-bottom: 2px solid #444; }
+        .filtered-hidden { display: none; }
+
+        thead tr.filter-row th {
+            position: sticky;
+            top: 47px;
+            z-index: 2;
+            background: #1a1a1a;
+            padding: 4px 6px;
+            font-weight: normal;
+            border-bottom: 1px solid #333;
+            cursor: default;
+        }
+        thead tr.filter-row th:hover { background: #1a1a1a; }
+        .filter-row input[type="number"],
+        .filter-row input[type="text"],
+        .filter-row .filter-multi-btn {
+            width: 100%;
+            box-sizing: border-box;
+            background: #0f0f0f;
+            color: #ddd;
+            border: 1px solid #333;
+            border-radius: 3px;
+            padding: 3px 6px;
+            font: 12px system-ui, -apple-system, sans-serif;
+        }
+        .filter-row input:focus, .filter-row .filter-multi-btn:focus { outline: 1px solid #4caf50; outline-offset: -1px; }
+        .filter-range { display: flex; gap: 3px; }
+        .filter-range input { width: 50%; padding: 3px 4px; min-width: 0; }
+        .filter-multi-btn { text-align: left; cursor: pointer; }
+        .filter-multi-panel {
+            position: absolute;
+            background: #1e1e1e;
+            border: 1px solid #444;
+            border-radius: 4px;
+            padding: 6px;
+            z-index: 10;
+            min-width: 180px;
+            max-height: 300px;
+            overflow-y: auto;
+            display: none;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+        .filter-multi-panel.open { display: block; }
+        .filter-multi-panel label { display: block; padding: 3px 2px; cursor: pointer; color: #ddd; font: 12px system-ui, sans-serif; white-space: nowrap; }
+        .filter-multi-panel label:hover { background: #2a2a2a; }
+        .filter-multi-panel input[type="checkbox"] { margin-right: 6px; vertical-align: middle; }
+        .filter-group-label { color: #888; font: 11px system-ui; text-transform: uppercase; letter-spacing: 0.5px; padding: 4px 2px 2px; border-top: 1px solid #333; margin-top: 4px; }
+        .filter-multi-panel > .filter-group-label:first-child { border-top: 0; margin-top: 0; }
+        .filter-clear-btn {
+            margin-left: 8px;
+            background: #333;
+            color: #ddd;
+            border: 1px solid #444;
+            border-radius: 3px;
+            padding: 2px 8px;
+            cursor: pointer;
+            font: 11px system-ui;
+        }
+        .filter-clear-btn:hover { background: #444; }
         .resizer { position: absolute; right: 0; top: 0; height: 100%; width: 5px; cursor: col-resize; user-select: none; touch-action: none; }
         .resizer:hover, .resizing { background: #bb86fc; opacity: 0.5; }
         .status-badge { padding: 3px 8px; border-radius: 3px; font-size: 11px; font-weight: bold; text-transform: uppercase; margin-right: 6px; }
@@ -1649,22 +1713,60 @@ def export_reports(sorted_items, eligible_ids):
         </div>
 
         <div class="card">
+            <div style="margin-bottom: 10px;">
+                <button type="button" id="filterClearBtn" class="filter-clear-btn">Clear all filters</button>
+            </div>
             <div class="table-container">
             <table id="reportTable">
                 <thead>
                     <tr>
                         <th onclick="sortTable(0)" style="width:140px">Status<div class="resizer"></div></th>
                         <th onclick="sortTable(1)" style="width:70px">Type<div class="resizer"></div></th>
-                        <th onclick="sortTable(2)" style="width:50px">Seeds<div class="resizer"></div></th>
-                        <th onclick="sortTable(3)" style="width:45px">Ratio<div class="resizer"></div></th>
-                        <th onclick="sortTable(4)" style="width:70px">Size<div class="resizer"></div></th>
-                        <th onclick="sortTable(5)" style="width:70px">Uploaded<div class="resizer"></div></th>
-                        <th onclick="sortTable(6)" style="width:95px">Seeded (D:H)<div class="resizer"></div></th>
+                        <th onclick="sortTable(2)" style="width:75px">Seeds<div class="resizer"></div></th>
+                        <th onclick="sortTable(3)" style="width:70px">Ratio<div class="resizer"></div></th>
+                        <th onclick="sortTable(4)" style="width:90px">Size<div class="resizer"></div></th>
+                        <th onclick="sortTable(5)" style="width:90px">Uploaded<div class="resizer"></div></th>
+                        <th onclick="sortTable(6)" style="width:100px">Seeded (D:H)<div class="resizer"></div></th>
                         <th onclick="sortTable(7)" style="width:95px">Added<div class="resizer"></div></th>
-                        <th onclick="sortTable(8)" style="width:110px">Tracker<div class="resizer"></div></th>
-                        <th onclick="sortTable(9)" style="width:110px">Category<div class="resizer"></div></th>
+                        <th onclick="sortTable(8)" style="width:140px">Tracker<div class="resizer"></div></th>
+                        <th onclick="sortTable(9)" style="width:140px">Category<div class="resizer"></div></th>
                         <th onclick="sortTable(10)">Name<div class="resizer"></div></th>
                         <th onclick="sortTable(11)">Path<div class="resizer"></div></th>
+                    </tr>
+                    <tr class="filter-row">
+                        <th data-col="0">
+                            <button type="button" class="filter-multi-btn" data-filter="status">Any ▾</button>
+                            <div class="filter-multi-panel" data-filter-panel="status">
+                                <div class="filter-group-label">Status</div>
+                                <label><input type="checkbox" value="keep" data-filter-status>KEEP</label>
+                                <label><input type="checkbox" value="delete" data-filter-status>DELETE</label>
+                                <div class="filter-group-label">Rejection reasons</div>
+                                <label><input type="checkbox" value="LOW_SEEDS" data-filter-reason>🌱 Low seeders</label>
+                                <label><input type="checkbox" value="SMALL_SIZE" data-filter-reason>💾 Small size</label>
+                                <label><input type="checkbox" value="LOW_TIME" data-filter-reason>⏳ Short seed time</label>
+                                <label><input type="checkbox" value="TOO_MANY" data-filter-reason>📦 Large group</label>
+                                <label><input type="checkbox" value="EXTERNAL_LINK" data-filter-reason>🔗 External hardlink</label>
+                                <label><input type="checkbox" value="PATH_ERROR" data-filter-reason>⚠️ Path error</label>
+                                <label><input type="checkbox" value="CATEGORY_FILTER" data-filter-reason>🏷️ Category filter</label>
+                            </div>
+                        </th>
+                        <th data-col="1"></th>
+                        <th data-col="2"><div class="filter-range"><input type="number" data-filter="seedsMin" placeholder="min"><input type="number" data-filter="seedsMax" placeholder="max"></div></th>
+                        <th data-col="3"><div class="filter-range"><input type="number" step="0.01" data-filter="ratioMin" placeholder="min"><input type="number" step="0.01" data-filter="ratioMax" placeholder="max"></div></th>
+                        <th data-col="4"><div class="filter-range"><input type="number" step="0.1" data-filter="sizeMin" placeholder="min GiB"><input type="number" step="0.1" data-filter="sizeMax" placeholder="max"></div></th>
+                        <th data-col="5"><div class="filter-range"><input type="number" step="0.1" data-filter="upMin" placeholder="min GiB"><input type="number" step="0.1" data-filter="upMax" placeholder="max"></div></th>
+                        <th data-col="6"><div class="filter-range"><input type="number" data-filter="seededMin" placeholder="min d"><input type="number" data-filter="seededMax" placeholder="max"></div></th>
+                        <th data-col="7"></th>
+                        <th data-col="8">
+                            <button type="button" class="filter-multi-btn" data-filter="tracker">Any ▾</button>
+                            <div class="filter-multi-panel" data-filter-panel="tracker"></div>
+                        </th>
+                        <th data-col="9">
+                            <button type="button" class="filter-multi-btn" data-filter="category">Any ▾</button>
+                            <div class="filter-multi-panel" data-filter-panel="category"></div>
+                        </th>
+                        <th data-col="10"><input type="text" data-filter="name" placeholder="search name"></th>
+                        <th data-col="11"><input type="text" data-filter="path" placeholder="search path"></th>
                     </tr>
                 </thead>
     """]
@@ -1699,7 +1801,13 @@ def export_reports(sorted_items, eligible_ids):
         status_cell_content = f'<div class="status-container">{badge_html}{reasons_html}</div>'
         torrents_to_list = [d['original']] + d['crossseeds']
 
-        html_parts.append('<tbody class="group-body">')
+        status_attr = 'delete' if is_del_group else 'keep'
+        reason_codes = ' '.join(r['code'] for r in row.get('reasons', []))
+        min_seeds = min(t.get('_seeder_count', 0) for t in torrents_to_list)
+        html_parts.append(
+            f'<tbody class="group-body" data-status="{status_attr}" '
+            f'data-reasons="{_h(reason_codes)}" data-seeds-min="{min_seeds}">'
+        )
 
         for i, t in enumerate(torrents_to_list):
             is_orig = (i == 0)
@@ -1957,6 +2065,181 @@ def export_reports(sorted_items, eligible_ids):
 
             const labels = {_js(chart_labels)};
             const groupLabels = {_js(group_chart_labels)};
+
+            const UNIQUE_TRACKERS = {_js(sorted(unique_trackers))};
+            const UNIQUE_CATEGORIES = {_js(sorted(unique_categories))};
+
+            (function initFilters() {{
+                const GIB = 1073741824;
+                const DAY = 86400;
+
+                const statusSet = new Set();
+                const reasonsSet = new Set();
+                const trackersSet = new Set();
+                const categoriesSet = new Set();
+
+                function populateDropdown(panel, values, targetSet) {{
+                    panel.innerHTML = '';
+                    for (const v of values) {{
+                        const label = document.createElement('label');
+                        const cb = document.createElement('input');
+                        cb.type = 'checkbox';
+                        cb.value = v;
+                        cb.addEventListener('change', () => {{
+                            if (cb.checked) targetSet.add(v); else targetSet.delete(v);
+                            updateBtnLabel(panel, targetSet);
+                            applyFilters();
+                        }});
+                        label.appendChild(cb);
+                        label.appendChild(document.createTextNode(' ' + (v || '(none)')));
+                        panel.appendChild(label);
+                    }}
+                }}
+
+                function updateBtnLabel(panel, targetSet) {{
+                    const btn = panel.previousElementSibling;
+                    if (!btn) return;
+                    if (targetSet.size === 0) btn.textContent = 'Any ▾';
+                    else if (targetSet.size === 1) btn.textContent = Array.from(targetSet)[0].slice(0, 12) + ' ▾';
+                    else btn.textContent = targetSet.size + ' selected ▾';
+                }}
+
+                populateDropdown(document.querySelector('[data-filter-panel="tracker"]'), UNIQUE_TRACKERS, trackersSet);
+                populateDropdown(document.querySelector('[data-filter-panel="category"]'), UNIQUE_CATEGORIES, categoriesSet);
+
+                // Status/reasons panel: wire up the static checkboxes
+                document.querySelectorAll('[data-filter-status]').forEach(cb => {{
+                    cb.addEventListener('change', () => {{
+                        if (cb.checked) statusSet.add(cb.value); else statusSet.delete(cb.value);
+                        updateStatusBtnLabel();
+                        applyFilters();
+                    }});
+                }});
+                document.querySelectorAll('[data-filter-reason]').forEach(cb => {{
+                    cb.addEventListener('change', () => {{
+                        if (cb.checked) reasonsSet.add(cb.value); else reasonsSet.delete(cb.value);
+                        updateStatusBtnLabel();
+                        applyFilters();
+                    }});
+                }});
+
+                function updateStatusBtnLabel() {{
+                    const btn = document.querySelector('[data-filter="status"]');
+                    if (!btn) return;
+                    const n = statusSet.size + reasonsSet.size;
+                    btn.textContent = n === 0 ? 'Any ▾' : n + ' selected ▾';
+                }}
+
+                // Multi-select dropdown open/close
+                document.addEventListener('click', (e) => {{
+                    const btn = e.target.closest('.filter-multi-btn');
+                    document.querySelectorAll('.filter-multi-panel.open').forEach(p => {{
+                        if (!btn || p !== btn.nextElementSibling) p.classList.remove('open');
+                    }});
+                    if (btn) {{
+                        const panel = btn.nextElementSibling;
+                        if (panel && panel.classList.contains('filter-multi-panel')) {{
+                            panel.classList.toggle('open');
+                            const rect = btn.getBoundingClientRect();
+                            panel.style.left = rect.left + 'px';
+                            panel.style.top = rect.bottom + 'px';
+                            panel.style.minWidth = rect.width + 'px';
+                        }}
+                        e.stopPropagation();
+                    }}
+                }});
+
+                // Text/number inputs
+                let debounceTimer = null;
+                const debounceApply = () => {{
+                    clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(applyFilters, 120);
+                }};
+                document.querySelectorAll('.filter-row input[type="number"], .filter-row input[type="text"]').forEach(inp => {{
+                    inp.addEventListener('input', debounceApply);
+                }});
+
+                // Clear all
+                const clearBtn = document.getElementById('filterClearBtn');
+                if (clearBtn) {{
+                    clearBtn.addEventListener('click', () => {{
+                        document.querySelectorAll('.filter-row input').forEach(i => {{
+                            if (i.type === 'checkbox') i.checked = false; else i.value = '';
+                        }});
+                        statusSet.clear(); reasonsSet.clear();
+                        trackersSet.clear(); categoriesSet.clear();
+                        document.querySelectorAll('.filter-multi-btn').forEach(b => b.textContent = 'Any ▾');
+                        applyFilters();
+                    }});
+                }}
+
+                function readNum(name) {{
+                    const el = document.querySelector(`.filter-row [data-filter="${{name}}"]`);
+                    if (!el || el.value === '') return null;
+                    const n = parseFloat(el.value);
+                    return isFinite(n) ? n : null;
+                }}
+                function readText(name) {{
+                    const el = document.querySelector(`.filter-row [data-filter="${{name}}"]`);
+                    return el && el.value ? el.value.toLowerCase().trim() : '';
+                }}
+
+                function numericInRange(val, min, max) {{
+                    const n = parseFloat(val);
+                    if (min !== null && !(n >= min)) return false;
+                    if (max !== null && !(n <= max)) return false;
+                    return true;
+                }}
+
+                function applyFilters() {{
+                    const seedsMin = readNum('seedsMin'), seedsMax = readNum('seedsMax');
+                    const ratioMin = readNum('ratioMin'), ratioMax = readNum('ratioMax');
+                    const sizeMinB = readNum('sizeMin'), sizeMaxB = readNum('sizeMax');
+                    const upMinB   = readNum('upMin'),   upMaxB   = readNum('upMax');
+                    const seededMinD = readNum('seededMin'), seededMaxD = readNum('seededMax');
+                    const nameQ = readText('name');
+                    const pathQ = readText('path');
+
+                    const sizeMinBytes = sizeMinB !== null ? sizeMinB * GIB : null;
+                    const sizeMaxBytes = sizeMaxB !== null ? sizeMaxB * GIB : null;
+                    const upMinBytes   = upMinB   !== null ? upMinB   * GIB : null;
+                    const upMaxBytes   = upMaxB   !== null ? upMaxB   * GIB : null;
+                    const seededMinSec = seededMinD !== null ? seededMinD * DAY : null;
+                    const seededMaxSec = seededMaxD !== null ? seededMaxD * DAY : null;
+
+                    const groups = document.getElementsByClassName('group-body');
+                    for (const g of groups) {{
+                        if (statusSet.size && !statusSet.has(g.dataset.status)) {{ g.classList.add('filtered-hidden'); continue; }}
+                        if (reasonsSet.size) {{
+                            const gr = (g.dataset.reasons || '').split(/\\s+/).filter(Boolean);
+                            if (!gr.some(r => reasonsSet.has(r))) {{ g.classList.add('filtered-hidden'); continue; }}
+                        }}
+                        if (!numericInRange(g.dataset.seedsMin, seedsMin, seedsMax)) {{ g.classList.add('filtered-hidden'); continue; }}
+
+                        const orig = g.rows[0];
+                        if (!orig) {{ g.classList.add('filtered-hidden'); continue; }}
+                        if (!numericInRange(orig.dataset.sk3, ratioMin,   ratioMax))   {{ g.classList.add('filtered-hidden'); continue; }}
+                        if (!numericInRange(orig.dataset.sk4, sizeMinBytes, sizeMaxBytes)) {{ g.classList.add('filtered-hidden'); continue; }}
+                        if (!numericInRange(orig.dataset.sk5, upMinBytes,   upMaxBytes))   {{ g.classList.add('filtered-hidden'); continue; }}
+                        if (!numericInRange(orig.dataset.sk6, seededMinSec, seededMaxSec)) {{ g.classList.add('filtered-hidden'); continue; }}
+
+                        if (trackersSet.size || categoriesSet.size || nameQ || pathQ) {{
+                            let ok = false;
+                            for (const tr of g.rows) {{
+                                if (trackersSet.size && !trackersSet.has(tr.dataset.sk8)) continue;
+                                if (categoriesSet.size && !categoriesSet.has(tr.dataset.sk9)) continue;
+                                if (nameQ && !(tr.dataset.sk10 || '').includes(nameQ)) continue;
+                                if (pathQ && !(tr.dataset.sk11 || '').includes(pathQ)) continue;
+                                ok = true; break;
+                            }}
+                            if (!ok) {{ g.classList.add('filtered-hidden'); continue; }}
+                        }}
+                        g.classList.remove('filtered-hidden');
+                    }}
+                }}
+
+                window.applyReportFilters = applyFilters;  // in case we want to trigger externally
+            }})();
 
             new Chart(ctxCount, {{
                 type: 'bar',
