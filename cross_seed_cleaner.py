@@ -1523,16 +1523,22 @@ def export_reports(sorted_items, eligible_ids):
             font: 12px system-ui, -apple-system, sans-serif;
         }
         .filter-row input:focus, .filter-row .filter-multi-btn:focus { outline: 1px solid #4caf50; outline-offset: -1px; }
+        .filter-row input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+        .filter-row input[type="number"]::-webkit-inner-spin-button,
+        .filter-row input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none; appearance: none; margin: 0;
+        }
         .filter-range { display: flex; gap: 3px; }
-        .filter-range input { width: 50%; padding: 3px 4px; min-width: 0; }
+        .filter-range input { width: 50%; padding: 3px 4px; min-width: 0; text-align: center; }
+        .filter-range input::placeholder { color: #555; }
         .filter-multi-btn { text-align: left; cursor: pointer; }
         .filter-multi-panel {
-            position: absolute;
+            position: fixed;
             background: #1e1e1e;
             border: 1px solid #444;
             border-radius: 4px;
             padding: 6px;
-            z-index: 10;
+            z-index: 100;
             min-width: 180px;
             max-height: 300px;
             overflow-y: auto;
@@ -1751,11 +1757,11 @@ def export_reports(sorted_items, eligible_ids):
                             </div>
                         </th>
                         <th data-col="1"></th>
-                        <th data-col="2"><div class="filter-range"><input type="number" data-filter="seedsMin" placeholder="min"><input type="number" data-filter="seedsMax" placeholder="max"></div></th>
-                        <th data-col="3"><div class="filter-range"><input type="number" step="0.01" data-filter="ratioMin" placeholder="min"><input type="number" step="0.01" data-filter="ratioMax" placeholder="max"></div></th>
-                        <th data-col="4"><div class="filter-range"><input type="number" step="0.1" data-filter="sizeMin" placeholder="min GiB"><input type="number" step="0.1" data-filter="sizeMax" placeholder="max"></div></th>
-                        <th data-col="5"><div class="filter-range"><input type="number" step="0.1" data-filter="upMin" placeholder="min GiB"><input type="number" step="0.1" data-filter="upMax" placeholder="max"></div></th>
-                        <th data-col="6"><div class="filter-range"><input type="number" data-filter="seededMin" placeholder="min d"><input type="number" data-filter="seededMax" placeholder="max"></div></th>
+                        <th data-col="2"><div class="filter-range" title="min / max seeds (group worst)"><input type="number" data-filter="seedsMin" placeholder="≥"><input type="number" data-filter="seedsMax" placeholder="≤"></div></th>
+                        <th data-col="3"><div class="filter-range" title="min / max ratio (ORIGINAL)"><input type="number" step="0.01" data-filter="ratioMin" placeholder="≥"><input type="number" step="0.01" data-filter="ratioMax" placeholder="≤"></div></th>
+                        <th data-col="4"><div class="filter-range" title="min / max size in GiB (ORIGINAL)"><input type="number" step="0.1" data-filter="sizeMin" placeholder="≥ GiB"><input type="number" step="0.1" data-filter="sizeMax" placeholder="≤"></div></th>
+                        <th data-col="5"><div class="filter-range" title="min / max uploaded in GiB (ORIGINAL)"><input type="number" step="0.1" data-filter="upMin" placeholder="≥ GiB"><input type="number" step="0.1" data-filter="upMax" placeholder="≤"></div></th>
+                        <th data-col="6"><div class="filter-range" title="min / max seeded in days (ORIGINAL)"><input type="number" data-filter="seededMin" placeholder="≥ d"><input type="number" data-filter="seededMax" placeholder="≤"></div></th>
                         <th data-col="7"></th>
                         <th data-col="8">
                             <button type="button" class="filter-multi-btn" data-filter="tracker">Any ▾</button>
@@ -2072,6 +2078,7 @@ def export_reports(sorted_items, eligible_ids):
             (function initFilters() {{
                 const GIB = 1073741824;
                 const DAY = 86400;
+                let _groupsCache = null;
 
                 const statusSet = new Set();
                 const reasonsSet = new Set();
@@ -2173,15 +2180,22 @@ def export_reports(sorted_items, eligible_ids):
                     }});
                 }}
 
+                // cache filter input refs once
+                const inputs = {{}};
+                document.querySelectorAll('.filter-row [data-filter]').forEach(el => {{
+                    inputs[el.getAttribute('data-filter')] = el;
+                }});
+
                 function readNum(name) {{
-                    const el = document.querySelector(`.filter-row [data-filter="${{name}}"]`);
+                    const el = inputs[name];
                     if (!el || el.value === '') return null;
                     const n = parseFloat(el.value);
                     return isFinite(n) ? n : null;
                 }}
                 function readText(name) {{
-                    const el = document.querySelector(`.filter-row [data-filter="${{name}}"]`);
-                    return el && el.value ? el.value.toLowerCase().trim() : '';
+                    const el = inputs[name];
+                    const v = el ? el.value : '';
+                    return (v || '').toLowerCase().trim();
                 }}
 
                 function numericInRange(val, min, max) {{
@@ -2207,7 +2221,7 @@ def export_reports(sorted_items, eligible_ids):
                     const seededMinSec = seededMinD !== null ? seededMinD * DAY : null;
                     const seededMaxSec = seededMaxD !== null ? seededMaxD * DAY : null;
 
-                    const groups = document.getElementsByClassName('group-body');
+                    const groups = _groupsCache || (_groupsCache = Array.from(document.getElementsByClassName('group-body')));
                     for (const g of groups) {{
                         if (statusSet.size && !statusSet.has(g.dataset.status)) {{ g.classList.add('filtered-hidden'); continue; }}
                         if (reasonsSet.size) {{
