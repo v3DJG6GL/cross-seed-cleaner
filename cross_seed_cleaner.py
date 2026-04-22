@@ -1329,12 +1329,12 @@ def export_reports(sorted_items, eligible_ids):
         .config-ul li { margin-bottom: 2px; }
         .config-ul b { color: #888; font-weight: 600; }
 
-        .charts-row { display: flex; gap: 20px; margin-bottom: 20px; }
-        .chart-col { flex: 1; background: #1e1e1e; padding: 15px; border-radius: 6px; border: 1px solid #333; }
+        .charts-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 20px; }
+        .chart-col { background: #1e1e1e; padding: 15px; border-radius: 6px; border: 1px solid #333; }
         .chart-container { position: relative; height: 350px; width: 100%; }
 
-        .metrics-row { display: flex; gap: 20px; margin-bottom: 20px; }
-        .metric-col { flex: 1; background: #1e1e1e; padding: 20px; border-radius: 6px; border: 1px solid #333; }
+        .metrics-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 20px; }
+        .metric-col { background: #1e1e1e; padding: 20px; border-radius: 6px; border: 1px solid #333; }
 
         .metric-title { font-size: 16px; font-weight: bold; margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 10px; }
         .metric-item { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; }
