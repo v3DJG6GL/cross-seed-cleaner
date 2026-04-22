@@ -1396,7 +1396,7 @@ def export_reports(sorted_items, eligible_ids):
         .hcell.sorted-asc::after  { border-bottom: 6px solid currentColor; }
         .hcell.sorted-desc::after { border-top: 6px solid currentColor; }
         .grid-row:hover > .cell { background: #2a2a2a; }
-        .group { content-visibility: auto; contain-intrinsic-size: auto 80px; }
+        .group { content-visibility: auto; contain-intrinsic-size: auto 80px; min-width: max-content; }
         .group.group-even .grid-row:not(:hover) > .cell { background: #242424; }
         .group .grid-row:last-child > .cell { border-bottom: 2px solid #444; }
         .group.filtered-hidden, .grid-row.filtered-hidden { display: none; }
