@@ -21,9 +21,7 @@ from datetime import datetime
 # these defaults at runtime (see get_config() below for the precedence chain).
 from config import *
 
-# ============================================================================
-# 1. CONFIGURATION LOADER (CLI > ENV > DEFAULTS)
-# ============================================================================
+
 def str2bool(v):
     if isinstance(v, bool): return v
     return v.lower() in ('yes', 'true', 't', 'y', '1')
@@ -149,9 +147,7 @@ def expand_braces(text):
         results.extend(expand_braces(prefix + option.strip() + suffix))
     return results
 
-# ============================================================================
-# 2. GLOBAL CONFIGURATION
-# ============================================================================
+
 class Colors:
     HEADER = '\033[95m'
     BLUE = '\033[94m'
@@ -194,7 +190,7 @@ QBITTORRENT_PASS = ARGS.password
 MIN_SEEDERS = ARGS.min_seeders
 MAX_TORRENTS_IN_GROUP = ARGS.max_group_size
 MIN_ORIGINAL_SEED_TIME_DAYS = ARGS.min_days
-MIN_ORIGINAL_SEED_TIME_HOURS = MIN_ORIGINAL_SEED_TIME_DAYS * 24
+MIN_ORIGINAL_SEED_TIME_SECONDS = MIN_ORIGINAL_SEED_TIME_DAYS * 86400
 MIN_SIZE_GIB = ARGS.min_size_gib
 MIN_SIZE_BYTES = MIN_SIZE_GIB * 1024 * 1024 * 1024
 _SORTED_PATH_MAPPING_PREFIXES = sorted(PATH_MAPPINGS.keys(), key=len, reverse=True)
@@ -226,8 +222,7 @@ EXTERNAL_MEDIA_PATHS = smart_split_paths(ARGS.external_media_paths) if ARGS.exte
 CATEGORY_FILTER_MODE = os.environ.get("CATEGORY_FILTER_MODE", CATEGORY_FILTER_MODE)
 SORT_BY = os.environ.get("SORT_BY", SORT_BY)
 SORT_ORDER = os.environ.get("SORT_ORDER", SORT_ORDER)
-_UNRELIABLE_RAW = os.environ.get("UNRELIABLE_TRACKERS", UNRELIABLE_TRACKERS)
-UNRELIABLE_TRACKERS = [t.strip() for t in _UNRELIABLE_RAW.split(",") if t.strip()] if _UNRELIABLE_RAW else []
+UNRELIABLE_TRACKERS = [t.strip() for t in os.environ.get("UNRELIABLE_TRACKERS", UNRELIABLE_TRACKERS).split(",") if t.strip()]
 
 _validate_config()
 
@@ -512,7 +507,7 @@ def get_seeder_count(client, torrent):
         return num_complete
 
 def _fetch_and_filter_torrents(client):
-    """[1/6] fetch torrents. Category filtering is now done per-group in evaluate_group()."""
+    """Fetch torrents. Category filtering is done per-group in evaluate_group()."""
     t_start = datetime.now()
     print(f"{Colors.BOLD}[1/6]{Colors.END} Fetching torrents...")
 
@@ -541,7 +536,7 @@ def _fetch_and_filter_torrents(client):
 
 
 def _scan_external_libs_phase():
-    """[2/6] scan configured external paths; returns {(dev,ino): path} dict."""
+    """Scan configured external paths; return {(dev,ino): path} dict."""
     t_start = datetime.now()
     external_inodes = {}
     msg = "Scanning external libraries..." if EXTERNAL_MEDIA_PATHS else "Skipping external libraries scan (Not Configured)..."
@@ -553,7 +548,7 @@ def _scan_external_libs_phase():
 
 
 def _fetch_seeders_phase(client, torrents):
-    """[3/6] populate _seeder_count on each torrent."""
+    """Populate _seeder_count on each torrent."""
     t_start = datetime.now()
     print(f"{Colors.BOLD}[3/6]{Colors.END} Fetching seeders...")
 
@@ -776,7 +771,7 @@ def evaluate_group(d):
         count_ok = len(all_t) < MAX_TORRENTS_IN_GROUP
 
     size_ok = orig.get('size', 0) >= MIN_SIZE_BYTES
-    time_ok = orig.get('seeding_time', 0) >= MIN_ORIGINAL_SEED_TIME_HOURS * 3600
+    time_ok = orig.get('seeding_time', 0) >= MIN_ORIGINAL_SEED_TIME_SECONDS
     cat_ok = all(category_allowed(t.get('category', '')) for t in all_t)
 
     reasons = []
@@ -886,7 +881,6 @@ def print_config():
     cat_block_str = ', '.join(CATEGORY_BLOCKLIST) if CATEGORY_BLOCKLIST else 'None'
 
     def c(val):
-        """Colorize boolean-like values"""
         s = str(val)
         if s == "True": return f"{Colors.GREEN}True{Colors.END}"
         if s == "False": return f"{Colors.RED}False{Colors.END}"
@@ -958,20 +952,10 @@ def print_group(client, d, num, total):
     if not eligible:
         return eligible, all_t
 
-    status = f"{Colors.GREEN}✓ ELIGIBLE{Colors.END}" if eligible else f"{Colors.YELLOW}✗ KEPT{Colors.END} |"
-    reasons = [f"{_REASON_CLI_COLOR[code]}{_reason_text(code)}{Colors.END}" for code in result['reasons']]
-
-    if reasons:
-        reason_str = " " + " | ".join(reasons)
-    elif NO_HARD_LINKS_MODE:
-        reason_str = " Orphan (No Hard Link)"
-    else:
-        reason_str = ""
-
     print(f"\n{Colors.BOLD}{Colors.BLUE}{'─' * 262}{Colors.END}")
     print(f"{Colors.BOLD}Group {num}/{total}: "
           f"{Colors.CYAN}{orig.get('name')[:140]}{Colors.END} "
-          f"({status}{reason_str})")
+          f"({Colors.GREEN}✓ ELIGIBLE{Colors.END})")
 
     headers = ["Type", "Seeds", "Ratio", "Size", "Uploaded", "Seeded (D:H)", "Added", "Tracker", "Category", "Name"]
     widths  = [    13,       6,       6,     10,         11,             13,      18,        30,         20,    105]
@@ -991,7 +975,7 @@ def print_group(client, d, num, total):
 
         if is_orig:
             c_size = Colors.GREEN if size >= MIN_SIZE_BYTES else Colors.RED
-            c_time = Colors.GREEN if seed_time >= (MIN_ORIGINAL_SEED_TIME_HOURS * 3600) else Colors.RED
+            c_time = Colors.GREEN if seed_time >= MIN_ORIGINAL_SEED_TIME_SECONDS else Colors.RED
             if NO_HARD_LINKS_MODE and t.get('_path_error'):
                 c_cat = Colors.RED
 
@@ -1202,9 +1186,6 @@ def export_reports(sorted_items, eligible_ids):
     keep_pct = (keep_size / total_size * 100) if total_size > 0 else 0.0
     del_torrents_pct = (del_torrents / total_torrents * 100) if total_torrents > 0 else 0.0
     keep_torrents_pct = (keep_torrents / total_torrents * 100) if total_torrents > 0 else 0.0
-
-    orig_count = total_groups
-    cross_count = total_torrents - total_groups
 
     def get_avg(stats_dict, key):
         return stats_dict[key] / stats_dict['count'] if stats_dict['count'] > 0 else 0
@@ -1877,7 +1858,7 @@ def export_reports(sorted_items, eligible_ids):
 
             if is_orig:
                 c_size = "text-success" if t_size >= MIN_SIZE_BYTES else "text-danger"
-                c_time = "text-success" if t_time >= MIN_ORIGINAL_SEED_TIME_HOURS * 3600 else "text-danger"
+                c_time = "text-success" if t_time >= MIN_ORIGINAL_SEED_TIME_SECONDS else "text-danger"
 
                 if t.get('_path_error'):
                     c_cat = "text-danger"
@@ -1912,8 +1893,6 @@ def export_reports(sorted_items, eligible_ids):
 
         external_path = d['original'].get('_external_path')
         if external_path:
-            ext_status_cell = f'<div class="status-container">{badge_html}{reasons_html}</div>'
-
             orig_size = d['original'].get('size', 0)
             ext_sk = _sort_attrs(
                 'KEEP', 'EXT', 0, 0, orig_size, 0, 0, 0,
@@ -1923,7 +1902,7 @@ def export_reports(sorted_items, eligible_ids):
 
             html_parts.append(f"""
             <div class="grid-row"{ext_sk}>
-                <div class="cell">{ext_status_cell}</div>
+                <div class="cell">{status_cell_content}</div>
                 <div class="cell"><span class="type-badge" style="color:#aaa; border:1px solid #555;">EXT</span></div>
                 <div class="cell" style="text-align:center; color:#555; justify-content:center;">-</div>
                 <div class="cell" style="text-align:center; color:#555; justify-content:center;">-</div>

@@ -34,27 +34,22 @@ sys.argv = ["render_smoke.py"]
 
 import cross_seed_cleaner as csc  # noqa: E402
 
-# ---- Tunables that shape the dataset & the eligibility decision -----------
-# These mirror what the user might run cross_seed_cleaner with. Set explicitly
-# (rather than inheriting argparse defaults) so the demo report deterministically
+# Set tunables explicitly (not via argparse) so the demo deterministically
 # exercises every rejection reason regardless of the user's environment.
 csc.MIN_SEEDERS = 10
 csc.MAX_TORRENTS_IN_GROUP = 5
 csc.MIN_ORIGINAL_SEED_TIME_DAYS = 30
-csc.MIN_ORIGINAL_SEED_TIME_HOURS = csc.MIN_ORIGINAL_SEED_TIME_DAYS * 24
+csc.MIN_ORIGINAL_SEED_TIME_SECONDS = csc.MIN_ORIGINAL_SEED_TIME_DAYS * 86400
 csc.MIN_SIZE_GIB = 2
 csc.MIN_SIZE_BYTES = csc.MIN_SIZE_GIB * 1024 ** 3
-# Block one common category so CATEGORY_FILTER fires on matching torrents.
 csc.CATEGORY_BLOCKLIST = ["games"]
 csc.CATEGORY_ALLOWLIST = []
 csc.CATEGORY_FILTER_MODE = "block"
-# `category_allowed` reads the *compiled* spec lists (built once at module
-# load), so re-compile after the override.
+# category_allowed reads pre-compiled spec lists; re-compile after override.
 csc._CATEGORY_BLOCKLIST_SPECS = csc._compile_specs(csc.CATEGORY_BLOCKLIST, "CATEGORY_BLOCKLIST")
 csc._CATEGORY_ALLOWLIST_SPECS = csc._compile_specs(csc.CATEGORY_ALLOWLIST, "CATEGORY_ALLOWLIST")
 csc.NO_HARD_LINKS_MODE = False
 csc.UNRELIABLE_TRACKERS = ["torrentday.com"]
-# ---------------------------------------------------------------------------
 
 CATEGORIES = [
     "movies", "tv", "music", "books", "games",
