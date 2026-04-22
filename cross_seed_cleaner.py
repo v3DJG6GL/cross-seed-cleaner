@@ -1347,11 +1347,14 @@ def export_reports(sorted_items, eligible_ids):
 
         /* Grid-based "table": divs all the way down so off-screen groups can use
            content-visibility:auto, which is forbidden on real <tbody>/<tr>/<td>.
-           Initial --cols uses max-content for the 8 narrow columns; alignNarrowColumns()
-           in the page script measures each column's widest cell across a representative
-           sample and replaces --cols with fixed px so every row shares the same tracks
-           (CSS subgrid would be nicer but conflicts with content-visibility:auto — see
-           W3C csswg-drafts#7091). .grid-report stays visibility:hidden until JS runs. */
+           Initial --cols uses max-content for the 8 narrow columns; recomputeNarrowColumns()
+           in the page script resets those columns to max-content, samples natural cell
+           widths from the header, filter row and visible originals, then writes fixed px
+           so every row shares the same tracks. The reset step is essential — cells use
+           overflow:hidden, so once --cols is px, offsetWidth returns the clipped width
+           and columns can never grow to fit a new sort arrow or extra rejection icon.
+           (CSS subgrid would do this declaratively but conflicts with content-visibility:auto
+           — see W3C csswg-drafts#7091). .grid-report stays visibility:hidden until JS runs. */
         .grid-report {
             --cols:
                 max-content max-content max-content max-content
@@ -1972,21 +1975,45 @@ def export_reports(sorted_items, eligible_ids):
     <body>
         {html_body}
         <script>
-            // Content-based px widths for the 8 narrow columns. Each .grid-row
-            // has its own display:grid, so a bare max-content template would
-            // size columns per row (different widest cell per row → misaligned).
-            // Instead, we measure the current visible content, set --cols to
-            // the max widths found, and recompute on every filter or sort
-            // change so widths always match the current state (KEEP rows bring
-            // rejection icons; the sorted column grows an ::after arrow, etc.).
-            // Subgrid would do this declaratively but conflicts with
-            // content-visibility:auto on .group (see W3C csswg-drafts#7091).
-            function computeNarrowColumnWidths() {{
+            // Content-based px widths for the 8 narrow columns. Cells use
+            // overflow:hidden + nowrap, so once --cols holds px values
+            // offsetWidth returns the clipped column width — not the natural
+            // content width. To grow a column we must first reset it to
+            // max-content; only then does offsetWidth reveal what the cell
+            // actually wants. We capture user-resized px values up front so
+            // the reset doesn't lose them, sample header + filter row +
+            // visible originals (capped, since .group has
+            // content-visibility:auto and offsetWidth queries force layout
+            // of off-screen subtrees), then apply per-column max as fixed px.
+            // Recomputed on every sort and filter change so the sort ::after
+            // arrow and extra rejection icons always fit.
+            function recomputeNarrowColumns() {{
                 const table = document.querySelector('.grid-report');
-                if (!table) return null;
+                if (!table) return;
                 const NARROW = 8;
+                const headCells = Array.from(table.querySelectorAll('.grid-headrow > .hcell'));
+
+                // Capture user-resized widths from current --cols before the reset wipes them.
+                const cur = getComputedStyle(table).getPropertyValue('--cols').trim().split(/\\s+/);
+                const userWidths = new Array(NARROW).fill(null);
+                for (let i = 0; i < NARROW; i++) {{
+                    if (headCells[i] && headCells[i].dataset.userResized === 'true') {{
+                        const v = parseInt(cur[i], 10);
+                        if (Number.isFinite(v)) userWidths[i] = v;
+                    }}
+                }}
+
+                // Reset narrow cols to max-content so each row's cells size to natural content.
+                const measureCols = [...cur];
+                for (let i = 0; i < NARROW; i++) measureCols[i] = 'max-content';
+                table.style.setProperty('--cols', measureCols.join(' '));
+
+                // Measure header + filter row + sampled visible originals. Each grid-row
+                // is its own display:grid, so per-row offsetWidth reflects that row's
+                // max-content; we take the max across rows to align all rows on the widest.
                 const widths = new Array(NARROW).fill(0);
                 const measureRow = (row) => {{
+                    if (!row) return;
                     let i = 0;
                     for (const cell of row.children) {{
                         if (i >= NARROW) break;
@@ -1995,35 +2022,23 @@ def export_reports(sorted_items, eligible_ids):
                         i++;
                     }}
                 }};
-                const headerRow = table.querySelector('.grid-headrow');
-                const filterRow = table.querySelector('.grid-filterrow');
-                const firstDel  = table.querySelector('.group[data-status="delete"]:not(.filtered-hidden)');
-                const firstKeep = table.querySelector('.group[data-status="keep"]:not(.filtered-hidden)');
-                if (headerRow) measureRow(headerRow);
-                if (filterRow) measureRow(filterRow);
-                if (firstDel)  for (const r of firstDel .querySelectorAll('.grid-row')) measureRow(r);
-                if (firstKeep) for (const r of firstKeep.querySelectorAll('.grid-row')) measureRow(r);
-                return widths;
-            }}
-            function applyNarrowColumnWidths(widths) {{
-                const table = document.querySelector('.grid-report');
-                if (!table || !widths) return;
-                const cur = getComputedStyle(table).getPropertyValue('--cols').trim().split(/\\s+/);
-                const NARROW = 8;
-                const headCells = Array.from(table.querySelectorAll('.grid-headrow > .hcell'));
-                const next = [...cur];
+                measureRow(table.querySelector('.grid-headrow'));
+                measureRow(table.querySelector('.grid-filterrow'));
+                const visibleGroups = table.querySelectorAll('.group:not(.filtered-hidden)');
+                const SAMPLE_CAP = 150;
+                const stride = Math.max(1, Math.ceil(visibleGroups.length / SAMPLE_CAP));
+                for (let gi = 0; gi < visibleGroups.length; gi += stride) {{
+                    const firstRow = visibleGroups[gi].querySelector('.grid-row');
+                    measureRow(firstRow);
+                }}
+
+                // Apply final px widths, honoring captured user values as a floor.
+                const next = [...measureCols];
                 for (let i = 0; i < NARROW; i++) {{
-                    const userVal = parseInt(next[i], 10) || 0;
-                    const userSet = headCells[i] && headCells[i].dataset.userResized === 'true';
-                    // If the user dragged this column wider, keep their value
-                    // unless the measured content would overflow that width
-                    // (sort arrow, KEEP-row icons, etc).
-                    next[i] = (userSet && userVal >= widths[i] ? userVal : widths[i]) + 'px';
+                    const u = userWidths[i];
+                    next[i] = (u !== null && u >= widths[i] ? u : widths[i]) + 'px';
                 }}
                 table.style.setProperty('--cols', next.join(' '));
-            }}
-            function recomputeNarrowColumns() {{
-                applyNarrowColumnWidths(computeNarrowColumnWidths());
             }}
             recomputeNarrowColumns();
             document.querySelector('.grid-report').classList.add('ready');
