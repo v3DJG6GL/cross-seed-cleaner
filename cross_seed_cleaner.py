@@ -1979,6 +1979,23 @@ def export_reports(sorted_items, eligible_ids):
     <body>
         {html_body}
         <script>
+            // Split a --cols value on whitespace while keeping parenthesized
+            // segments (e.g. "minmax(200px, 1fr)") as single atomic tokens.
+            // A plain /\\s+/ split corrupts those tokens because of the space
+            // after the comma, producing 14 tokens for 12 tracks and mis-indexing
+            // the resize handlers relative to headCells.
+            function parseCols(s) {{
+                const out = []; let buf = ''; let depth = 0;
+                for (const ch of s) {{
+                    if (ch === '(') {{ depth++; buf += ch; }}
+                    else if (ch === ')') {{ depth--; buf += ch; }}
+                    else if (depth === 0 && /\\s/.test(ch)) {{
+                        if (buf) {{ out.push(buf); buf = ''; }}
+                    }} else {{ buf += ch; }}
+                }}
+                if (buf) out.push(buf);
+                return out;
+            }}
             // Content-based px widths for the 8 narrow columns. Cells use
             // overflow:hidden + nowrap, so once --cols holds px values
             // offsetWidth returns the clipped column width — not the natural
@@ -1998,7 +2015,7 @@ def export_reports(sorted_items, eligible_ids):
                 const headCells = Array.from(table.querySelectorAll('.grid-headrow > .hcell'));
 
                 // Capture user-resized widths from current --cols before the reset wipes them.
-                const cur = getComputedStyle(table).getPropertyValue('--cols').trim().split(/\\s+/);
+                const cur = parseCols(getComputedStyle(table).getPropertyValue('--cols').trim());
                 const userWidths = new Array(NARROW).fill(null);
                 for (let i = 0; i < NARROW; i++) {{
                     if (headCells[i] && headCells[i].dataset.userResized === 'true') {{
@@ -2075,7 +2092,7 @@ def export_reports(sorted_items, eligible_ids):
                 if (!headCells.length) return;
                 const readCols = () => {{
                     const v = getComputedStyle(table).getPropertyValue('--cols').trim();
-                    return v.split(/\\s+/).filter(Boolean);
+                    return parseCols(v);
                 }};
                 let cols = readCols();
                 // Resolved width of each column after initial layout becomes its
@@ -2091,8 +2108,10 @@ def export_reports(sorted_items, eligible_ids):
                         cols = readCols();
                         // Lock 1fr columns to their measured pixel width before resizing,
                         // otherwise the grid won't honor a px change next to fr units.
+                        // Matches both bare "1fr" and "minmax(200px, 1fr)" tokens;
+                        // \\b anchors fr as a unit so identifiers like "frozen" won't match.
                         cols = cols.map((c, i) => {{
-                            if (c.endsWith('fr')) {{
+                            if (/\\bfr\\b/.test(c)) {{
                                 const measured = headCells[i].getBoundingClientRect().width;
                                 return Math.round(measured) + 'px';
                             }}
