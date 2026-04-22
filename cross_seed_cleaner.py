@@ -1347,40 +1347,22 @@ def export_reports(sorted_items, eligible_ids):
 
         /* Grid-based "table": divs all the way down so off-screen groups can use
            content-visibility:auto, which is forbidden on real <tbody>/<tr>/<td>. */
-        /* Single grid for the whole table; .grid-head, .group and every
-           .grid-row inherit its column tracks via subgrid so max-content is
-           computed once across all rows and columns align vertically. */
+        /* Every row (.grid-headrow, .grid-filterrow, and every data .grid-row)
+           uses the same --cols template, so columns align vertically across
+           rows. Fixed px for the narrow columns keeps widths stable even when
+           .group's content-visibility:auto skips layout for offscreen groups. */
         .grid-report {
-            display: grid;
             --cols:
-                max-content max-content max-content max-content
-                max-content max-content max-content max-content
-                140px 130px
+                100px 85px 75px 75px 95px 100px 115px 140px
+                150px 150px
                 minmax(200px, 1fr) minmax(220px, 2fr);
-            grid-template-columns: var(--cols);
             width: 100%; min-width: 0;
             font-size: 13px;
         }
-        .grid-row    {
-            display: grid;
-            grid-template-columns: subgrid;
-            grid-column: 1 / -1;
-            align-items: stretch;
-        }
+        .grid-row    { display: grid; grid-template-columns: var(--cols); align-items: stretch; }
         .cell        { padding: 8px; border-bottom: 1px solid #2a2a2a; color: #ddd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; }
-        .grid-head   {
-            display: grid;
-            grid-template-columns: subgrid;
-            grid-column: 1 / -1;
-            grid-auto-rows: min-content;
-            position: sticky; top: 0; z-index: 3;
-            background: #1e1e1e;
-        }
-        .filter-bar  {
-            grid-column: 1 / -1;
-            padding: 10px 12px;
-            border-bottom: 1px solid #2a2a2a;
-        }
+        .grid-head   { position: sticky; top: 0; z-index: 3; background: #1e1e1e; }
+        .filter-bar  { padding: 10px 12px; border-bottom: 1px solid #2a2a2a; }
         .hcell {
             position: relative;
             padding: 12px 8px; background: #252525; color: #aaa; font-weight: 600;
@@ -1403,14 +1385,7 @@ def export_reports(sorted_items, eligible_ids):
         .hcell.sorted-asc::after  { border-bottom: 6px solid currentColor; }
         .hcell.sorted-desc::after { border-top: 6px solid currentColor; }
         .grid-row:hover > .cell { background: #2a2a2a; }
-        .group {
-            display: grid;
-            grid-template-columns: subgrid;
-            grid-column: 1 / -1;
-            grid-auto-rows: min-content;
-            content-visibility: auto;
-            contain-intrinsic-size: auto 80px;
-        }
+        .group { content-visibility: auto; contain-intrinsic-size: auto 80px; }
         .group.group-even .grid-row:not(:hover) > .cell { background: #242424; }
         .group .grid-row:last-child > .cell { border-bottom: 2px solid #444; }
         .group.filtered-hidden, .grid-row.filtered-hidden { display: none; }
