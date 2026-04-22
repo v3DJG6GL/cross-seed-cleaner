@@ -16,6 +16,7 @@ import html
 import threading
 from collections import defaultdict
 from datetime import datetime
+from functools import lru_cache
 
 # User-editable settings live in config.py. Env vars and CLI flags override
 # these defaults at runtime (see get_config() below for the precedence chain).
@@ -448,7 +449,9 @@ _CATEGORY_ALLOWLIST_SPECS = _compile_specs(CATEGORY_ALLOWLIST, "CATEGORY_ALLOWLI
 _CATEGORY_BLOCKLIST_SPECS = _compile_specs(CATEGORY_BLOCKLIST, "CATEGORY_BLOCKLIST")
 _UNRELIABLE_TRACKERS_SPECS = _compile_specs(UNRELIABLE_TRACKERS, "UNRELIABLE_TRACKERS")
 _NO_HARD_LINKS_CATEGORY_SPECS = _compile_specs(NO_HARD_LINKS_CATEGORIES, "NO_HARD_LINKS_CATEGORIES")
+_CATEGORY_FILTER_MODE_LC = CATEGORY_FILTER_MODE.lower()
 
+@lru_cache(maxsize=1024)
 def _domain_from_tracker_url(url):
     """Normalize a tracker URL to a display domain, or return None."""
     if not url or '://' not in url or url.startswith('**'):
@@ -683,9 +686,7 @@ def load_and_group_torrents(client):
 
 
 def category_allowed(cat):
-
-    mode = CATEGORY_FILTER_MODE.lower()
-
+    mode = _CATEGORY_FILTER_MODE_LC
     if mode == "none":
         return True
 
@@ -772,7 +773,7 @@ def evaluate_group(d):
 
     size_ok = orig.get('size', 0) >= MIN_SIZE_BYTES
     time_ok = orig.get('seeding_time', 0) >= MIN_ORIGINAL_SEED_TIME_SECONDS
-    cat_ok = all(category_allowed(t.get('category', '')) for t in all_t)
+    cat_ok = all(category_allowed(c) for c in {t.get('category', '') for t in all_t})
 
     reasons = []
     if externally_linked: reasons.append("EXTERNAL_LINK")
@@ -2148,7 +2149,7 @@ def export_reports(sorted_items, eligible_ids):
             let sortDirection = {initial_sort_dir};
             let lastSortedCol = {initial_sort_col};
 
-            const NUMERIC_SK = {{2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1}};
+            const NUMERIC_SK = new Set([2, 3, 4, 5, 6, 7]);
 
             function sortTable(n) {{
                 const table = document.getElementById("reportTable");
@@ -2163,7 +2164,7 @@ def export_reports(sorted_items, eligible_ids):
                 }}
                 if (headers[n]) headers[n].classList.add(sortDirection > 0 ? 'sorted-asc' : 'sorted-desc');
 
-                const isNum = !!NUMERIC_SK[n];
+                const isNum = NUMERIC_SK.has(n);
                 const keyAttr = 'data-sk-' + n;
                 const keyOf = (row) => {{
                     if (!row) return isNum ? 0 : '';
@@ -2235,7 +2236,6 @@ def export_reports(sorted_items, eligible_ids):
                 const tip = document.createElement('div');
                 tip.id = 'rsnTip';
                 document.body.appendChild(tip);
-                const hide = () => tip.classList.remove('visible');
 
                 const tipTextFor = (el) => {{
                     if (!el || !el.closest) return '';
@@ -2249,28 +2249,34 @@ def export_reports(sorted_items, eligible_ids):
                 }};
 
                 let tipW = 0, tipH = 0;
-                document.addEventListener('mouseover', (e) => {{
-                    const text = tipTextFor(e.target);
-                    if (!text) return;
-                    tip.textContent = text;
-                    tip.classList.add('visible');
-                    tipW = tip.offsetWidth; tipH = tip.offsetHeight;
-                }});
-                document.addEventListener('mousemove', (e) => {{
-                    if (!tip.classList.contains('visible')) return;
+                const onMove = (e) => {{
                     const pad = 12;
                     let x = e.clientX + pad, y = e.clientY + pad;
                     if (x + tipW > window.innerWidth - 4)  x = e.clientX - tipW - pad;
                     if (y + tipH > window.innerHeight - 4) y = e.clientY - tipH - pad;
                     tip.style.left = x + 'px';
                     tip.style.top  = y + 'px';
+                }};
+                const hideTip = () => {{
+                    tip.classList.remove('visible');
+                    document.removeEventListener('mousemove', onMove);
+                }};
+                document.addEventListener('mouseover', (e) => {{
+                    const text = tipTextFor(e.target);
+                    if (!text) return;
+                    tip.textContent = text;
+                    if (!tip.classList.contains('visible')) {{
+                        tip.classList.add('visible');
+                        document.addEventListener('mousemove', onMove);
+                    }}
+                    tipW = tip.offsetWidth; tipH = tip.offsetHeight;
                 }});
                 document.addEventListener('mouseout', (e) => {{
                     if (!tipTextFor(e.target)) return;
                     const next = e.relatedTarget;
-                    if (!next || !tipTextFor(next)) hide();
+                    if (!next || !tipTextFor(next)) hideTip();
                 }});
-                window.addEventListener('scroll', hide, true);
+                window.addEventListener('scroll', hideTip, true);
             }})();
 
             const ctxCount = document.getElementById('countChart').getContext('2d');
@@ -2397,6 +2403,7 @@ def export_reports(sorted_items, eligible_ids):
                 // portal panels to <body> on first open, after which
                 // btn.nextElementSibling no longer points at the panel.
                 const _btnPanel = new WeakMap();
+                let _openPanel = null;
                 document.querySelectorAll('.filter-multi-btn').forEach(btn => {{
                     const p = btn.nextElementSibling;
                     if (p && p.classList.contains('filter-multi-panel')) {{
@@ -2412,9 +2419,10 @@ def export_reports(sorted_items, eligible_ids):
 
                     const btn = e.target.closest('.filter-multi-btn');
                     const targetPanel = btn ? _btnPanel.get(btn) : null;
-                    document.querySelectorAll('.filter-multi-panel.open').forEach(p => {{
-                        if (p !== targetPanel) p.classList.remove('open');
-                    }});
+                    if (_openPanel && _openPanel !== targetPanel) {{
+                        _openPanel.classList.remove('open');
+                        _openPanel = null;
+                    }}
                     if (btn && targetPanel) {{
                         targetPanel.classList.toggle('open');
                         if (targetPanel.classList.contains('open')) {{
@@ -2423,6 +2431,9 @@ def export_reports(sorted_items, eligible_ids):
                                 document.body.appendChild(targetPanel);
                             }}
                             positionPanel(targetPanel);
+                            _openPanel = targetPanel;
+                        }} else {{
+                            _openPanel = null;
                         }}
                         e.stopPropagation();
                     }}
@@ -2623,7 +2634,17 @@ def export_reports(sorted_items, eligible_ids):
                     const seededMinSec = seededMinD !== null ? seededMinD * DAY : null;
                     const seededMaxSec = seededMaxD !== null ? seededMaxD * DAY : null;
 
-                    const groups = _groupsCache || (_groupsCache = Array.from(document.getElementsByClassName('group')));
+                    let groups = _groupsCache;
+                    if (!groups) {{
+                        groups = _groupsCache = Array.from(document.getElementsByClassName('group'));
+                        // Cache parsed-once state on each group so the per-keystroke loop reads plain JS props.
+                        for (const g of groups) {{
+                            g._status = g.dataset.status;
+                            g._reasonSet = new Set((g.dataset.reasons || '').split(/\\s+/).filter(Boolean));
+                            g._seedsMin = g.dataset.seedsMin;
+                            g._search = g.dataset.search || '';
+                        }}
+                    }}
                     if (!_lastHidden || _lastHidden.length !== groups.length) {{
                         _lastHidden = new Uint8Array(groups.length);
                     }}
@@ -2634,18 +2655,17 @@ def export_reports(sorted_items, eligible_ids):
                         const g = groups[i];
                         let hide = false;
 
-                        if (statusSet.size && !statusSet.has(g.dataset.status)) hide = true;
+                        if (statusSet.size && !statusSet.has(g._status)) hide = true;
                         else if (reasonsSet.size) {{
-                            const gr = (g.dataset.reasons || '').split(/\\s+/);
                             let any = false;
-                            for (const r of gr) if (r && reasonsSet.has(r)) {{ any = true; break; }}
+                            for (const r of g._reasonSet) if (reasonsSet.has(r)) {{ any = true; break; }}
                             if (!any) hide = true;
                         }}
 
-                        if (!hide && !numericInRange(g.dataset.seedsMin, seedsMin, seedsMax)) hide = true;
+                        if (!hide && !numericInRange(g._seedsMin, seedsMin, seedsMax)) hide = true;
 
-                        if (!hide && nameQ && !g.dataset.search.includes(nameQ)) hide = true;
-                        if (!hide && pathQ && !g.dataset.search.includes(pathQ)) hide = true;
+                        if (!hide && nameQ && !g._search.includes(nameQ)) hide = true;
+                        if (!hide && pathQ && !g._search.includes(pathQ)) hide = true;
 
                         if (!hide && (ratioMin !== null || ratioMax !== null
                                       || sizeMinBytes !== null || sizeMaxBytes !== null
@@ -2691,6 +2711,13 @@ def export_reports(sorted_items, eligible_ids):
 
                 const filterCountsEl = document.getElementById('filterCounts');
                 const emptyStateEl = document.getElementById('emptyState');
+                let _visGNode = null, _visTNode = null, _lastVisG = -1, _lastVisT = -1;
+                if (filterCountsEl) {{
+                    _visGNode = document.createElement('strong');
+                    _visTNode = document.createElement('strong');
+                    filterCountsEl.append('Showing ', _visGNode, ' / ' + TOTAL_GROUPS + ' groups · ',
+                                          _visTNode, ' / ' + TOTAL_TORRENTS + ' torrents');
+                }}
                 function updateFilterCounts() {{
                     const groups = _groupsCache;
                     let visG, visT;
@@ -2704,10 +2731,10 @@ def export_reports(sorted_items, eligible_ids):
                             visT += parseInt(groups[i].dataset.rowCount, 10) || 0;
                         }}
                     }}
-                    if (filterCountsEl) {{
-                        filterCountsEl.innerHTML =
-                            'Showing <strong>' + visG + '</strong> / ' + TOTAL_GROUPS + ' groups · ' +
-                            '<strong>' + visT + '</strong> / ' + TOTAL_TORRENTS + ' torrents';
+                    if (_visGNode && (visG !== _lastVisG || visT !== _lastVisT)) {{
+                        _visGNode.textContent = visG;
+                        _visTNode.textContent = visT;
+                        _lastVisG = visG; _lastVisT = visT;
                     }}
                     if (emptyStateEl) {{
                         // Show the empty-state placeholder when filters narrow to zero
@@ -2719,13 +2746,13 @@ def export_reports(sorted_items, eligible_ids):
                 updateStatusBtnLabel();
                 applyFilters();
 
-                // Re-anchor any open dropdown panel on scroll/resize — panels are
+                // Re-anchor the open panel on scroll/resize — panels are
                 // position:fixed and would otherwise drift away from their sticky button.
-                const reanchorOpenPanels = () => {{
-                    document.querySelectorAll('.filter-multi-panel.open').forEach(positionPanel);
+                const reanchorOpenPanel = () => {{
+                    if (_openPanel) positionPanel(_openPanel);
                 }};
-                window.addEventListener('scroll', reanchorOpenPanels, true);
-                window.addEventListener('resize', reanchorOpenPanels);
+                window.addEventListener('scroll', reanchorOpenPanel, true);
+                window.addEventListener('resize', reanchorOpenPanel);
             }})();
 
             new Chart(ctxCount, {{
