@@ -2018,7 +2018,6 @@ def export_reports(sorted_items, eligible_ids):
                 const NARROW = 8;
                 const headCells = Array.from(table.querySelectorAll('.grid-headrow > .hcell'));
 
-                // Capture user-resized widths from current --cols before the reset wipes them.
                 const cur = readCols(table);
                 const userWidths = new Array(NARROW).fill(null);
                 for (let i = 0; i < NARROW; i++) {{
@@ -2028,7 +2027,6 @@ def export_reports(sorted_items, eligible_ids):
                     }}
                 }}
 
-                // Reset narrow cols to max-content so each row's cells size to natural content.
                 const measureCols = [...cur];
                 for (let i = 0; i < NARROW; i++) measureCols[i] = 'max-content';
                 table.style.setProperty('--cols', measureCols.join(' '));
@@ -2074,13 +2072,10 @@ def export_reports(sorted_items, eligible_ids):
                     measureRow(firstRow);
                 }}
 
-                // Restore the button styles before writing final widths so the layout
-                // pass that follows applies the real (clipping) styles.
                 btnRestore.forEach(([b, w, ov, mw]) => {{
                     b.style.width = w; b.style.overflow = ov; b.style.maxWidth = mw;
                 }});
 
-                // Apply final px widths, honoring captured user values as a floor.
                 const next = [...measureCols];
                 for (let i = 0; i < NARROW; i++) {{
                     const u = userWidths[i];
@@ -2178,7 +2173,7 @@ def export_reports(sorted_items, eligible_ids):
 
                 const groups = Array.from(body.getElementsByClassName("group"));
                 const outerKey = new Map();
-                groups.forEach(g => outerKey.set(g, keyOf(groupRows(g)[0])));
+                groups.forEach(g => outerKey.set(g, keyOf(g.querySelector(':scope > .grid-row'))));
 
                 // Detach the body during the reorder so we get one reflow at the end.
                 const bodyParent = body.parentNode;
@@ -2216,8 +2211,9 @@ def export_reports(sorted_items, eligible_ids):
 
                 bodyParent.insertBefore(body, bodyNextSib);
                 // The newly-sorted header gained a ::after arrow → its column
-                // may need to widen; recompute so the arrow never clips.
-                recomputeNarrowColumns();
+                // may need to widen; recompute so the arrow never clips. Only
+                // narrow (0-7) columns have the ellipsis-or-grow tradeoff.
+                if (n < 8) recomputeNarrowColumns();
             }}
 
             // Wire header click → sortTable via addEventListener instead of an
