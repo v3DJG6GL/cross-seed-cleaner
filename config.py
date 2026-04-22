@@ -54,10 +54,6 @@ DEBUG_MODE = False
 # In Manual Mode the script always asks you to confirm before deleting, no matter what this is set to.
 DRY_RUN = True
 
-# True = hide non-eligible groups from the CLI output and the HTML report.
-# This does NOT affect the CSV export — the CSV always contains every group.
-ELIGIBLE_ONLY = True
-
 
 # ─── NO-HARD-LINKS MODE ────────────────────────────────────────────────────
 # When enabled, the script finds torrents in selected qBittorrent categories that have NO hard-links.

@@ -53,7 +53,6 @@ class XSSEscapingTest(unittest.TestCase):
 
         self.csc.HTML_EXPORT = os.path.join(self.tmpdir.name, "report.html")
         self.csc.CSV_EXPORT = os.path.join(self.tmpdir.name, "report.csv")
-        self.csc.ELIGIBLE_ONLY = False
 
     def _render(self):
         torrent = {

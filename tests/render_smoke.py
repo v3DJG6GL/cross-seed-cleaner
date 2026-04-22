@@ -246,7 +246,6 @@ def main():
     tmp = tempfile.mkdtemp(prefix="render_smoke_")
     csc.HTML_EXPORT = os.path.join(tmp, "report.html")
     csc.CSV_EXPORT = os.path.join(tmp, "report.csv")
-    csc.ELIGIBLE_ONLY = False
 
     n_torrents = sum(
         1 + len(r[1]["crossseeds"]) + (1 if r[1]["original"].get("_external_path") else 0)

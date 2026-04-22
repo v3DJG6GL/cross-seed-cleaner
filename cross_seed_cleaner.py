@@ -63,7 +63,6 @@ def get_config():
     env_min_size_gib = float(os.environ.get("MIN_SIZE_GIB", MIN_SIZE_GIB))
     env_debug = str2bool(os.environ.get("DEBUG_MODE", str(DEBUG_MODE)))
     env_dry_run = str2bool(os.environ.get("DRY_RUN", str(DRY_RUN)))
-    env_eligible_only = str2bool(os.environ.get("ELIGIBLE_ONLY", str(ELIGIBLE_ONLY)))
     env_html_export = os.environ.get("HTML_EXPORT", HTML_EXPORT)
     env_csv_export = os.environ.get("CSV_EXPORT", CSV_EXPORT)
     env_no_hard_links_mode = str2bool(os.environ.get("NO_HARD_LINKS_MODE", str(NO_HARD_LINKS_MODE)))
@@ -80,7 +79,6 @@ def get_config():
     parser.add_argument('--min-size-gib', type=float, default=env_min_size_gib, help='Min torrent size in GiB (0=no limit)')
     parser.add_argument('--debug', action=argparse.BooleanOptionalAction, default=env_debug, help='Enable debug logging')
     parser.add_argument('--manual', action='store_true', help='Enable Interactive Manual Deletion Mode')
-    parser.add_argument('--eligible-only', action=argparse.BooleanOptionalAction, default=env_eligible_only, help='Hide non-eligible groups from CLI and HTML (CSV always exports all groups)')
     parser.add_argument('--html', type=str, default=env_html_export, help='Path to save HTML report')
     parser.add_argument('--csv', type=str, default=env_csv_export, help='Path to save CSV report')
 
@@ -202,7 +200,6 @@ MIN_SIZE_BYTES = MIN_SIZE_GIB * 1024 * 1024 * 1024
 _SORTED_PATH_MAPPING_PREFIXES = sorted(PATH_MAPPINGS.keys(), key=len, reverse=True)
 DEBUG_MODE = ARGS.debug
 MANUAL_MODE = ARGS.manual
-ELIGIBLE_ONLY = ARGS.eligible_only
 HTML_EXPORT = ARGS.html
 CSV_EXPORT = ARGS.csv
 
@@ -897,7 +894,6 @@ def print_config():
         [bold("Cat Allowlist"), cat_allow_str],
         [bold("Cat Blocklist"), cat_block_str],
         [bold("Unreliable Trackers"), unreliable_str],
-        [bold("Eligible Only"), c(ELIGIBLE_ONLY)],
         [bold("Dry Run"), c(DRY_RUN)],
         [bold("Debug Mode"), c(DEBUG_MODE)],
         [bold("No Hard Links Mode"), c(NO_HARD_LINKS_MODE)],
@@ -949,7 +945,7 @@ def print_group(client, d, num, total):
     all_t = result['all_torrents']
     is_externally_linked = result['externally_linked']
 
-    if ELIGIBLE_ONLY and not eligible:
+    if not eligible:
         return eligible, all_t
 
     status = f"{Colors.GREEN}✓ ELIGIBLE{Colors.END}" if eligible else f"{Colors.YELLOW}✗ KEPT{Colors.END} |"
@@ -1279,7 +1275,6 @@ def export_reports(sorted_items, eligible_ids):
         f"<b>Cat Allowlist:</b> {cat_allow_str}",
         f"<b>Cat Blocklist:</b> {cat_block_str}",
         f"<b>Unreliable Trackers:</b> {unreliable_str}",
-        f"<b>Eligible Only:</b> {ELIGIBLE_ONLY}",
         f"<b>Dry Run:</b> {DRY_RUN}",
         f"<b>Debug Mode:</b> {DEBUG_MODE}",
         f"<b>No Hard Links Mode:</b> {NO_HARD_LINKS_MODE}",
@@ -1671,7 +1666,7 @@ def export_reports(sorted_items, eligible_ids):
                             <div class="filter-multi-panel" data-filter-panel="status">
                                 <div class="filter-group-label">Status</div>
                                 <label><input type="checkbox" value="keep" data-filter-status>KEEP</label>
-                                <label><input type="checkbox" value="delete" data-filter-status>DELETE</label>
+                                <label><input type="checkbox" value="delete" data-filter-status checked>DELETE</label>
                                 <div class="filter-group-label">Rejection reasons</div>
                                 <label><input type="checkbox" value="LOW_SEEDS" data-filter-reason>🌱 Low seeders</label>
                                 <label><input type="checkbox" value="SMALL_SIZE" data-filter-reason>💾 Small size</label>
@@ -1772,9 +1767,6 @@ def export_reports(sorted_items, eligible_ids):
     ds_up_min = ds_up_max = None
     ds_seeded_min = ds_seeded_max = None
     for row in report_rows:
-        if ELIGIBLE_ONLY and not row['is_del']:
-            continue
-
         d = row['data']
         is_del_group = row['is_del']
         group_class = "group group-even" if group_idx % 2 == 1 else "group"
@@ -2230,6 +2222,11 @@ def export_reports(sorted_items, eligible_ids):
                     }});
                 }});
 
+                // Seed from server-pre-checked inputs so the default landing view
+                // matches the DELETE-only preset without a user interaction.
+                document.querySelectorAll('[data-filter-status]:checked').forEach(cb => statusSet.add(cb.value));
+                document.querySelectorAll('[data-filter-reason]:checked').forEach(cb => reasonsSet.add(cb.value));
+
                 function updateStatusBtnLabel() {{
                     const btn = document.querySelector('[data-filter="status"]');
                     if (!btn) return;
@@ -2589,7 +2586,8 @@ def export_reports(sorted_items, eligible_ids):
                         emptyStateEl.classList.toggle('shown', visG === 0 && TOTAL_GROUPS > 0);
                     }}
                 }}
-                updateFilterCounts();
+                updateStatusBtnLabel();
+                applyFilters();
 
                 // Re-anchor any open dropdown panel on scroll/resize — panels are
                 // position:fixed and would otherwise drift away from their sticky button.
