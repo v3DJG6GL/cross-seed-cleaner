@@ -1365,7 +1365,7 @@ def export_reports(sorted_items, eligible_ids):
                 max-content max-content max-content max-content
                 140px 130px
                 minmax(200px, 1fr) minmax(220px, 2fr);
-            width: 100%; min-width: max-content;
+            width: 100%; min-width: 0;
             font-size: 13px;
             visibility: hidden;
         }
@@ -1996,6 +1996,24 @@ def export_reports(sorted_items, eligible_ids):
                 if (buf) out.push(buf);
                 return out;
             }}
+            // Sum of track *minimums* (first px value in each --cols token)
+            // written as an inline min-width on .grid-report. The grid then
+            // widens exactly when the container can't fit the tracks — no
+            // always-on horizontal scroll at wide viewports, and Name/Path
+            // truncate via ellipsis when there's no room to grow them. Also
+            // ensures the .group paint-containment box covers all tracks,
+            // so data cells render at every scroll position.
+            function recomputeMinWidth() {{
+                const grid = document.querySelector('.grid-report');
+                if (!grid) return;
+                const cols = parseCols(getComputedStyle(grid).getPropertyValue('--cols').trim());
+                let sum = 0;
+                for (const c of cols) {{
+                    const m = c.match(/(\\d+(?:\\.\\d+)?)/);
+                    if (m) sum += parseFloat(m[1]);
+                }}
+                grid.style.minWidth = sum + 'px';
+            }}
             // Content-based px widths for the 8 narrow columns. Cells use
             // overflow:hidden + nowrap, so once --cols holds px values
             // offsetWidth returns the clipped column width — not the natural
@@ -2083,6 +2101,7 @@ def export_reports(sorted_items, eligible_ids):
                     next[i] = (u !== null && u >= widths[i] ? u : widths[i]) + 'px';
                 }}
                 table.style.setProperty('--cols', next.join(' '));
+                recomputeMinWidth();
             }}
             recomputeNarrowColumns();
             document.querySelector('.grid-report').classList.add('ready');
@@ -2129,6 +2148,7 @@ def export_reports(sorted_items, eligible_ids):
                         const next = Math.max(COL_MINS[idx] ?? 30, w + dx);
                         cols[idx] = next + 'px';
                         table.style.setProperty('--cols', cols.join(' '));
+                        recomputeMinWidth();
                     }};
                     const mouseUpHandler = function() {{
                         document.removeEventListener('mousemove', mouseMoveHandler);
