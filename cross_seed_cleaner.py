@@ -1977,6 +1977,10 @@ def export_reports(sorted_items, eligible_ids):
                     return v.split(/\\s+/).filter(Boolean);
                 }};
                 let cols = readCols();
+                // Resolved width of each column after initial layout becomes its
+                // drag floor. Captures max-content results for auto columns, px
+                // for fixed columns, and whatever fr resolved to for flex columns.
+                const COL_MINS = headCells.map(c => Math.round(c.getBoundingClientRect().width));
                 headCells.forEach((col, idx) => {{
                     const resizer = col.querySelector('.resizer');
                     if (!resizer) return;
@@ -2002,7 +2006,7 @@ def export_reports(sorted_items, eligible_ids):
                     }};
                     const mouseMoveHandler = function(e) {{
                         const dx = e.clientX - x;
-                        const next = Math.max(30, w + dx);
+                        const next = Math.max(COL_MINS[idx] ?? 30, w + dx);
                         cols[idx] = next + 'px';
                         table.style.setProperty('--cols', cols.join(' '));
                     }};
