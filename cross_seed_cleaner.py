@@ -1627,7 +1627,7 @@ def export_reports(sorted_items, eligible_ids):
             </div>
 
             <div class="metric-col" style="border-color: #ff5252;">
-                <div class="metric-title" style="color: #ff5252;">Eligible for Deletion ({stats_eligible['count']})</div>
+                <div class="metric-title" style="color: #ff5252;">Deleted ({stats_eligible['count']})</div>
                 <div class="metric-item"><span>Average Ratio</span><span class="metric-val">{avg_del_ratio:.2f}</span></div>
                 <div class="metric-item"><span>Average Seed Time</span><span class="metric-val">{avg_del_time}</span></div>
                 <div class="metric-item"><span>Total Uploaded</span><span class="metric-val">{total_del_up}</span></div>
@@ -2651,7 +2651,7 @@ def export_reports(sorted_items, eligible_ids):
                 data: {{
                     labels: groupLabels,
                     datasets: [
-                        {{ label: 'Eligible (Groups)', data: {_js(ds_group_del)}, backgroundColor: '#ff5252' }},
+                        {{ label: 'Deleted (Groups)', data: {_js(ds_group_del)}, backgroundColor: '#ff5252' }},
                         {{ label: 'Total (Groups)', data: {_js(ds_group_total)}, backgroundColor: '#333' }}
                     ]
                 }},
