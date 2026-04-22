@@ -535,7 +535,6 @@ def _fetch_and_filter_torrents(client):
     torrents = result.get('torrents', [])
 
     SCAN_STATS['fetch_duration'] = (datetime.now() - t_start).total_seconds()
-    SCAN_STATS['filter_duration'] = 0.0
     print(f"{Colors.GREEN}  ✓ Fetching complete in {SCAN_STATS['fetch_duration']:.2f}s.{Colors.END}")
     print(f"{Colors.GREEN}  ✓ Found {len(torrents)} torrents.{Colors.END}\n")
     return torrents
@@ -545,11 +544,10 @@ def _scan_external_libs_phase():
     """[2/6] scan configured external paths; returns {(dev,ino): path} dict."""
     t_start = datetime.now()
     external_inodes = {}
+    msg = "Scanning external libraries..." if EXTERNAL_MEDIA_PATHS else "Skipping external libraries scan (Not Configured)..."
+    print(f"{Colors.BOLD}[2/6]{Colors.END} {msg}")
     if EXTERNAL_MEDIA_PATHS:
-        print(f"{Colors.BOLD}[2/6]{Colors.END} Scanning external libraries...")
         external_inodes = scan_external_libraries(EXTERNAL_MEDIA_PATHS)
-    else:
-        print(f"{Colors.BOLD}[2/6]{Colors.END} Skipping external libraries scan (Not Configured)...")
     SCAN_STATS['scan_duration'] = (datetime.now() - t_start).total_seconds()
     return external_inodes
 
@@ -840,6 +838,16 @@ _SORT_KEY_MAP = {
     'time': 'seeding_time',
 }
 
+_SORT_COL_MAP = {
+    "seeders": 2, "seeds": 2,
+    "ratio": 3,
+    "size": 4,
+    "uploaded": 5,
+    "time": 6,
+    "added": 7,
+    "name": 10,
+}
+
 def _torrent_sort_key(torrent, by):
     field = _SORT_KEY_MAP[by]
     if field == 'name':
@@ -850,15 +858,17 @@ def sort_torrents(original, crossseeds, by, order):
     rev = (order == "desc")
     return [original] + sorted(crossseeds, key=lambda t: _torrent_sort_key(t, by), reverse=rev)
 
-def print_header():
-    w = 262
-    title = "CROSS-SEED CLEANER v2026.04.21"
+def _print_centered_banner(title, w=262):
     inner = w - 2 - len(title)
     left = inner // 2
     right = inner - left
     print(f"\n{Colors.BOLD}{Colors.CYAN}{'═' * w}{Colors.END}")
     print(f"{Colors.BOLD}{Colors.CYAN}║{' ' * left}{title}{' ' * right}║{Colors.END}")
     print(f"{Colors.BOLD}{Colors.CYAN}{'═' * w}{Colors.END}\n")
+
+
+def print_header():
+    _print_centered_banner("CROSS-SEED CLEANER v2026.04.21")
 
 
 def _mode_label_and_color():
@@ -1058,15 +1068,7 @@ def print_summary(s):
     ]
 
     print()
-    w = 262
-    title = "SUMMARY & STATISTICS"
-    inner = w - 2 - len(title)
-    left = inner // 2
-    right = inner - left
-    print(f"\n{Colors.BOLD}{Colors.CYAN}{'═' * w}{Colors.END}")
-    print(f"{Colors.BOLD}{Colors.CYAN}║{' ' * left}{title}{' ' * right}║{Colors.END}")
-    print(f"{Colors.BOLD}{Colors.CYAN}{'═' * w}{Colors.END}\n")
-
+    _print_centered_banner("SUMMARY & STATISTICS")
     Table.render([f"{Colors.BOLD}Metric{Colors.END}", f"{Colors.BOLD}Value{Colors.END}"], rows, [40, 105])
     print()
 
@@ -1079,15 +1081,6 @@ def export_reports(sorted_items, eligible_ids):
     _h = html_escape
     _js = js_string
 
-    _SORT_COL_MAP = {
-        "seeders": 2, "seeds": 2,
-        "ratio": 3,
-        "size": 4,
-        "uploaded": 5,
-        "time": 6,
-        "added": 7,
-        "name": 10,
-    }
     initial_sort_col = _SORT_COL_MAP.get(SORT_BY, -1)
     initial_sort_dir = 1 if SORT_ORDER == "asc" else -1
     initial_sort_class = (
@@ -1996,6 +1989,8 @@ def export_reports(sorted_items, eligible_ids):
                 if (buf) out.push(buf);
                 return out;
             }}
+            const readCols = (el) => parseCols(getComputedStyle(el).getPropertyValue('--cols').trim());
+            const groupRows = (g) => Array.from(g.children).filter(c => c.classList.contains('grid-row'));
             // Sum of track *minimums* (first px value in each --cols token)
             // written as an inline min-width on .grid-report. The grid then
             // widens exactly when the container can't fit the tracks — no
@@ -2006,7 +2001,7 @@ def export_reports(sorted_items, eligible_ids):
             function recomputeMinWidth() {{
                 const grid = document.querySelector('.grid-report');
                 if (!grid) return;
-                const cols = parseCols(getComputedStyle(grid).getPropertyValue('--cols').trim());
+                const cols = readCols(grid);
                 let sum = 0;
                 for (const c of cols) {{
                     const m = c.match(/(\\d+(?:\\.\\d+)?)/);
@@ -2044,7 +2039,7 @@ def export_reports(sorted_items, eligible_ids):
                 const headCells = Array.from(table.querySelectorAll('.grid-headrow > .hcell'));
 
                 // Capture user-resized widths from current --cols before the reset wipes them.
-                const cur = parseCols(getComputedStyle(table).getPropertyValue('--cols').trim());
+                const cur = readCols(table);
                 const userWidths = new Array(NARROW).fill(null);
                 for (let i = 0; i < NARROW; i++) {{
                     if (headCells[i] && headCells[i].dataset.userResized === 'true') {{
@@ -2120,18 +2115,14 @@ def export_reports(sorted_items, eligible_ids):
             const createResizableTable = function(table) {{
                 const headCells = Array.from(table.querySelectorAll('.grid-headrow > .hcell'));
                 if (!headCells.length) return;
-                const readCols = () => {{
-                    const v = getComputedStyle(table).getPropertyValue('--cols').trim();
-                    return parseCols(v);
-                }};
-                let cols = readCols();
+                let cols = readCols(table);
                 headCells.forEach((col, idx) => {{
                     const resizer = col.querySelector('.resizer');
                     if (!resizer) return;
                     let x = 0; let w = 0; let myMin = 30;
                     const mouseDownHandler = function(e) {{
                         x = e.clientX;
-                        cols = readCols();
+                        cols = readCols(table);
                         // Read the semantic min from the pre-fr-lock token so
                         // fr-backed columns (Name/Path) surface their minmax min
                         // (200/220) instead of their current fr allocation.
@@ -2170,8 +2161,6 @@ def export_reports(sorted_items, eligible_ids):
                         headCells[idx].dataset.userResized = 'true';
                     }};
                     resizer.addEventListener('mousedown', mouseDownHandler);
-                    // Resizer is inside the header cell which has onclick=sortTable —
-                    // swallow clicks on the grip so dragging doesn't also trigger sort.
                     resizer.addEventListener('click', (e) => e.stopPropagation());
                 }});
             }};
@@ -2208,7 +2197,6 @@ def export_reports(sorted_items, eligible_ids):
                     : (a, b) => a < b ? -1 : a > b ? 1 : 0;
 
                 const groups = Array.from(body.getElementsByClassName("group"));
-                const groupRows = (g) => Array.from(g.children).filter(c => c.classList.contains('grid-row'));
                 const outerKey = new Map();
                 groups.forEach(g => outerKey.set(g, keyOf(groupRows(g)[0])));
 
@@ -2274,9 +2262,9 @@ def export_reports(sorted_items, eligible_ids):
                     if (!el || !el.closest) return '';
                     const icon = el.closest('.rejection-icon');
                     if (icon) return icon.getAttribute('data-tip') || '';
-                    const td = el.closest('td');
-                    if (td && td.cellIndex !== 0 && td.scrollWidth > td.clientWidth + 1) {{
-                        return td.textContent.trim();
+                    const cell = el.closest('.cell');
+                    if (cell && cell.previousElementSibling && cell.scrollWidth > cell.clientWidth + 1) {{
+                        return cell.textContent.trim();
                     }}
                     return '';
                 }};
@@ -2357,7 +2345,7 @@ def export_reports(sorted_items, eligible_ids):
                 }}
 
                 function updateBtnLabel(panel, targetSet) {{
-                    const btn = panel._anchorBtn;   // Set at init; survives portaling to <body>.
+                    const btn = panel._anchorBtn;
                     if (!btn) return;
                     if (targetSet.size === 0) {{
                         btn.textContent = 'Any ▾';
@@ -2451,12 +2439,10 @@ def export_reports(sorted_items, eligible_ids):
                     if (btn && targetPanel) {{
                         targetPanel.classList.toggle('open');
                         if (targetPanel.classList.contains('open')) {{
-                            // Portal: move to <body> so ancestor overflow can't clip
-                            // the popover. Idempotent — no-op if already there.
+                            // Portal to <body> so ancestor overflow can't clip the popover.
                             if (targetPanel.parentNode !== document.body) {{
                                 document.body.appendChild(targetPanel);
                             }}
-                            targetPanel._anchorBtn = btn;
                             positionPanel(targetPanel);
                         }}
                         e.stopPropagation();
@@ -2473,12 +2459,10 @@ def export_reports(sorted_items, eligible_ids):
                     inp.addEventListener('input', debounceApply);
                 }});
 
-                // Range popovers: keep the trigger button label in sync with the
-                // min/max values inside the panel (Any / ≥N / ≤M / N–M).
                 function updateRangeBtnLabel(name) {{
                     const panel = document.querySelector('[data-range-panel="' + name + '"]');
                     if (!panel) return;
-                    const btn = panel._anchorBtn;   // Set at init; survives portaling to <body>.
+                    const btn = panel._anchorBtn;
                     if (!btn) return;
                     // Only the row inputs — exclude slider thumbs (data-slider).
                     const inputs = panel.querySelectorAll('label.range-row input');
@@ -2666,11 +2650,6 @@ def export_reports(sorted_items, eligible_ids):
                     }}
 
                     const needsRowScan = trackersSet.size || categoriesSet.size;
-                    const groupRows = (g) => {{
-                        const out = [];
-                        for (const c of g.children) if (c.classList && c.classList.contains('grid-row')) out.push(c);
-                        return out;
-                    }};
 
                     for (let i = 0; i < groups.length; i++) {{
                         const g = groups[i];
@@ -2768,8 +2747,6 @@ def export_reports(sorted_items, eligible_ids):
                 }};
                 window.addEventListener('scroll', reanchorOpenPanels, true);
                 window.addEventListener('resize', reanchorOpenPanels);
-
-                window.applyReportFilters = applyFilters;  // in case we want to trigger externally
             }})();
 
             new Chart(ctxCount, {{
