@@ -198,11 +198,13 @@ def gen_group(rng, idx, kind):
         original["_external_hardlink"] = True
         # Also stamp _external_path so the EXT row renders.
         original["_external_path"] = f"/mnt/library/{primary_cat}/{name}"
-    elif rng.random() < 0.04:
-        # Sprinkle EXT rows on a few "normal" groups. In production
-        # _external_path and _external_hardlink are always set together
-        # (cross_seed_cleaner.py:770-774), so pair them here too — an EXT
-        # row implies the group is KEPT for EXTERNAL_LINK.
+    elif kind != "orphan" and rng.random() < 0.04:
+        # Sprinkle EXT rows on a few "normal" (non-orphan) groups. STANDARD-
+        # mode production drops singletons entirely (cross_seed_cleaner.py:645),
+        # so a real ORPHAN group never reaches the HTML with an EXT row;
+        # don't generate that combination here either. _external_path and
+        # _external_hardlink are always set together in production
+        # (cross_seed_cleaner.py:770-774) — an EXT row implies EXTERNAL_LINK KEEP.
         original["_external_hardlink"] = True
         original["_external_path"] = f"/mnt/library/{primary_cat}/{name}"
 
