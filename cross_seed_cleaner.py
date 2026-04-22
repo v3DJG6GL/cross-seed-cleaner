@@ -1972,17 +1972,18 @@ def export_reports(sorted_items, eligible_ids):
     <body>
         {html_body}
         <script>
-            // Bake content-based fixed-px widths for the 8 narrow columns BEFORE
-            // first paint. Each .grid-row has its own display:grid, so a bare
-            // max-content template would size columns per row (different widest
-            // cell per row → misaligned). Measure once from a representative
-            // sample (header + filter + first group), set --cols to the max
-            // widths found, then reveal. Subgrid would give the same result
-            // declaratively, but conflicts with content-visibility:auto on
-            // .group (see W3C csswg-drafts#7091).
-            (function alignNarrowColumns() {{
+            // Content-based px widths for the 8 narrow columns. Each .grid-row
+            // has its own display:grid, so a bare max-content template would
+            // size columns per row (different widest cell per row → misaligned).
+            // Instead, we measure the current visible content, set --cols to
+            // the max widths found, and recompute on every filter or sort
+            // change so widths always match the current state (KEEP rows bring
+            // rejection icons; the sorted column grows an ::after arrow, etc.).
+            // Subgrid would do this declaratively but conflicts with
+            // content-visibility:auto on .group (see W3C csswg-drafts#7091).
+            function computeNarrowColumnWidths() {{
                 const table = document.querySelector('.grid-report');
-                if (!table) return;
+                if (!table) return null;
                 const NARROW = 8;
                 const widths = new Array(NARROW).fill(0);
                 const measureRow = (row) => {{
@@ -1994,20 +1995,38 @@ def export_reports(sorted_items, eligible_ids):
                         i++;
                     }}
                 }};
-                const headerRow  = table.querySelector('.grid-headrow');
-                const filterRow  = table.querySelector('.grid-filterrow');
-                const firstGroup = table.querySelector('.group');
-                if (headerRow)  measureRow(headerRow);
-                if (filterRow)  measureRow(filterRow);
-                if (firstGroup) for (const r of firstGroup.querySelectorAll('.grid-row')) measureRow(r);
-                const cols = [
-                    ...widths.map(w => w + 'px'),
-                    '140px', '130px',
-                    'minmax(200px, 1fr)', 'minmax(220px, 2fr)',
-                ];
-                table.style.setProperty('--cols', cols.join(' '));
-                table.classList.add('ready');
-            }})();
+                const headerRow = table.querySelector('.grid-headrow');
+                const filterRow = table.querySelector('.grid-filterrow');
+                const firstDel  = table.querySelector('.group[data-status="delete"]:not(.filtered-hidden)');
+                const firstKeep = table.querySelector('.group[data-status="keep"]:not(.filtered-hidden)');
+                if (headerRow) measureRow(headerRow);
+                if (filterRow) measureRow(filterRow);
+                if (firstDel)  for (const r of firstDel .querySelectorAll('.grid-row')) measureRow(r);
+                if (firstKeep) for (const r of firstKeep.querySelectorAll('.grid-row')) measureRow(r);
+                return widths;
+            }}
+            function applyNarrowColumnWidths(widths) {{
+                const table = document.querySelector('.grid-report');
+                if (!table || !widths) return;
+                const cur = getComputedStyle(table).getPropertyValue('--cols').trim().split(/\\s+/);
+                const NARROW = 8;
+                const headCells = Array.from(table.querySelectorAll('.grid-headrow > .hcell'));
+                const next = [...cur];
+                for (let i = 0; i < NARROW; i++) {{
+                    const userVal = parseInt(next[i], 10) || 0;
+                    const userSet = headCells[i] && headCells[i].dataset.userResized === 'true';
+                    // If the user dragged this column wider, keep their value
+                    // unless the measured content would overflow that width
+                    // (sort arrow, KEEP-row icons, etc).
+                    next[i] = (userSet && userVal >= widths[i] ? userVal : widths[i]) + 'px';
+                }}
+                table.style.setProperty('--cols', next.join(' '));
+            }}
+            function recomputeNarrowColumns() {{
+                applyNarrowColumnWidths(computeNarrowColumnWidths());
+            }}
+            recomputeNarrowColumns();
+            document.querySelector('.grid-report').classList.add('ready');
 
             const createResizableTable = function(table) {{
                 const headCells = Array.from(table.querySelectorAll('.grid-headrow > .hcell'));
@@ -2054,6 +2073,9 @@ def export_reports(sorted_items, eligible_ids):
                         document.removeEventListener('mousemove', mouseMoveHandler);
                         document.removeEventListener('mouseup', mouseUpHandler);
                         resizer.classList.remove('resizing');
+                        // Mark as user-resized so later recomputeNarrowColumns()
+                        // calls don't overwrite the width this user just chose.
+                        headCells[idx].dataset.userResized = 'true';
                     }};
                     resizer.addEventListener('mousedown', mouseDownHandler);
                     // Resizer is inside the header cell which has onclick=sortTable —
@@ -2133,6 +2155,9 @@ def export_reports(sorted_items, eligible_ids):
                 body.appendChild(bodyFrag);
 
                 bodyParent.insertBefore(body, bodyNextSib);
+                // The newly-sorted header gained a ::after arrow → its column
+                // may need to widen; recompute so the arrow never clips.
+                recomputeNarrowColumns();
             }}
 
             // Wire header click → sortTable via addEventListener instead of an
@@ -2609,6 +2634,9 @@ def export_reports(sorted_items, eligible_ids):
                         }}
                     }}
                     updateFilterCounts();
+                    // Visible set changed → DELETE-only / KEEP-only / mixed
+                    // samples may carry different max content widths.
+                    if (typeof recomputeNarrowColumns === 'function') recomputeNarrowColumns();
                 }}
 
                 const filterCountsEl = document.getElementById('filterCounts');
