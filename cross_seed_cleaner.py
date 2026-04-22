@@ -1490,7 +1490,8 @@ def export_reports(sorted_items, eligible_ids):
         }
         .grid-row    { display: grid; grid-template-columns: var(--cols); align-items: stretch; }
         .cell        { padding: 8px; border-bottom: 1px solid #2a2a2a; color: #ddd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; }
-        .grid-head   { position: sticky; top: 0; z-index: 3; }
+        .grid-head   { position: sticky; top: 0; z-index: 3; background: #1e1e1e; }
+        .filter-bar  { padding: 10px 12px; border-bottom: 1px solid #2a2a2a; }
         .hcell {
             position: relative;
             padding: 12px 8px; background: #252525; color: #aaa; font-weight: 600;
@@ -1774,13 +1775,13 @@ def export_reports(sorted_items, eligible_ids):
         </div>
 
         <div class="card">
-            <div style="margin-bottom: 10px;">
-                <button type="button" id="filterClearBtn" class="filter-clear-btn">Clear all filters</button>
-                <span id="filterCounts" class="filter-counts"></span>
-            </div>
             <div class="table-container">
             <div id="reportTable" class="grid-report">
                 <div class="grid-head">
+                    <div class="filter-bar">
+                        <button type="button" id="filterClearBtn" class="filter-clear-btn">Clear all filters</button>
+                        <span id="filterCounts" class="filter-counts"></span>
+                    </div>
                     <div class="grid-row grid-headrow">
                         <div class="hcell" data-col="0">Status<div class="resizer"></div></div>
                         <div class="hcell" data-col="1">Type<div class="resizer"></div></div>
