@@ -1346,19 +1346,23 @@ def export_reports(sorted_items, eligible_ids):
         .table-container { overflow: visible; }
 
         /* Grid-based "table": divs all the way down so off-screen groups can use
-           content-visibility:auto, which is forbidden on real <tbody>/<tr>/<td>. */
-        /* Every row (.grid-headrow, .grid-filterrow, and every data .grid-row)
-           uses the same --cols template, so columns align vertically across
-           rows. Fixed px for the narrow columns keeps widths stable even when
-           .group's content-visibility:auto skips layout for offscreen groups. */
+           content-visibility:auto, which is forbidden on real <tbody>/<tr>/<td>.
+           Initial --cols uses max-content for the 8 narrow columns; alignNarrowColumns()
+           in the page script measures each column's widest cell across a representative
+           sample and replaces --cols with fixed px so every row shares the same tracks
+           (CSS subgrid would be nicer but conflicts with content-visibility:auto — see
+           W3C csswg-drafts#7091). .grid-report stays visibility:hidden until JS runs. */
         .grid-report {
             --cols:
-                100px 85px 75px 75px 95px 100px 115px 140px
-                150px 150px
+                max-content max-content max-content max-content
+                max-content max-content max-content max-content
+                140px 130px
                 minmax(200px, 1fr) minmax(220px, 2fr);
             width: 100%; min-width: 0;
             font-size: 13px;
+            visibility: hidden;
         }
+        .grid-report.ready { visibility: visible; }
         .grid-row    { display: grid; grid-template-columns: var(--cols); align-items: stretch; }
         .cell        { padding: 8px; border-bottom: 1px solid #2a2a2a; color: #ddd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; }
         .grid-head   { position: sticky; top: 0; z-index: 3; background: #1e1e1e; }
@@ -1968,6 +1972,43 @@ def export_reports(sorted_items, eligible_ids):
     <body>
         {html_body}
         <script>
+            // Bake content-based fixed-px widths for the 8 narrow columns BEFORE
+            // first paint. Each .grid-row has its own display:grid, so a bare
+            // max-content template would size columns per row (different widest
+            // cell per row → misaligned). Measure once from a representative
+            // sample (header + filter + first group), set --cols to the max
+            // widths found, then reveal. Subgrid would give the same result
+            // declaratively, but conflicts with content-visibility:auto on
+            // .group (see W3C csswg-drafts#7091).
+            (function alignNarrowColumns() {{
+                const table = document.querySelector('.grid-report');
+                if (!table) return;
+                const NARROW = 8;
+                const widths = new Array(NARROW).fill(0);
+                const measureRow = (row) => {{
+                    let i = 0;
+                    for (const cell of row.children) {{
+                        if (i >= NARROW) break;
+                        const w = cell.offsetWidth;
+                        if (w > widths[i]) widths[i] = w;
+                        i++;
+                    }}
+                }};
+                const headerRow  = table.querySelector('.grid-headrow');
+                const filterRow  = table.querySelector('.grid-filterrow');
+                const firstGroup = table.querySelector('.group');
+                if (headerRow)  measureRow(headerRow);
+                if (filterRow)  measureRow(filterRow);
+                if (firstGroup) for (const r of firstGroup.querySelectorAll('.grid-row')) measureRow(r);
+                const cols = [
+                    ...widths.map(w => w + 'px'),
+                    '140px', '130px',
+                    'minmax(200px, 1fr)', 'minmax(220px, 2fr)',
+                ];
+                table.style.setProperty('--cols', cols.join(' '));
+                table.classList.add('ready');
+            }})();
+
             const createResizableTable = function(table) {{
                 const headCells = Array.from(table.querySelectorAll('.grid-headrow > .hcell'));
                 if (!headCells.length) return;
