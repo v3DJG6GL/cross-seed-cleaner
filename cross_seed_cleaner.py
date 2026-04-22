@@ -2014,6 +2014,17 @@ def export_reports(sorted_items, eligible_ids):
                 }}
                 grid.style.minWidth = sum + 'px';
             }}
+            // Per-column drag floor: the first px number in its --cols token.
+            // "Xpx" → X; "minmax(Xpx, Yfr)" → X; "minmax(Xpx, Ypx)" → X. Computed
+            // fresh on each drag-start, so later reflows and prior user resizes
+            // are honored and fr-backed columns surface their minmax min rather
+            // than the viewport-dependent fr allocation.
+            function colMinFromCols(cols, idx) {{
+                const c = cols[idx];
+                if (!c) return 30;
+                const m = c.match(/(\\d+(?:\\.\\d+)?)/);
+                return m ? parseFloat(m[1]) : 30;
+            }}
             // Content-based px widths for the 8 narrow columns. Cells use
             // overflow:hidden + nowrap, so once --cols holds px values
             // offsetWidth returns the clipped column width — not the natural
@@ -2114,17 +2125,17 @@ def export_reports(sorted_items, eligible_ids):
                     return parseCols(v);
                 }};
                 let cols = readCols();
-                // Resolved width of each column after initial layout becomes its
-                // drag floor. Captures max-content results for auto columns, px
-                // for fixed columns, and whatever fr resolved to for flex columns.
-                const COL_MINS = headCells.map(c => Math.round(c.getBoundingClientRect().width));
                 headCells.forEach((col, idx) => {{
                     const resizer = col.querySelector('.resizer');
                     if (!resizer) return;
-                    let x = 0; let w = 0;
+                    let x = 0; let w = 0; let myMin = 30;
                     const mouseDownHandler = function(e) {{
                         x = e.clientX;
                         cols = readCols();
+                        // Read the semantic min from the pre-fr-lock token so
+                        // fr-backed columns (Name/Path) surface their minmax min
+                        // (200/220) instead of their current fr allocation.
+                        myMin = colMinFromCols(cols, idx);
                         // Lock 1fr columns to their measured pixel width before resizing,
                         // otherwise the grid won't honor a px change next to fr units.
                         // Matches both bare "1fr" and "minmax(200px, 1fr)" tokens;
@@ -2145,7 +2156,7 @@ def export_reports(sorted_items, eligible_ids):
                     }};
                     const mouseMoveHandler = function(e) {{
                         const dx = e.clientX - x;
-                        const next = Math.max(COL_MINS[idx] ?? 30, w + dx);
+                        const next = Math.max(myMin, w + dx);
                         cols[idx] = next + 'px';
                         table.style.setProperty('--cols', cols.join(' '));
                         recomputeMinWidth();
