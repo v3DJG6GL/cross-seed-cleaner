@@ -1348,8 +1348,16 @@ def export_reports(sorted_items, eligible_ids):
         /* Grid-based "table": divs all the way down so off-screen groups can use
            content-visibility:auto, which is forbidden on real <tbody>/<tr>/<td>. */
         .grid-report {
-            --cols: 140px 70px 75px 70px 90px 90px 100px 100px 140px 140px 350px 500px;
-            width: max-content; min-width: 100%;
+            /* 8 auto-sized columns fit their widest cell (usually the header);
+               Tracker/Category stay capped so long domain/category names don't
+               stretch the grid; Name and Path flex to absorb leftover width, with
+               Path getting 2x the share since paths are typically longer. */
+            --cols:
+                max-content max-content max-content max-content
+                max-content max-content max-content max-content
+                140px 130px
+                minmax(200px, 1fr) minmax(220px, 2fr);
+            width: 100%; min-width: 0;
             font-size: 13px;
         }
         .grid-row    { display: grid; grid-template-columns: var(--cols); align-items: stretch; }
