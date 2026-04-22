@@ -1340,10 +1340,14 @@ def export_reports(sorted_items, eligible_ids):
         .metric-item { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; }
         .metric-val { font-weight: bold; color: #fff; }
 
-        /* Note: overflow:visible (not auto) so .grid-head's position:sticky
-           anchors to the viewport, not to this container. When the column
-           total exceeds viewport width the BODY scrolls horizontally. */
-        .table-container { overflow: visible; }
+        /* overflow-x:auto so the grid scrolls horizontally INSIDE its card
+           instead of pushing the body wider than the viewport. Per CSS, setting
+           overflow-x to a non-visible value computes overflow-y to auto, which
+           reassigns .grid-head's sticky containing block from the viewport to
+           this container — the header is no longer viewport-sticky on page
+           scroll, only sticky within this container. Accepted tradeoff so the
+           table respects the card's horizontal bounds on narrow screens. */
+        .table-container { overflow-x: auto; }
 
         /* Grid-based "table": divs all the way down so off-screen groups can use
            content-visibility:auto, which is forbidden on real <tbody>/<tr>/<td>.
