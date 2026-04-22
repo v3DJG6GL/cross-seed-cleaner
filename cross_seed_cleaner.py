@@ -2008,6 +2008,21 @@ def export_reports(sorted_items, eligible_ids):
                 for (let i = 0; i < NARROW; i++) measureCols[i] = 'max-content';
                 table.style.setProperty('--cols', measureCols.join(' '));
 
+                // The filter-row buttons are width:100% + overflow:hidden, so their
+                // label ("1 selected ▾", "Any ▾", etc.) clips inside the button itself
+                // and never widens the .fcell — visible on narrow viewports where the
+                // surrounding tracks are tight. Same risk for any clipped descendant.
+                // Temporarily strip width/overflow on the buttons so their natural
+                // label width pushes the cell's max-content out.
+                const relaxedBtns = table.querySelectorAll('.filter-multi-btn');
+                const btnRestore = [];
+                relaxedBtns.forEach(b => {{
+                    btnRestore.push([b, b.style.width, b.style.overflow, b.style.maxWidth]);
+                    b.style.width = 'auto';
+                    b.style.maxWidth = 'none';
+                    b.style.overflow = 'visible';
+                }});
+
                 // Measure header + filter row + sampled visible originals. Each grid-row
                 // is its own display:grid, so per-row offsetWidth reflects that row's
                 // max-content; we take the max across rows to align all rows on the widest.
@@ -2017,7 +2032,9 @@ def export_reports(sorted_items, eligible_ids):
                     let i = 0;
                     for (const cell of row.children) {{
                         if (i >= NARROW) break;
-                        const w = cell.offsetWidth;
+                        // scrollWidth catches overflow that offsetWidth (clipped) misses;
+                        // offsetWidth catches padding/border that scrollWidth omits.
+                        let w = Math.max(cell.offsetWidth, cell.scrollWidth);
                         if (w > widths[i]) widths[i] = w;
                         i++;
                     }}
@@ -2031,6 +2048,12 @@ def export_reports(sorted_items, eligible_ids):
                     const firstRow = visibleGroups[gi].querySelector('.grid-row');
                     measureRow(firstRow);
                 }}
+
+                // Restore the button styles before writing final widths so the layout
+                // pass that follows applies the real (clipping) styles.
+                btnRestore.forEach(([b, w, ov, mw]) => {{
+                    b.style.width = w; b.style.overflow = ov; b.style.maxWidth = mw;
+                }});
 
                 // Apply final px widths, honoring captured user values as a floor.
                 const next = [...measureCols];
