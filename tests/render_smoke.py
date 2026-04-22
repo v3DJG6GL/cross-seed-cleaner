@@ -102,13 +102,15 @@ def gen_torrent(rng, base_name, tracker=None, category=None,
         seeded_secs = rng.randint(86400, 86400 * 4 * 365)
     uploaded = int(size * ratio)
     added_on = 1775073600 - rng.randint(0, 86400 * 4 * 365)
+    category = category or rng.choice(CATEGORIES)
+    tracker = tracker or rng.choice(TRACKERS)
 
     return {
         "name": base_name,
-        "content_path": f"/data/downloads/{category or 'misc'}/{base_name}",
-        "category": category or rng.choice(CATEGORIES),
-        "tracker": f"http://{tracker or rng.choice(TRACKERS)}/announce",
-        "_tracker_domain": tracker or rng.choice(TRACKERS),
+        "content_path": f"/data/downloads/{category}/{base_name}",
+        "category": category,
+        "tracker": f"http://{tracker}/announce",
+        "_tracker_domain": tracker,
         "size": size,
         "ratio": ratio,
         "uploaded": uploaded,
