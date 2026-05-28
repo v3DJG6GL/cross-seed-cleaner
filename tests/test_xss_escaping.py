@@ -60,6 +60,7 @@ class XSSEscapingTest(unittest.TestCase):
             "content_path": self.XSS_PATH,
             "category": self.XSS_CAT,
             "tracker": self.XSS_TRACKER,
+            "_tracker_domain": self.XSS_TRACKER,
             "size": 5 * 1024 * 1024 * 1024,
             "ratio": 1.5,
             "uploaded": 1024 * 1024 * 1024,
