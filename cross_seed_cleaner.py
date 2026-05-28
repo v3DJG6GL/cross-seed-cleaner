@@ -345,11 +345,17 @@ def apply_path_mapping(remote_path):
         return ""
 
     for remote_prefix in _SORTED_PATH_MAPPING_PREFIXES:
-        if remote_path.startswith(remote_prefix):
-            local_prefix = PATH_MAPPINGS[remote_prefix]
-            local_path = os.path.normpath(remote_path.replace(remote_prefix, local_prefix, 1))
-            debug_log(f"[GROUP]   > Mapping: '{remote_path}' -> '{local_path}'")
-            return local_path
+        if not remote_path.startswith(remote_prefix):
+            continue
+        # Require a path boundary so '/data' doesn't match '/database'. Accept
+        # both separators since the remote may be Windows while local is POSIX.
+        rest = remote_path[len(remote_prefix):]
+        if rest and rest[0] not in ('/', '\\') and remote_prefix[-1] not in ('/', '\\'):
+            continue
+        local_prefix = PATH_MAPPINGS[remote_prefix]
+        local_path = os.path.normpath(remote_path.replace(remote_prefix, local_prefix, 1))
+        debug_log(f"[GROUP]   > Mapping: '{remote_path}' -> '{local_path}'")
+        return local_path
 
     debug_log(f"[GROUP]   > Mapping: No match. Using '{remote_path}'")
     return os.path.normpath(remote_path)
