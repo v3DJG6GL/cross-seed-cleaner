@@ -207,6 +207,7 @@ HTML_EXPORT = ARGS.html
 CSV_EXPORT = ARGS.csv
 
 CHARTJS_SOURCE = None
+REPORT_LOGIC_SOURCE = None
 if HTML_EXPORT:
     _VENDOR_CHARTJS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'vendor', 'chart.js', 'chart.umd.min.js')
     try:
@@ -218,6 +219,17 @@ if HTML_EXPORT:
         sys.stderr.write(
             f"ERROR: vendored Chart.js not found at {_VENDOR_CHARTJS_PATH}.\n"
             f"Run from a full checkout of the repository (the vendor/chart.js/ directory must be present).\n"
+        )
+        sys.exit(1)
+
+    _VENDOR_REPORT_LOGIC_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'vendor', 'report', 'report-logic.js')
+    try:
+        with open(_VENDOR_REPORT_LOGIC_PATH, 'r', encoding='utf-8') as _f:
+            REPORT_LOGIC_SOURCE = _f.read()
+    except FileNotFoundError:
+        sys.stderr.write(
+            f"ERROR: vendored report logic not found at {_VENDOR_REPORT_LOGIC_PATH}.\n"
+            f"Run from a full checkout of the repository (the vendor/report/ directory must be present).\n"
         )
         sys.exit(1)
 
@@ -1989,28 +2001,14 @@ def export_reports(sorted_items, eligible_ids):
         <title>Cross-Seed Cleaner Report</title>
         <meta charset="UTF-8">
         <script>{CHARTJS_SOURCE}</script>
+        <script>{REPORT_LOGIC_SOURCE}</script>
         <style>{css_block}</style>
     </head>
     <body>
         {html_body}
         <script>
-            // Split a --cols value on whitespace while keeping parenthesized
-            // segments (e.g. "minmax(200px, 1fr)") as single atomic tokens.
-            // A plain /\\s+/ split corrupts those tokens because of the space
-            // after the comma, producing 14 tokens for 12 tracks and mis-indexing
-            // the resize handlers relative to headCells.
-            function parseCols(s) {{
-                const out = []; let buf = ''; let depth = 0;
-                for (const ch of s) {{
-                    if (ch === '(') {{ depth++; buf += ch; }}
-                    else if (ch === ')') {{ depth--; buf += ch; }}
-                    else if (depth === 0 && /\\s/.test(ch)) {{
-                        if (buf) {{ out.push(buf); buf = ''; }}
-                    }} else {{ buf += ch; }}
-                }}
-                if (buf) out.push(buf);
-                return out;
-            }}
+            // parseCols / colMinFromCols / numericInRange / parseSortKey /
+            // compareSortKeys are provided by the inlined vendor/report/report-logic.js.
             const readCols = (el) => parseCols(getComputedStyle(el).getPropertyValue('--cols').trim());
             const groupRows = (g) => Array.from(g.children).filter(c => c.classList.contains('grid-row'));
             // Sum of track *minimums* (first px value in each --cols token)
@@ -2030,17 +2028,6 @@ def export_reports(sorted_items, eligible_ids):
                     if (m) sum += parseFloat(m[1]);
                 }}
                 grid.style.minWidth = sum + 'px';
-            }}
-            // Per-column drag floor: the first px number in its --cols token.
-            // "Xpx" → X; "minmax(Xpx, Yfr)" → X; "minmax(Xpx, Ypx)" → X. Computed
-            // fresh on each drag-start, so later reflows and prior user resizes
-            // are honored and fr-backed columns surface their minmax min rather
-            // than the viewport-dependent fr allocation.
-            function colMinFromCols(cols, idx) {{
-                const c = cols[idx];
-                if (!c) return 30;
-                const m = c.match(/(\\d+(?:\\.\\d+)?)/);
-                return m ? parseFloat(m[1]) : 30;
             }}
             // Content-based px widths for the 8 narrow columns. Cells use
             // overflow:hidden + nowrap, so once --cols holds px values
@@ -2203,15 +2190,8 @@ def export_reports(sorted_items, eligible_ids):
 
                 const isNum = NUMERIC_SK.has(n);
                 const keyAttr = 'data-sk-' + n;
-                const keyOf = (row) => {{
-                    if (!row) return isNum ? 0 : '';
-                    const v = row.getAttribute(keyAttr);
-                    if (v === null) return isNum ? 0 : '';
-                    return isNum ? parseFloat(v) : v;
-                }};
-                const cmp = isNum
-                    ? (a, b) => a - b
-                    : (a, b) => a < b ? -1 : a > b ? 1 : 0;
+                const keyOf = (row) => parseSortKey(row ? row.getAttribute(keyAttr) : null, isNum);
+                const cmp = (a, b) => compareSortKeys(a, b, isNum);
 
                 const groups = Array.from(body.getElementsByClassName("group"));
                 const outerKey = new Map();
@@ -2633,13 +2613,7 @@ def export_reports(sorted_items, eligible_ids):
                     return (v || '').toLowerCase().trim();
                 }}
 
-                function numericInRange(val, min, max) {{
-                    const n = parseFloat(val);
-                    if (min !== null && !(n >= min)) return false;
-                    if (max !== null && !(n <= max)) return false;
-                    return true;
-                }}
-
+                // numericInRange is provided by the inlined report-logic.js.
                 const getAttr = (el, n) => el.getAttribute('data-sk-' + n) || '';
                 let _lastHidden = null;  // Uint8Array: 1 = hidden last pass, 0 = visible
 
