@@ -1,0 +1,12 @@
+{
+  "name": "cross-seed-cleaner-tests",
+  "version": "0.0.0",
+  "private": true,
+  "description": "JS tests for the cross-seed-cleaner HTML report logic.",
+  "scripts": {
+    "test": "node --test tests/js/*.test.mjs"
+  },
+  "devDependencies": {
+    "jsdom": "^24.0.0"
+  }
+}
