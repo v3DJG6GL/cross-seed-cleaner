@@ -7,6 +7,6 @@
     "test": "node --test tests/js/*.test.mjs"
   },
   "devDependencies": {
-    "jsdom": "^24.0.0"
+    "jsdom": "^29.1.1"
   }
 }
