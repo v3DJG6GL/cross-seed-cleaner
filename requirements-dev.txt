@@ -1,2 +1,2 @@
 # Test-only dependencies. The tool itself is pure Python standard library.
-pytest>=7.0
+pytest>=9.0.3
