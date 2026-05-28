@@ -1,2 +1,5 @@
 __pycache__/
 *.pyc
+
+# Local code-review bookkeeping
+CODE-REVIEW_NOTES.md
