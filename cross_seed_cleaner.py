@@ -461,7 +461,7 @@ def _compile_specs(patterns, label):
 def matches_pattern(text, spec):
     regex, literal = spec
     if regex is not None:
-        return bool(regex.match(text))
+        return bool(regex.fullmatch(text))
     return text == literal
 
 
