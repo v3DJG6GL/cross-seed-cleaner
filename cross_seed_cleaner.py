@@ -443,18 +443,22 @@ def get_path_identity(torrent):
     return identity
 
 
-def _compile_specs(patterns, label):
-    """Build a list of (compiled_regex_or_None, literal_or_None) from raw r:…/exact patterns."""
+def _compile_specs(patterns, label, lower=False):
+    """Build a list of (compiled_regex_or_None, literal_or_None) from raw r:…/exact patterns.
+
+    lower=True makes matching case-insensitive — used for tracker domains, which
+    are normalized to lowercase before comparison (DNS is case-insensitive).
+    """
     specs = []
     for p in patterns:
         if p.startswith("r:"):
             try:
-                specs.append((re.compile(p[2:]), None))
+                specs.append((re.compile(p[2:], re.IGNORECASE if lower else 0), None))
             except re.error as e:
                 sys.stderr.write(f"ERROR: invalid regex in {label}: {p!r} ({e})\n")
                 sys.exit(1)
         else:
-            specs.append((None, p))
+            specs.append((None, p.lower() if lower else p))
     return specs
 
 
@@ -467,7 +471,7 @@ def matches_pattern(text, spec):
 
 _CATEGORY_ALLOWLIST_SPECS = _compile_specs(CATEGORY_ALLOWLIST, "CATEGORY_ALLOWLIST")
 _CATEGORY_BLOCKLIST_SPECS = _compile_specs(CATEGORY_BLOCKLIST, "CATEGORY_BLOCKLIST")
-_UNRELIABLE_TRACKERS_SPECS = _compile_specs(UNRELIABLE_TRACKERS, "UNRELIABLE_TRACKERS")
+_UNRELIABLE_TRACKERS_SPECS = _compile_specs(UNRELIABLE_TRACKERS, "UNRELIABLE_TRACKERS", lower=True)
 _NO_HARD_LINKS_CATEGORY_SPECS = _compile_specs(NO_HARD_LINKS_CATEGORIES, "NO_HARD_LINKS_CATEGORIES")
 _CATEGORY_FILTER_MODE_LC = CATEGORY_FILTER_MODE.lower()
 
@@ -479,7 +483,16 @@ def _domain_from_tracker_url(url):
     host = urllib.parse.urlparse(url).hostname
     if not host:
         return None
-    return host.replace('tracker.', '').replace('www.', '')
+    # Strip only leading 'www.'/'tracker.' labels (not substrings, so
+    # 'my-tracker.org' is left intact).
+    changed = True
+    while changed:
+        changed = False
+        for prefix in ('www.', 'tracker.'):
+            if host.startswith(prefix):
+                host = host[len(prefix):]
+                changed = True
+    return host
 
 
 def get_tracker_domain(client, torrent):
