@@ -2913,6 +2913,8 @@ def manual_loop(client, emap):
         result = client.delete_torrents([t['hash'] for t in emap[gid]], delete_files=True)
         if result == "dry_run":
             print(f"{Colors.YELLOW}[DRY RUN] Group {gid} would be deleted (no action taken){Colors.END}")
+        elif result is None:
+            print(f"{Colors.RED}Group {gid} deletion FAILED (qBittorrent request error); group kept.{Colors.END}")
         else:
             print(f"{Colors.GREEN}Group {gid} deleted.{Colors.END}")
             emap.pop(gid, None)
@@ -2973,8 +2975,11 @@ def _finalize_deletion(client, emap):
     if confirm == 'YES':
         print(f"{Colors.RED}AUTO-DELETING...{Colors.END}")
         for gid, ts in emap.items():
-            client.delete_torrents([t['hash'] for t in ts])
-            print(f"{Colors.GREEN}Group {gid} deleted.{Colors.END}")
+            result = client.delete_torrents([t['hash'] for t in ts], delete_files=True)
+            if result is None:
+                print(f"{Colors.RED}Group {gid} deletion FAILED (qBittorrent request error).{Colors.END}")
+            else:
+                print(f"{Colors.GREEN}Group {gid} deleted.{Colors.END}")
     else:
         print(f"{Colors.YELLOW}Deletion cancelled.{Colors.END}")
 
