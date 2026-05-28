@@ -17,6 +17,11 @@ QBITTORRENT_HOST = "http://localhost:8080"
 QBITTORRENT_USER = "admin"
 QBITTORRENT_PASS = "password"
 
+# API key for qBittorrent v5.2.0+ (WebAPI v2.14.1+). Format: "qbt_" + 28 chars.
+# When set (non-empty), it is used instead of username/password — generate it in
+# qBittorrent: Preferences -> WebUI -> API Key. Leave empty to use user/password.
+QBITTORRENT_API_KEY = ""
+
 
 # ─── SAFETY LIMITS ─────────────────────────────────────────────────────────
 # A group is kept (not deleted) if any of its torrents has fewer than X seeders.

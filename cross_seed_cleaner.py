@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Cross-Seed Cleaner v2026.04.21 - Deduplicate and cleanup cross-seeded torrents in qBittorrent
+Cross-Seed Cleaner v2026.05.28 - Deduplicate and cleanup cross-seeded torrents in qBittorrent
 """
 
 import urllib.request
@@ -56,6 +56,7 @@ def get_config():
     env_host = os.environ.get("QBITTORRENT_HOST", QBITTORRENT_HOST)
     env_user = os.environ.get("QBITTORRENT_USER", QBITTORRENT_USER)
     env_pass = os.environ.get("QBITTORRENT_PASS", QBITTORRENT_PASS)
+    env_api_key = os.environ.get("QBITTORRENT_API_KEY", QBITTORRENT_API_KEY)
     env_min_seeders = int(os.environ.get("MIN_SEEDERS", MIN_SEEDERS))
     env_max_group = int(os.environ.get("MAX_TORRENTS_IN_GROUP", MAX_TORRENTS_IN_GROUP))
     env_min_days = float(os.environ.get("MIN_ORIGINAL_SEED_TIME_DAYS", MIN_ORIGINAL_SEED_TIME_DAYS))
@@ -72,6 +73,7 @@ def get_config():
     parser.add_argument('--host', default=env_host, help='qBittorrent Host')
     parser.add_argument('--user', default=env_user, help='qBittorrent User')
     parser.add_argument('--password', default=env_pass, help='qBittorrent Password')
+    parser.add_argument('--api-key', default=env_api_key, help='qBittorrent API key (v5.2.0+); overrides user/password when set')
     parser.add_argument('--min-seeders', type=int, default=env_min_seeders, help='Minimum seeders required')
     parser.add_argument('--max-group-size', type=int, default=env_max_group, help='Max torrents in group')
     parser.add_argument('--min-days', type=float, default=env_min_days, help='Min seed time in DAYS')
@@ -81,7 +83,7 @@ def get_config():
     parser.add_argument('--html', type=str, default=env_html_export, help='Path to save HTML report')
     parser.add_argument('--csv', type=str, default=env_csv_export, help='Path to save CSV report')
 
-    parser.add_argument('--no-hard-links-mode', action=argparse.BooleanOptionalAction, default=env_no_hard_links_mode, help='Enable mode to check for torrents without hard links')
+    parser.add_argument('--no-hard-links-mode', action='store_true', default=env_no_hard_links_mode, help='Enable mode to check for torrents without hard links')
     parser.add_argument('--no-hard-links-categories', type=str, default=env_no_hard_links_cats, help='Comma-separated categories for no-hard-links mode; prefix "r:" for regex (e.g. "r:autobrr-.*")')
     parser.add_argument('--external-media-paths', type=str, default=env_ext_media_paths,
                         help='Paths to scan for hardlinks. Supports commas, wildcards (*), and braces ({a,b}). E.g., "/mnt/{movies,tv},/mnt/users/*"')
@@ -188,6 +190,7 @@ ARGS, DRY_RUN = get_config()
 QBITTORRENT_HOST = ARGS.host
 QBITTORRENT_USER = ARGS.user
 QBITTORRENT_PASS = ARGS.password
+QBITTORRENT_API_KEY = ARGS.api_key
 MIN_SEEDERS = ARGS.min_seeders
 MAX_TORRENTS_IN_GROUP = ARGS.max_group_size
 MIN_ORIGINAL_SEED_TIME_DAYS = ARGS.min_days
@@ -268,10 +271,22 @@ class Table:
 
 
 class QBittorrentClient:
-    def __init__(self, host, username, password):
+    def __init__(self, host, username, password, api_key=None):
         self.host = host.rstrip('/')
         self.cookie = None
-        self.login(username, password)
+        self.api_key = (api_key or "").strip() or None
+        if self.api_key:
+            self._verify_api_key()
+        else:
+            self.login(username, password)
+
+    def _verify_api_key(self):
+        # API keys can't hit auth/login; probe a lightweight endpoint to fail fast.
+        if self._request('app/webapiVersion') is None:
+            raise Exception(
+                "API key authentication failed (check the key and that "
+                "qBittorrent is v5.2.0+ / WebAPI v2.14.1+)"
+            )
 
     def login(self, username, password):
         url = f"{self.host}/api/v2/auth/login"
@@ -292,7 +307,9 @@ class QBittorrentClient:
         if params:
             url += '?' + urllib.parse.urlencode(params)
         request = urllib.request.Request(url)
-        if self.cookie:
+        if self.api_key:
+            request.add_header('Authorization', f'Bearer {self.api_key}')
+        elif self.cookie:
             request.add_header('Cookie', self.cookie)
         if data:
             data = urllib.parse.urlencode(data).encode()
@@ -864,7 +881,7 @@ def _print_centered_banner(title, w=262):
 
 
 def print_header():
-    _print_centered_banner("CROSS-SEED CLEANER v2026.04.21")
+    _print_centered_banner("CROSS-SEED CLEANER v2026.05.28")
 
 
 def _mode_label_and_color():
@@ -889,8 +906,11 @@ def print_config():
         if s == "None": return f"{Colors.DIM}None{Colors.END}"
         return s
 
+    auth_method = "API Key" if (QBITTORRENT_API_KEY or "").strip() else "Username/Password"
+
     rows = [
         [bold("Execution Mode"), f"{mode_color}{mode_text}{Colors.END}"],
+        [bold("Auth Method"), auth_method],
         [bold("Min Seeders"), str(MIN_SEEDERS)],
         [bold("Min Seed Time"), f"{MIN_ORIGINAL_SEED_TIME_DAYS} days"],
         [bold("Min Size"), f"{MIN_SIZE_GIB} GiB" + (" (no limit)" if MIN_SIZE_GIB == 0 else "")],
@@ -3142,7 +3162,7 @@ def _run_analyze_and_finalize(client, all_groups):
 def main():
     print_header()
     print_config()
-    client = QBittorrentClient(QBITTORRENT_HOST, QBITTORRENT_USER, QBITTORRENT_PASS)
+    client = QBittorrentClient(QBITTORRENT_HOST, QBITTORRENT_USER, QBITTORRENT_PASS, QBITTORRENT_API_KEY)
     if NO_HARD_LINKS_MODE:
         check_no_hard_links(client)
         return
