@@ -36,3 +36,13 @@ jobs:
       # dom.test.mjs spawns make_report.py to render a real report for jsdom.
       - run: npm ci
       - run: npm test
+
+  ci:
+    name: CI
+    if: always()
+    needs: [python, js]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify all required jobs passed
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+        run: exit 1
