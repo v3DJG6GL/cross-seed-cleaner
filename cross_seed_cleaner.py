@@ -53,10 +53,13 @@ def _validate_config():
 
 
 def get_config():
-    env_host = os.environ.get("QBITTORRENT_HOST", QBITTORRENT_HOST)
-    env_user = os.environ.get("QBITTORRENT_USER", QBITTORRENT_USER)
-    env_pass = os.environ.get("QBITTORRENT_PASS", QBITTORRENT_PASS)
-    env_api_key = os.environ.get("QBITTORRENT_API_KEY", QBITTORRENT_API_KEY)
+    # Read fallbacks via globals().get so a commented-out / missing constant in
+    # config.py degrades to a safe default instead of raising NameError (lets
+    # API-key users drop USER/PASS, and password users drop API_KEY).
+    env_host = os.environ.get("QBITTORRENT_HOST", globals().get("QBITTORRENT_HOST", "http://localhost:8080"))
+    env_user = os.environ.get("QBITTORRENT_USER", globals().get("QBITTORRENT_USER", ""))
+    env_pass = os.environ.get("QBITTORRENT_PASS", globals().get("QBITTORRENT_PASS", ""))
+    env_api_key = os.environ.get("QBITTORRENT_API_KEY", globals().get("QBITTORRENT_API_KEY", ""))
     env_min_seeders = int(os.environ.get("MIN_SEEDERS", MIN_SEEDERS))
     env_max_group = int(os.environ.get("MAX_TORRENTS_IN_GROUP", MAX_TORRENTS_IN_GROUP))
     env_min_days = float(os.environ.get("MIN_ORIGINAL_SEED_TIME_DAYS", MIN_ORIGINAL_SEED_TIME_DAYS))
