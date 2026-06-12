@@ -44,7 +44,10 @@ def t(name, seeds, tr, cat, **extra):
 items = [
     ("g0", {"original": t("DelA", 100, "aaa.cc", "movies"),
             "crossseeds": [t("DelB", 80, "bbb.cc", "tv")]}),
-    ("g1", {"original": t("KeepLow", 1, "ccc.cc", "music"), "crossseeds": []}),
+    # Small size below MIN_SIZE_GIB so this kept group carries two
+    # reasons (LOW_SEEDS + SMALL_SIZE) — needed so the Any/Only switch
+    # test in dom.test.mjs has a real divergence to assert against.
+    ("g1", {"original": t("KeepLow", 1, "ccc.cc", "music", size=int(0.5 * GIB)), "crossseeds": []}),
     ("g2", {"original": t("ExtO", 50, "ddd.cc", "games",
                           _external_hardlink=True, _external_path="/mnt/lib/ExtO"),
             "crossseeds": [t("ExtX", 60, "eee.cc", "books")]}),
