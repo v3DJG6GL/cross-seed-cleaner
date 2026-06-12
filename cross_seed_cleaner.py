@@ -2088,6 +2088,7 @@ def export_reports(sorted_items, eligible_ids):
             search_tokens.append(t.get('content_path', '').lower())
             search_tokens.append((t.get('_tracker_domain') or '').lower())
             search_tokens.append((t.get('category') or '').lower())
+            search_tokens.append((t.get('_tracker_msg') or '').lower())
         ext_path_for_search = d['original'].get('_external_path')
         if ext_path_for_search:
             search_tokens.append(ext_path_for_search.lower())
