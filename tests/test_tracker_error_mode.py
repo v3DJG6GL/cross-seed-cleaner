@@ -270,16 +270,15 @@ def test_fallback_path_used_when_too_old(csc, monkeypatch):
 
 
 def test_main_dispatches_to_tracker_error_mode(csc, monkeypatch):
-    """main() routes to scan_dead_trackers when TRACKER_ERROR_MODE is on,
-    regardless of NO_HARD_LINKS_MODE setting (it's already an exit branch)."""
+    """main() routes to scan_dead_trackers when TRACKER_ERROR_MODE is on."""
     csc.TRACKER_ERROR_MODE = True
     csc.NO_HARD_LINKS_MODE = False
     monkeypatch.setattr(csc, 'print_header', lambda: None)
     monkeypatch.setattr(csc, 'print_config', lambda: None)
     monkeypatch.setattr(csc, 'QBittorrentClient', lambda *a, **kw: FakeClient())
     called = []
-    monkeypatch.setattr(csc, 'scan_dead_trackers', lambda c: called.append(c))
+    monkeypatch.setattr(csc, 'scan_dead_trackers', lambda c: called.append('tracker'))
     monkeypatch.setattr(csc, 'check_no_hard_links', lambda c: called.append('nhl'))
     monkeypatch.setattr(csc, 'load_and_group_torrents', lambda c: called.append('std'))
     csc.main()
-    assert len(called) == 1 and called[0] != 'nhl' and called[0] != 'std'
+    assert called == ['tracker']
