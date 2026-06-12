@@ -6,7 +6,7 @@ from conftest import FakeClient, reconfigure
 
 
 NOW = 1_700_000_000          # arbitrary "now" used in unit tests
-OLD = NOW - 30 * 24 * 3600   # 30 days ago — safely past the default min-age window
+OLD = NOW - 60 * 24 * 3600   # 60 days ago — safely past both default windows (1d min-age, 30d min-inactivity)
 
 
 def _tr(url='http://t/announce', status=5, updating=False, msg=''):
@@ -79,7 +79,7 @@ def test_excluded_when_only_sticky_trackers(csc):
 
 
 def test_excluded_when_added_recently(csc):
-    """A torrent added 5 minutes ago is well within the default 60-min min-age."""
+    """A torrent added 5 minutes ago is well within the default 1-day min-age."""
     t = _torrent(trackers=[_tr(status=5)], added=NOW - 5 * 60)
     r = _eval(csc, t)
     assert r['eligible'] is False
@@ -87,8 +87,8 @@ def test_excluded_when_added_recently(csc):
 
 
 def test_min_age_can_be_disabled(csc):
-    """TRACKER_ERROR_MIN_AGE_MINUTES = 0 disables the min-age check entirely."""
-    reconfigure(csc, TRACKER_ERROR_MIN_AGE_MINUTES=0)
+    """TRACKER_ERROR_MIN_AGE_DAYS = 0 disables the min-age check entirely."""
+    reconfigure(csc, TRACKER_ERROR_MIN_AGE_DAYS=0)
     t = _torrent(trackers=[_tr(status=5)], added=NOW - 5)   # added 5 seconds ago
     r = _eval(csc, t)
     assert r['eligible'] is True
@@ -144,18 +144,18 @@ def test_reasons_combine_when_multiple_apply(csc):
 # ─── recent-activity guardrail ───────────────────────────────────────────────
 
 def test_excluded_when_recent_activity(csc):
-    """Default min-inactivity is 7 days. A torrent with peers swapping
-    data 1 day ago is protected — DHT/PeX may be keeping it alive even
+    """Default min-inactivity is 30 days. A torrent with peers swapping
+    data 5 days ago is protected — DHT/PeX may be keeping it alive even
     if the tracker is dead."""
-    t = _torrent(trackers=[_tr(status=5)], last_activity=NOW - 24 * 3600)
+    t = _torrent(trackers=[_tr(status=5)], last_activity=NOW - 5 * 24 * 3600)
     r = _eval(csc, t)
     assert r['eligible'] is False
     assert 'RECENT_ACTIVITY' in r['reasons']
 
 
 def test_eligible_when_last_activity_is_old(csc):
-    """Activity 30 days ago — well past the 7-day default. Eligible."""
-    t = _torrent(trackers=[_tr(status=5)], last_activity=NOW - 30 * 24 * 3600)
+    """Activity 60 days ago — well past the 30-day default. Eligible."""
+    t = _torrent(trackers=[_tr(status=5)], last_activity=NOW - 60 * 24 * 3600)
     r = _eval(csc, t)
     assert r['eligible'] is True
 
@@ -204,7 +204,7 @@ def _setup_scan(csc, monkeypatch, torrents, trackers_by_hash, **client_kwargs):
 def test_scan_passes_dead_to_finalize(csc, monkeypatch):
     """End-to-end: a torrent with all dead trackers reaches finalize as eligible."""
     # added_on must be old enough to clear the min-age window — use a real recent past
-    old = int(time.time()) - 24 * 3600
+    old = int(time.time()) - 2 * 24 * 3600   # 2 days ago — past the 1-day default min-age
     tor = {'hash': 'h1', 'name': 'dead-one', 'category': '', 'added_on': old,
            'size': 100, 'num_complete': 0, 'num_incomplete': 0, 'tracker': ''}
     fake, cap = _setup_scan(csc, monkeypatch, [tor],
@@ -217,7 +217,7 @@ def test_scan_passes_dead_to_finalize(csc, monkeypatch):
 
 
 def test_scan_keeps_alive_torrent_with_reason(csc, monkeypatch):
-    old = int(time.time()) - 24 * 3600
+    old = int(time.time()) - 2 * 24 * 3600   # 2 days ago — past the 1-day default min-age
     tor = {'hash': 'h1', 'name': 'alive', 'category': '', 'added_on': old,
            'size': 100, 'num_complete': 0, 'num_incomplete': 0, 'tracker': ''}
     fake, cap = _setup_scan(csc, monkeypatch, [tor],
@@ -235,7 +235,7 @@ def test_category_blocklist_protects_dead_torrent(csc, monkeypatch):
     reconfigure(csc,
                 CATEGORY_FILTER_MODE='block',
                 CATEGORY_BLOCKLIST=['protected'])
-    old = int(time.time()) - 24 * 3600
+    old = int(time.time()) - 2 * 24 * 3600   # 2 days ago — past the 1-day default min-age
     tor = {'hash': 'h1', 'name': 'dead-but-protected', 'category': 'protected',
            'added_on': old, 'size': 100, 'num_complete': 0, 'num_incomplete': 0,
            'tracker': ''}
@@ -246,7 +246,7 @@ def test_category_blocklist_protects_dead_torrent(csc, monkeypatch):
 
 
 def test_bulk_path_used_when_supported(csc, monkeypatch):
-    old = int(time.time()) - 24 * 3600
+    old = int(time.time()) - 2 * 24 * 3600   # 2 days ago — past the 1-day default min-age
     tors = [{'hash': f'h{i}', 'name': f'h{i}', 'category': '', 'added_on': old,
              'size': 100, 'num_complete': 0, 'num_incomplete': 0, 'tracker': ''}
             for i in range(3)]
@@ -258,7 +258,7 @@ def test_bulk_path_used_when_supported(csc, monkeypatch):
 
 
 def test_fallback_path_used_when_too_old(csc, monkeypatch):
-    old = int(time.time()) - 24 * 3600
+    old = int(time.time()) - 2 * 24 * 3600   # 2 days ago — past the 1-day default min-age
     tors = [{'hash': f'h{i}', 'name': f'h{i}', 'category': '', 'added_on': old,
              'size': 100, 'num_complete': 0, 'num_incomplete': 0, 'tracker': ''}
             for i in range(3)]

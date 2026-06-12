@@ -79,22 +79,23 @@ TRACKER_ERROR_MODE = False
 # never a real tracker — leave it out. Defaults to {4, 5, 6}.
 DEAD_TRACKER_STATUSES = "4,5,6"
 
-# Minimum age (in minutes since added) before a torrent is eligible.
-# Protects against deleting freshly-added torrents that simply haven't
-# announced yet — right after qBittorrent starts up, every tracker is
-# "Not contacted yet" for a bit, and transient tracker outages plus DNS
-# TTLs can also make every tracker look dead briefly. 60 min comfortably
-# covers both. Set to 0 to disable.
-TRACKER_ERROR_MIN_AGE_MINUTES = 60
+# Minimum age (in days since added) before a torrent is eligible. Protects
+# against deleting freshly-added torrents that simply haven't announced
+# yet — right after qBittorrent starts up, every tracker is "Not contacted
+# yet" for a bit, and transient tracker outages plus DNS TTLs can also
+# make every tracker look dead briefly. Decimal values are supported
+# (e.g. 0.0417 = 1 hour, 0.5 = 12 hours). Default 1 day is safely
+# conservative. Set to 0 to disable.
+TRACKER_ERROR_MIN_AGE_DAYS = 1
 
 # Skip torrents whose last peer activity (qBittorrent's "Last Activity"
 # column / last_activity field) is more recent than this many days. The
 # field updates on ANY peer data exchange — including DHT / PeX / LSD —
 # so this catches public torrents that are healthy via DHT even when
 # every tracker is dead, and protects against tracker outages that span
-# a few days but where peers are still being found through other means.
-# Defaults to 7 days. Set to 0 to disable the check.
-TRACKER_ERROR_MIN_INACTIVITY_DAYS = 7
+# weeks but where peers are still being found through other means.
+# Defaults to 30 days (conservative). Set to 0 to disable the check.
+TRACKER_ERROR_MIN_INACTIVITY_DAYS = 30
 
 
 # ─── NO-HARD-LINKS MODE ────────────────────────────────────────────────────
