@@ -14,6 +14,7 @@ import csv
 import glob
 import html
 import threading
+import concurrent.futures
 from collections import defaultdict
 from datetime import datetime
 from functools import lru_cache
@@ -330,11 +331,31 @@ class Table:
         print(bottom)
 
 
+def _version_at_least(version_str, threshold):
+    """Compare a 'x.y.z' version string to a (major, minor, patch) tuple.
+
+    Returns False on missing/malformed input so the caller falls back to
+    the legacy path rather than crashing.
+    """
+    if not version_str:
+        return False
+    parts = []
+    for tok in str(version_str).split('.'):
+        digits = ''.join(ch for ch in tok if ch.isdigit())
+        if not digits:
+            return False
+        parts.append(int(digits))
+    while len(parts) < len(threshold):
+        parts.append(0)
+    return tuple(parts[:len(threshold)]) >= tuple(threshold)
+
+
 class QBittorrentClient:
     def __init__(self, host, username, password, api_key=None):
         self.host = host.rstrip('/')
         self.cookie = None
         self.api_key = (api_key or "").strip() or None
+        self._webapi_version = None
         if self.api_key:
             self._verify_api_key()
         else:
@@ -342,11 +363,23 @@ class QBittorrentClient:
 
     def _verify_api_key(self):
         # API keys can't hit auth/login; probe a lightweight endpoint to fail fast.
-        if self._request('app/webapiVersion') is None:
+        version = self._request('app/webapiVersion')
+        if version is None:
             raise Exception(
                 "API key authentication failed (check the key and that "
                 "qBittorrent is v5.2.0+ / WebAPI v2.14.1+)"
             )
+        self._webapi_version = str(version).strip()
+
+    def webapi_version(self):
+        """Return the qBittorrent WebAPI version string ("2.11.0"), memoized.
+
+        Returns "" when the server doesn't respond (treat as legacy).
+        """
+        if self._webapi_version is None:
+            v = self._request('app/webapiVersion')
+            self._webapi_version = str(v).strip() if v is not None else ""
+        return self._webapi_version
 
     def login(self, username, password):
         url = f"{self.host}/api/v2/auth/login"
@@ -390,6 +423,41 @@ class QBittorrentClient:
 
     def get_torrent_trackers(self, torrent_hash):
         return self._request('torrents/trackers', params={'hash': torrent_hash}) or []
+
+    def get_torrents_with_trackers(self, max_workers=8):
+        """Fetch all torrents along with their tracker lists.
+
+        Each torrent gets `_trackers` populated with its tracker list (only
+        real trackers — DHT/PeX/LSD sticky entries are excluded, since the
+        bulk endpoint doesn't emit them and we filter them out manually in
+        the fallback path).
+
+        Uses WebAPI 2.11.0+'s `torrents/info?includeTrackers=true` in one
+        round-trip when supported. Falls back to per-torrent
+        `torrents/trackers` requests parallelized via a ThreadPoolExecutor.
+        """
+        bulk_supported = _version_at_least(self.webapi_version(), (2, 11, 0))
+        if bulk_supported:
+            torrents = self._request('torrents/info', params={'includeTrackers': 'true'})
+            if torrents is not None:
+                for t in torrents:
+                    raw = t.get('trackers') or []
+                    t['_trackers'] = [tr for tr in raw if not str(tr.get('url', '')).startswith('**')]
+                return torrents
+            # bulk call failed transiently — fall through to per-torrent path
+
+        torrents = self.get_torrents()
+        if not torrents:
+            return torrents
+
+        def _fetch_one(t):
+            raw = self.get_torrent_trackers(t['hash'])
+            t['_trackers'] = [tr for tr in raw if not str(tr.get('url', '')).startswith('**')]
+            return t
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as ex:
+            list(ex.map(_fetch_one, torrents))
+        return torrents
 
     def delete_torrents(self, hashes, delete_files=True):
         if DRY_RUN:
