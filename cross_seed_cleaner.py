@@ -2625,12 +2625,9 @@ def export_reports(sorted_items, eligible_ids):
                         applyFilters();
                     }});
                 }});
-                const _reasonCbs = document.querySelectorAll('[data-filter-reason]');
-                console.log('[CSC-DEBUG] init: reason checkboxes found =', _reasonCbs.length);
-                _reasonCbs.forEach(cb => {{
+                document.querySelectorAll('[data-filter-reason]').forEach(cb => {{
                     cb.addEventListener('change', () => {{
                         if (cb.checked) reasonsSet.add(cb.value); else reasonsSet.delete(cb.value);
-                        console.log('[CSC-DEBUG] reason change: value=', cb.value, 'checked=', cb.checked, 'reasonsSet=', [...reasonsSet], 'statusSet=', [...statusSet]);
                         updateStatusBtnLabel();
                         applyFilters();
                     }});
@@ -2902,7 +2899,6 @@ def export_reports(sorted_items, eligible_ids):
                 }}
 
                 function applyFilters() {{
-                    console.log('[CSC-DEBUG] applyFilters: statusSet=', [...statusSet], 'reasonsSet=', [...reasonsSet], 'mode=', reasonMatchMode);
                     const seedsMin = readNum('seedsMin'), seedsMax = readNum('seedsMax');
                     const ratioMin = readNum('ratioMin'), ratioMax = readNum('ratioMax');
                     const sizeMinB = readNum('sizeMin'), sizeMaxB = readNum('sizeMax');
@@ -2943,10 +2939,8 @@ def export_reports(sorted_items, eligible_ids):
                         const g = groups[i];
                         let hide = false;
 
-                        const _wasHidden = hide;
                         if (statusSet.size && !statusSet.has(g._status)) hide = true;
                         else if (reasonsSet.size && !matchesReasonFilter(g._reasonSet, reasonsSet, reasonMatchMode)) hide = true;
-                        if (i < 3 && hide !== _wasHidden) console.log('[CSC-DEBUG] group', i, 'status=', g._status, 'reasons=', [...g._reasonSet], '-> hide=', hide);
 
                         if (!hide && !numericInRange(g._seedsMin, seedsMin, seedsMax)) hide = true;
 
