@@ -144,13 +144,26 @@ class ReportHTML(HTMLParser):
 class FakeClient:
     """Stub client for deletion-path tests. delete_results is a list consumed
     per call (e.g. "dry_run", None for failure, "" for success); a non-list
-    value is returned for every call."""
+    value is returned for every call.
 
-    def __init__(self, delete_results="", torrents=None, trackers=None):
+    For tracker-error mode tests:
+      trackers_by_hash maps a torrent hash to its raw tracker list (matching
+      what /api/v2/torrents/trackers returns — sticky DHT/PeX/LSD entries
+      with URLs starting "**" are filtered out by the production code).
+      webapi_version returns whatever string the test wants; the production
+      get_torrents_with_trackers uses it to decide bulk vs per-torrent.
+      bulk_calls and per_hash_calls count which code path was taken."""
+
+    def __init__(self, delete_results="", torrents=None, trackers=None,
+                 trackers_by_hash=None, webapi_version="2.11.0"):
         self._delete_results = list(delete_results) if isinstance(delete_results, list) else delete_results
         self.deleted = []
         self._torrents = torrents or []
         self._trackers = trackers or []
+        self._trackers_by_hash = trackers_by_hash or {}
+        self._webapi_version = webapi_version
+        self.bulk_calls = 0
+        self.per_hash_calls = 0
 
     def delete_torrents(self, hashes, delete_files=True):
         self.deleted.append((list(hashes), delete_files))
@@ -162,4 +175,25 @@ class FakeClient:
         return self._torrents
 
     def get_torrent_trackers(self, torrent_hash):
+        self.per_hash_calls += 1
+        if torrent_hash in self._trackers_by_hash:
+            return list(self._trackers_by_hash[torrent_hash])
         return self._trackers
+
+    def webapi_version(self):
+        return self._webapi_version
+
+    def get_torrents_with_trackers(self, max_workers=8):
+        """Mirrors the production method: stash `_trackers` (sticky entries
+        stripped) on each torrent, prefer the bulk path on a recent API.
+        Counts calls so tests can assert which path was taken."""
+        if self._webapi_version and self._webapi_version >= "2.11.0":
+            self.bulk_calls += 1
+            for t in self._torrents:
+                raw = self._trackers_by_hash.get(t['hash'], [])
+                t['_trackers'] = [tr for tr in raw if not str(tr.get('url', '')).startswith('**')]
+            return self._torrents
+        for t in self._torrents:
+            raw = self.get_torrent_trackers(t['hash'])
+            t['_trackers'] = [tr for tr in raw if not str(tr.get('url', '')).startswith('**')]
+        return self._torrents
