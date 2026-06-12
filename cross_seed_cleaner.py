@@ -630,12 +630,21 @@ def get_tracker_domain(client, torrent):
     """Get the primary tracker domain for a torrent.
 
     Prefers the URL already on the torrent dict (populated by /torrents/info).
-    Falls back to a per-hash /torrents/trackers lookup only when that field
-    is empty — e.g. immediately after add, before first announce.
+    If the torrent has a pre-fetched `_trackers` list (e.g. from
+    get_torrents_with_trackers), iterate that instead of hitting the API.
+    Falls back to a per-hash /torrents/trackers lookup only when no source
+    is available — e.g. immediately after add, before first announce.
     """
     domain = _domain_from_tracker_url(torrent.get('tracker', ''))
     if domain:
         return domain
+    cached = torrent.get('_trackers')
+    if cached is not None:
+        for tracker in cached:
+            domain = _domain_from_tracker_url(tracker.get('url', ''))
+            if domain:
+                return domain
+        return None
     try:
         trackers = client.get_torrent_trackers(torrent['hash'])
         for tracker in trackers:
