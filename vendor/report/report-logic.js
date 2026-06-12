@@ -52,6 +52,27 @@ function compareSortKeys(a, b, isNum) {
     return a < b ? -1 : a > b ? 1 : 0;
 }
 
+// Decide whether a group's rejection-reason set passes the user's filter.
+//   groupReasons   : Set of reason codes carried by the group (may be empty)
+//   selectedReasons: Set the user has ticked in the panel
+//   mode           : 'any'  -> at least one of groupReasons is selected
+//                    'only' -> every reason in groupReasons is selected
+//                              (i.e. nothing the user did not pick)
+// An empty selectedReasons means "no filter active" and always passes.
+// An empty groupReasons (eligible torrent) cannot pass any active filter,
+// in either mode — selecting reasons is always exclusionary against eligible
+// rows.
+function matchesReasonFilter(groupReasons, selectedReasons, mode) {
+    if (!selectedReasons || selectedReasons.size === 0) return true;
+    if (!groupReasons || groupReasons.size === 0) return false;
+    if (mode === 'only') {
+        for (const r of groupReasons) if (!selectedReasons.has(r)) return false;
+        return true;
+    }
+    for (const r of groupReasons) if (selectedReasons.has(r)) return true;
+    return false;
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { parseCols, colMinFromCols, numericInRange, parseSortKey, compareSortKeys };
+    module.exports = { parseCols, colMinFromCols, numericInRange, parseSortKey, compareSortKeys, matchesReasonFilter };
 }

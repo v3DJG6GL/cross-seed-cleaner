@@ -70,3 +70,38 @@ test('compareSortKeys numeric vs string', () => {
   assert.ok(L.compareSortKeys('b', 'a', false) > 0);
   assert.equal(L.compareSortKeys('a', 'a', false), 0);
 });
+
+test('matchesReasonFilter empty selection always passes', () => {
+  assert.equal(L.matchesReasonFilter(new Set(['CATEGORY_FILTER']), new Set(), 'any'),  true);
+  assert.equal(L.matchesReasonFilter(new Set(['CATEGORY_FILTER']), new Set(), 'only'), true);
+  // even an eligible torrent (no reasons) passes when no filter is active
+  assert.equal(L.matchesReasonFilter(new Set(), new Set(), 'any'),  true);
+});
+
+test('matchesReasonFilter eligible torrent never passes an active filter', () => {
+  const sel = new Set(['CATEGORY_FILTER']);
+  assert.equal(L.matchesReasonFilter(new Set(), sel, 'any'),  false);
+  assert.equal(L.matchesReasonFilter(new Set(), sel, 'only'), false);
+});
+
+test('matchesReasonFilter any-mode: at least one overlap', () => {
+  const sel = new Set(['CATEGORY_FILTER']);
+  assert.equal(L.matchesReasonFilter(new Set(['CATEGORY_FILTER']),                  sel, 'any'), true);
+  assert.equal(L.matchesReasonFilter(new Set(['CATEGORY_FILTER', 'TRACKER_ALIVE']), sel, 'any'), true);
+  assert.equal(L.matchesReasonFilter(new Set(['TRACKER_ALIVE']),                    sel, 'any'), false);
+});
+
+test('matchesReasonFilter only-mode: every group reason must be selected', () => {
+  const sel = new Set(['CATEGORY_FILTER']);
+  assert.equal(L.matchesReasonFilter(new Set(['CATEGORY_FILTER']),                  sel, 'only'), true);
+  assert.equal(L.matchesReasonFilter(new Set(['CATEGORY_FILTER', 'TRACKER_ALIVE']), sel, 'only'), false);
+  assert.equal(L.matchesReasonFilter(new Set(['TRACKER_ALIVE']),                    sel, 'only'), false);
+});
+
+test('matchesReasonFilter only-mode with multiple selected: subset wins', () => {
+  const sel = new Set(['CATEGORY_FILTER', 'TRACKER_ALIVE']);
+  assert.equal(L.matchesReasonFilter(new Set(['CATEGORY_FILTER']),                  sel, 'only'), true);
+  assert.equal(L.matchesReasonFilter(new Set(['TRACKER_ALIVE']),                    sel, 'only'), true);
+  assert.equal(L.matchesReasonFilter(new Set(['CATEGORY_FILTER', 'TRACKER_ALIVE']), sel, 'only'), true);
+  assert.equal(L.matchesReasonFilter(new Set(['CATEGORY_FILTER', 'LOW_SEEDS']),     sel, 'only'), false);
+});

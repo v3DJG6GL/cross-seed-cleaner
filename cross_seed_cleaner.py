@@ -1734,6 +1734,11 @@ def export_reports(sorted_items, eligible_ids):
         }
         .filter-group-label { color: #888; font: 11px system-ui; text-transform: uppercase; letter-spacing: 0.5px; padding: 4px 2px 2px; border-top: 1px solid #333; margin-top: 4px; }
         .filter-multi-panel > .filter-group-label:first-child { border-top: 0; margin-top: 0; }
+        .reason-match-toggle { display: inline-flex; background: #1a1a1a; border: 1px solid #333; border-radius: 3px; overflow: hidden; margin: 4px 2px 2px; }
+        .reason-match-toggle label { display: inline-block; margin: 0; padding: 4px 12px; color: #888; font: 11px system-ui; cursor: pointer; white-space: nowrap; }
+        .reason-match-toggle label:hover { background: #2a2a2a; color: #ddd; }
+        .reason-match-toggle input[type="radio"] { position: absolute; opacity: 0; pointer-events: none; }
+        .reason-match-toggle label.is-on { background: #4caf50; color: #fff; }
         .filter-clear-btn {
             margin-left: 8px;
             background: #333;
@@ -1949,6 +1954,11 @@ def export_reports(sorted_items, eligible_ids):
                                 <label><input type="checkbox" value="NO_REAL_TRACKERS" data-filter-reason>🚫 No real trackers</label>
                                 <label><input type="checkbox" value="NO_ADDED_TIME" data-filter-reason>❓ No added_on timestamp</label>
                                 <label><input type="checkbox" value="RECENT_ACTIVITY" data-filter-reason>📡 Recent peer activity</label>
+                                <div class="filter-group-label">Match</div>
+                                <div class="reason-match-toggle">
+                                    <label class="is-on"><input type="radio" name="reason-match" value="any" data-reason-match checked>Any</label>
+                                    <label><input type="radio" name="reason-match" value="only" data-reason-match>Only</label>
+                                </div>
                             </div>
                         </div>
                         <div class="fcell" data-col="1"></div>
@@ -2624,10 +2634,28 @@ def export_reports(sorted_items, eligible_ids):
                     }});
                 }});
 
+                // Any/Only switch for how rejection reasons are matched.
+                // "Any"  (default): row matches if at least one of its reasons is ticked.
+                // "Only"          : row matches only if every reason on the row is ticked
+                //                   (i.e. no other reasons besides the selected ones).
+                let reasonMatchMode = 'any';
+                document.querySelectorAll('[data-reason-match]').forEach(radio => {{
+                    radio.addEventListener('change', () => {{
+                        if (!radio.checked) return;
+                        reasonMatchMode = radio.value;
+                        document.querySelectorAll('[data-reason-match]').forEach(r => {{
+                            r.parentElement.classList.toggle('is-on', r.checked);
+                        }});
+                        applyFilters();
+                    }});
+                }});
+
                 // Seed from server-pre-checked inputs so the default landing view
                 // matches the DELETE-only preset without a user interaction.
                 document.querySelectorAll('[data-filter-status]:checked').forEach(cb => statusSet.add(cb.value));
                 document.querySelectorAll('[data-filter-reason]:checked').forEach(cb => reasonsSet.add(cb.value));
+                const _seedReasonMatch = document.querySelector('[data-reason-match]:checked');
+                if (_seedReasonMatch) reasonMatchMode = _seedReasonMatch.value;
 
                 function updateStatusBtnLabel() {{
                     const btn = document.querySelector('[data-filter="status"]');
@@ -2910,11 +2938,7 @@ def export_reports(sorted_items, eligible_ids):
                         let hide = false;
 
                         if (statusSet.size && !statusSet.has(g._status)) hide = true;
-                        else if (reasonsSet.size) {{
-                            let any = false;
-                            for (const r of g._reasonSet) if (reasonsSet.has(r)) {{ any = true; break; }}
-                            if (!any) hide = true;
-                        }}
+                        else if (reasonsSet.size && !matchesReasonFilter(g._reasonSet, reasonsSet, reasonMatchMode)) hide = true;
 
                         if (!hide && !numericInRange(g._seedsMin, seedsMin, seedsMax)) hide = true;
 
