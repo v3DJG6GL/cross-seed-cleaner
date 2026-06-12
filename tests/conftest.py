@@ -187,7 +187,10 @@ class FakeClient:
         """Mirrors the production method: stash `_trackers` (sticky entries
         stripped) on each torrent, prefer the bulk path on a recent API.
         Counts calls so tests can assert which path was taken."""
-        if self._webapi_version and self._webapi_version >= "2.11.0":
+        # Use production's numeric version comparator so "2.9.0" < "2.11.0"
+        # routes to the fallback path (lex compare would flip "9" > "1").
+        from cross_seed_cleaner import _version_at_least
+        if _version_at_least(self._webapi_version, (2, 11, 0)):
             self.bulk_calls += 1
             for t in self._torrents:
                 raw = self._trackers_by_hash.get(t['hash'], [])
