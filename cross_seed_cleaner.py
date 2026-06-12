@@ -255,32 +255,26 @@ MANUAL_MODE = ARGS.manual
 HTML_EXPORT = ARGS.html
 CSV_EXPORT = ARGS.csv
 
-CHARTJS_SOURCE = None
-REPORT_LOGIC_SOURCE = None
-if HTML_EXPORT:
-    _VENDOR_CHARTJS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'vendor', 'chart.js', 'chart.umd.min.js')
+def _load_vendor_asset(rel_path, label):
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), *rel_path)
     try:
-        with open(_VENDOR_CHARTJS_PATH, 'r', encoding='utf-8') as _f:
-            CHARTJS_SOURCE = _f.read()
-        CHARTJS_SOURCE = re.sub(r'(?m)^\s*//[#@]\s*sourceMappingURL=.*$', '', CHARTJS_SOURCE)
-        CHARTJS_SOURCE = re.sub(r'/\*[#@]\s*sourceMappingURL=.*?\*/', '', CHARTJS_SOURCE)
+        with open(path, 'r', encoding='utf-8') as _f:
+            return _f.read()
     except FileNotFoundError:
         sys.stderr.write(
-            f"ERROR: vendored Chart.js not found at {_VENDOR_CHARTJS_PATH}.\n"
-            f"Run from a full checkout of the repository (the vendor/chart.js/ directory must be present).\n"
+            f"ERROR: vendored {label} not found at {path}.\n"
+            f"Run from a full checkout of the repository (the {os.path.join(*rel_path[:-1])}/ directory must be present).\n"
         )
         sys.exit(1)
 
-    _VENDOR_REPORT_LOGIC_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'vendor', 'report', 'report-logic.js')
-    try:
-        with open(_VENDOR_REPORT_LOGIC_PATH, 'r', encoding='utf-8') as _f:
-            REPORT_LOGIC_SOURCE = _f.read()
-    except FileNotFoundError:
-        sys.stderr.write(
-            f"ERROR: vendored report logic not found at {_VENDOR_REPORT_LOGIC_PATH}.\n"
-            f"Run from a full checkout of the repository (the vendor/report/ directory must be present).\n"
-        )
-        sys.exit(1)
+
+CHARTJS_SOURCE = None
+REPORT_LOGIC_SOURCE = None
+if HTML_EXPORT:
+    CHARTJS_SOURCE = _load_vendor_asset(('vendor', 'chart.js', 'chart.umd.min.js'), 'Chart.js')
+    CHARTJS_SOURCE = re.sub(r'(?m)^\s*//[#@]\s*sourceMappingURL=.*$', '', CHARTJS_SOURCE)
+    CHARTJS_SOURCE = re.sub(r'/\*[#@]\s*sourceMappingURL=.*?\*/', '', CHARTJS_SOURCE)
+    REPORT_LOGIC_SOURCE = _load_vendor_asset(('vendor', 'report', 'report-logic.js'), 'report logic')
 
 
 NO_HARD_LINKS_MODE = ARGS.no_hard_links_mode
