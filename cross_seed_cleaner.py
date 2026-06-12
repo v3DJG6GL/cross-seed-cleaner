@@ -3398,9 +3398,13 @@ def scan_dead_trackers(client):
     print(f"{Colors.GREEN}  ✓ Fetched {len(torrents)} torrents in {SCAN_STATS['fetch_duration']:.2f}s.{Colors.END}\n")
 
     t_start = datetime.now()
-    print(f"{Colors.BOLD}[3/6]{Colors.END} Filtering by category and populating metadata...")
+    print(f"{Colors.BOLD}[2/6]{Colors.END} Filtering by category...")
     filtered = [t for t in torrents if category_allowed(t.get('category', ''))]
     debug_log(f"[FILTER] {len(filtered)}/{len(torrents)} torrents pass the category filter")
+    print(f"{Colors.GREEN}  ✓ {len(filtered)}/{len(torrents)} torrent(s) pass category filter ({(datetime.now() - t_start).total_seconds():.2f}s).{Colors.END}\n")
+
+    t_start = datetime.now()
+    print(f"{Colors.BOLD}[3/6]{Colors.END} Populating metadata (seeders & tracker messages)...")
     for t in filtered:
         t['_seeder_count'] = get_seeder_count(client, t)
         # Surface the first real tracker's error message (e.g. "Torrent not
@@ -3415,7 +3419,7 @@ def scan_dead_trackers(client):
                 break
         t['_tracker_msg'] = first_msg
     SCAN_STATS['meta_duration'] = (datetime.now() - t_start).total_seconds()
-    print(f"{Colors.GREEN}  ✓ {len(filtered)} torrent(s) pass category filter. Metadata in {SCAN_STATS['meta_duration']:.2f}s.{Colors.END}\n")
+    print(f"{Colors.GREEN}  ✓ Metadata in {SCAN_STATS['meta_duration']:.2f}s.{Colors.END}\n")
 
     t_start = datetime.now()
     print(f"{Colors.BOLD}[4/6]{Colors.END} Evaluating tracker status...")
