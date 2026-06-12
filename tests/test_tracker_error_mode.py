@@ -197,7 +197,7 @@ def _setup_scan(csc, monkeypatch, torrents, trackers_by_hash, **client_kwargs):
     fake = FakeClient(torrents=torrents, trackers_by_hash=trackers_by_hash, **client_kwargs)
     captured = {}
     monkeypatch.setattr(csc, '_run_analyze_and_finalize',
-                        lambda client, all_groups: captured.update(all_groups))
+                        lambda client, all_groups, **kw: captured.update(all_groups))
     return fake, captured
 
 
@@ -228,10 +228,10 @@ def test_scan_keeps_alive_torrent_with_reason(csc, monkeypatch):
 
 
 def test_category_blocklist_protects_dead_torrent(csc, monkeypatch):
-    """A torrent in a blocked category must be skipped entirely, even if
-    its trackers are all dead. Without an explicit category check in
-    scan_dead_trackers this would be a silent bypass — this is the
-    regression guard."""
+    """A torrent in a blocked category appears in the report tagged
+    CATEGORY_FILTER (so the user can see their blocklist is working)
+    but is NOT eligible for deletion — matching how evaluate_group
+    surfaces blocked rows in standard mode."""
     reconfigure(csc,
                 CATEGORY_FILTER_MODE='block',
                 CATEGORY_BLOCKLIST=['protected'])
@@ -242,7 +242,11 @@ def test_category_blocklist_protects_dead_torrent(csc, monkeypatch):
     fake, cap = _setup_scan(csc, monkeypatch, [tor],
                             {'h1': [_tr(status=5)]})
     csc.scan_dead_trackers(fake)
-    assert cap == {}                # filtered out before evaluation
+    # Visible in the report (visibility fix)…
+    assert set(cap) == {'h1'}
+    # …but kept, with CATEGORY_FILTER as the reason.
+    assert cap['h1']['_evaluation']['eligible'] is False
+    assert 'CATEGORY_FILTER' in cap['h1']['_evaluation']['reasons']
 
 
 def test_bulk_path_used_when_supported(csc, monkeypatch):

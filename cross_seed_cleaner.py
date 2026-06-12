@@ -973,18 +973,23 @@ def evaluate_dead_trackers(d, now_ts):
     Mirrors the dict shape returned by evaluate_group so the rest of the
     reporting pipeline can consume d['_evaluation'] without modification.
 
-    A torrent is eligible iff it has at least one real (non-DHT/PeX/LSD)
-    tracker, every real tracker's status is in DEAD_TRACKER_STATUSES, no
-    tracker is currently updating, and the torrent is past the min-age
-    and min-inactivity windows. The standard MIN_SEEDERS / MIN_SIZE_BYTES /
-    MIN_TIME / MAX_GROUP
-    limits are intentionally bypassed — they don't apply to dead torrents.
+    A torrent is eligible iff its category passes the active filter, it
+    has at least one real (non-DHT/PeX/LSD) tracker, every real tracker's
+    status is in DEAD_TRACKER_STATUSES, no tracker is currently updating,
+    and the torrent is past the min-age and min-inactivity windows. The
+    standard MIN_SEEDERS / MIN_SIZE_BYTES / MIN_TIME / MAX_GROUP limits
+    are intentionally bypassed — they don't apply to dead torrents.
+    Category filtering is honored the same way evaluate_group does it:
+    blocked/non-allowed torrents stay in the report as kept rows with
+    CATEGORY_FILTER, instead of vanishing.
     """
     t = d['original']
     trackers = t.get('_trackers') or []
     real = [tr for tr in trackers if _domain_from_tracker_url(tr.get('url', ''))]
 
     reasons = []
+    if not category_allowed(t.get('category', '')):
+        reasons.append("CATEGORY_FILTER")
     if not real:
         reasons.append("NO_REAL_TRACKERS")
     else:
@@ -3394,20 +3399,17 @@ def scan_dead_trackers(client):
     standard pipeline does the category check).
     """
     t_start = datetime.now()
-    print(f"{Colors.BOLD}[1/6]{Colors.END} Fetching torrents and trackers...")
+    print(f"{Colors.BOLD}[1/5]{Colors.END} Fetching torrents and trackers...")
     torrents = client.get_torrents_with_trackers() or []
     SCAN_STATS['fetch_duration'] = (datetime.now() - t_start).total_seconds()
     print(f"{Colors.GREEN}  ✓ Fetched {len(torrents)} torrents in {SCAN_STATS['fetch_duration']:.2f}s.{Colors.END}\n")
 
+    # Category filtering happens inside evaluate_dead_trackers so blocked
+    # torrents stay visible in the report (kept rows tagged CATEGORY_FILTER),
+    # matching how standard mode's evaluate_group reports them.
     t_start = datetime.now()
-    print(f"{Colors.BOLD}[2/6]{Colors.END} Filtering by category...")
-    filtered = [t for t in torrents if category_allowed(t.get('category', ''))]
-    debug_log(f"[FILTER] {len(filtered)}/{len(torrents)} torrents pass the category filter")
-    print(f"{Colors.GREEN}  ✓ {len(filtered)}/{len(torrents)} torrent(s) pass category filter ({(datetime.now() - t_start).total_seconds():.2f}s).{Colors.END}\n")
-
-    t_start = datetime.now()
-    print(f"{Colors.BOLD}[3/6]{Colors.END} Populating metadata (seeders & tracker messages)...")
-    for t in filtered:
+    print(f"{Colors.BOLD}[2/5]{Colors.END} Populating metadata (seeders & tracker messages)...")
+    for t in torrents:
         t['_seeder_count'] = get_seeder_count(client, t)
         # Surface the first real tracker's error message (e.g. "Torrent not
         # registered with this tracker") so the report can show WHY it died.
@@ -3424,11 +3426,11 @@ def scan_dead_trackers(client):
     print(f"{Colors.GREEN}  ✓ Metadata in {SCAN_STATS['meta_duration']:.2f}s.{Colors.END}\n")
 
     t_start = datetime.now()
-    print(f"{Colors.BOLD}[4/6]{Colors.END} Evaluating tracker status...")
+    print(f"{Colors.BOLD}[3/5]{Colors.END} Evaluating tracker status...")
     now_ts = int(datetime.now().timestamp())
     all_groups = {}
     eligible_count = 0
-    for t in filtered:
+    for t in torrents:
         d = {"original": t, "crossseeds": [], "name": t['name']}
         d["_evaluation"] = evaluate_dead_trackers(d, now_ts)
         if d["_evaluation"]["eligible"]:
@@ -3440,13 +3442,13 @@ def scan_dead_trackers(client):
     if MANUAL_MODE and eligible_count > 500:
         print(f"{Colors.YELLOW}  ! Manual mode with {eligible_count} candidates — consider --html for triage and re-running with a narrower category filter.{Colors.END}\n")
 
-    _run_analyze_and_finalize(client, all_groups)
+    _run_analyze_and_finalize(client, all_groups, total_steps=5)
 
 
-def _run_analyze_and_finalize(client, all_groups):
+def _run_analyze_and_finalize(client, all_groups, total_steps=6):
     sorted_items = sorted(all_groups.items(), key=get_group_sort_key, reverse=(SORT_ORDER == 'desc'))
 
-    print(f"{Colors.BOLD}[5/6]{Colors.END} Analyze deletable torrents...")
+    print(f"{Colors.BOLD}[{total_steps - 1}/{total_steps}]{Colors.END} Analyze deletable torrents...")
     t_start = datetime.now()
     emap = {}
     for idx, (h, d) in enumerate(sorted_items, 1):
@@ -3456,7 +3458,7 @@ def _run_analyze_and_finalize(client, all_groups):
     SCAN_STATS['analyze_duration'] = (datetime.now() - t_start).total_seconds()
     print(f"{Colors.GREEN}\n  ✓ Analysis complete in {SCAN_STATS['analyze_duration']:.2f}s.{Colors.END}")
 
-    print(f"\n{Colors.BOLD}[6/6]{Colors.END} Finalizing & exporting reports...")
+    print(f"\n{Colors.BOLD}[{total_steps}/{total_steps}]{Colors.END} Finalizing & exporting reports...")
     stats = calculate_stats(all_groups, emap)
     print_summary(stats)
     export_reports(sorted_items, emap.keys())
