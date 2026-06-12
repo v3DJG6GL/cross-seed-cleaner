@@ -1735,9 +1735,10 @@ def export_reports(sorted_items, eligible_ids):
         .filter-group-label { color: #888; font: 11px system-ui; text-transform: uppercase; letter-spacing: 0.5px; padding: 4px 2px 2px; border-top: 1px solid #333; margin-top: 4px; }
         .filter-multi-panel > .filter-group-label:first-child { border-top: 0; margin-top: 0; }
         .reason-match-toggle { display: inline-flex; background: #1a1a1a; border: 1px solid #333; border-radius: 3px; overflow: hidden; margin: 4px 2px 2px; }
-        .reason-match-toggle button { margin: 0; padding: 4px 12px; color: #888; font: 11px system-ui; background: transparent; border: 0; cursor: pointer; white-space: nowrap; }
-        .reason-match-toggle button:hover { background: #2a2a2a; color: #ddd; }
-        .reason-match-toggle button.is-on { background: #4caf50; color: #fff; }
+        .reason-match-toggle label { display: inline-block; margin: 0; padding: 4px 12px; color: #888; font: 11px system-ui; cursor: pointer; white-space: nowrap; }
+        .reason-match-toggle label:hover { background: #2a2a2a; color: #ddd; }
+        .reason-match-toggle input[type="radio"] { position: absolute; opacity: 0; pointer-events: none; }
+        .reason-match-toggle label.is-on { background: #4caf50; color: #fff; }
         .filter-clear-btn {
             margin-left: 8px;
             background: #333;
@@ -1955,8 +1956,8 @@ def export_reports(sorted_items, eligible_ids):
                                 <label><input type="checkbox" value="RECENT_ACTIVITY" data-filter-reason>📡 Recent peer activity</label>
                                 <div class="filter-group-label">Match</div>
                                 <div class="reason-match-toggle">
-                                    <button type="button" class="is-on" data-reason-match="any">Any</button>
-                                    <button type="button" data-reason-match="only">Only</button>
+                                    <label class="is-on"><input type="radio" name="reason-match" value="any" data-reason-match checked>Any</label>
+                                    <label><input type="radio" name="reason-match" value="only" data-reason-match>Only</label>
                                 </div>
                             </div>
                         </div>
@@ -2638,11 +2639,12 @@ def export_reports(sorted_items, eligible_ids):
                 // "Only"          : row matches only if every reason on the row is ticked
                 //                   (i.e. no other reasons besides the selected ones).
                 let reasonMatchMode = 'any';
-                document.querySelectorAll('[data-reason-match]').forEach(btn => {{
-                    btn.addEventListener('click', () => {{
-                        reasonMatchMode = btn.getAttribute('data-reason-match');
-                        document.querySelectorAll('[data-reason-match]').forEach(b => {{
-                            b.classList.toggle('is-on', b === btn);
+                document.querySelectorAll('[data-reason-match]').forEach(radio => {{
+                    radio.addEventListener('change', () => {{
+                        if (!radio.checked) return;
+                        reasonMatchMode = radio.value;
+                        document.querySelectorAll('[data-reason-match]').forEach(r => {{
+                            r.parentElement.classList.toggle('is-on', r.checked);
                         }});
                         applyFilters();
                     }});
@@ -2652,8 +2654,8 @@ def export_reports(sorted_items, eligible_ids):
                 // matches the DELETE-only preset without a user interaction.
                 document.querySelectorAll('[data-filter-status]:checked').forEach(cb => statusSet.add(cb.value));
                 document.querySelectorAll('[data-filter-reason]:checked').forEach(cb => reasonsSet.add(cb.value));
-                const _seedReasonMatch = document.querySelector('[data-reason-match].is-on');
-                if (_seedReasonMatch) reasonMatchMode = _seedReasonMatch.getAttribute('data-reason-match');
+                const _seedReasonMatch = document.querySelector('[data-reason-match]:checked');
+                if (_seedReasonMatch) reasonMatchMode = _seedReasonMatch.value;
 
                 function updateStatusBtnLabel() {{
                     const btn = document.querySelector('[data-filter="status"]');
@@ -2857,10 +2859,6 @@ def export_reports(sorted_items, eligible_ids):
                         }});
                         statusSet.clear(); reasonsSet.clear();
                         trackersSet.clear(); categoriesSet.clear();
-                        reasonMatchMode = 'any';
-                        document.querySelectorAll('[data-reason-match]').forEach(b => {{
-                            b.classList.toggle('is-on', b.getAttribute('data-reason-match') === 'any');
-                        }});
                         document.querySelectorAll('.filter-multi-btn').forEach(b => {{ b.textContent = 'Any ▾'; b.title = ''; }});
                         document.querySelectorAll('.range-slider').forEach(slot => {{ if (slot._reset) slot._reset(); }});
                         applyFilters();
