@@ -965,6 +965,44 @@ def evaluate_group(d):
     }
 
 
+def evaluate_dead_trackers(d, now_ts):
+    """Decide eligibility for tracker-error mode (single-torrent group).
+
+    Mirrors the dict shape returned by evaluate_group so the rest of the
+    reporting pipeline can consume d['_evaluation'] without modification.
+
+    A torrent is eligible iff it has at least one real (non-DHT/PeX/LSD)
+    tracker, every real tracker's status is in DEAD_TRACKER_STATUSES, no
+    tracker is currently updating, and the torrent is past the grace
+    window. The standard MIN_SEEDERS / MIN_SIZE_BYTES / MIN_TIME / MAX_GROUP
+    limits are intentionally bypassed — they don't apply to dead torrents.
+    """
+    t = d['original']
+    trackers = t.get('_trackers') or []
+    real = [tr for tr in trackers if _domain_from_tracker_url(tr.get('url', ''))]
+
+    reasons = []
+    if not real:
+        reasons.append("NO_REAL_TRACKERS")
+    else:
+        added = int(t.get('added_on', 0) or 0)
+        if added == 0:
+            reasons.append("NO_ADDED_TIME")
+        elif TRACKER_ERROR_GRACE_MINUTES > 0 and (now_ts - added) < TRACKER_ERROR_GRACE_MINUTES * 60:
+            reasons.append("TRACKER_GRACE")
+        if any(bool(tr.get('updating')) for tr in real):
+            reasons.append("TRACKER_UPDATING")
+        if any(int(tr.get('status', 0) or 0) not in DEAD_TRACKER_STATUSES for tr in real):
+            reasons.append("TRACKER_ALIVE")
+
+    return {
+        "eligible": not reasons,
+        "reasons": reasons,
+        "all_torrents": [t],
+        "externally_linked": False,
+    }
+
+
 def _reason_text(code):
     if code == "EXTERNAL_LINK": return "Hardlinked to external library"
     if code == "PATH_ERROR": return "Path error — could not verify hardlinks"
@@ -3262,6 +3300,60 @@ def check_no_hard_links(client):
     _run_analyze_and_finalize(client, all_groups)
 
 
+def scan_dead_trackers(client):
+    """Find torrents whose every real tracker reports an error.
+
+    Bypasses standard size/seeder/seed-time/group-size limits — they don't
+    apply to dead torrents. Category allow/block list IS honored: we apply
+    it manually here because we bypass evaluate_group (which is where the
+    standard pipeline does the category check).
+    """
+    t_start = datetime.now()
+    print(f"{Colors.BOLD}[1/6]{Colors.END} Fetching torrents and trackers...")
+    torrents = client.get_torrents_with_trackers() or []
+    SCAN_STATS['fetch_duration'] = (datetime.now() - t_start).total_seconds()
+    print(f"{Colors.GREEN}  ✓ Fetched {len(torrents)} torrents in {SCAN_STATS['fetch_duration']:.2f}s.{Colors.END}\n")
+
+    t_start = datetime.now()
+    print(f"{Colors.BOLD}[3/6]{Colors.END} Filtering by category and populating metadata...")
+    filtered = [t for t in torrents if category_allowed(t.get('category', ''))]
+    debug_log(f"[FILTER] {len(filtered)}/{len(torrents)} torrents pass the category filter")
+    for t in filtered:
+        t['_seeder_count'] = get_seeder_count(client, t)
+        # Surface the first real tracker's error message (e.g. "Torrent not
+        # registered with this tracker") so the report can show WHY it died.
+        first_msg = ''
+        for tr in t.get('_trackers') or []:
+            if not _domain_from_tracker_url(tr.get('url', '')):
+                continue
+            m = tr.get('msg') or ''
+            if m:
+                first_msg = m
+                break
+        t['_tracker_msg'] = first_msg
+    SCAN_STATS['meta_duration'] = (datetime.now() - t_start).total_seconds()
+    print(f"{Colors.GREEN}  ✓ {len(filtered)} torrent(s) pass category filter. Metadata in {SCAN_STATS['meta_duration']:.2f}s.{Colors.END}\n")
+
+    t_start = datetime.now()
+    print(f"{Colors.BOLD}[4/6]{Colors.END} Evaluating tracker status...")
+    now_ts = int(datetime.now().timestamp())
+    all_groups = {}
+    eligible_count = 0
+    for t in filtered:
+        d = {"original": t, "crossseeds": [], "name": t['name']}
+        d["_evaluation"] = evaluate_dead_trackers(d, now_ts)
+        if d["_evaluation"]["eligible"]:
+            eligible_count += 1
+        all_groups[t['hash']] = d
+    SCAN_STATS['group_duration'] = (datetime.now() - t_start).total_seconds()
+    print(f"{Colors.GREEN}  ✓ {eligible_count} torrent(s) eligible for deletion ({SCAN_STATS['group_duration']:.2f}s).{Colors.END}\n")
+
+    if MANUAL_MODE and eligible_count > 500:
+        print(f"{Colors.YELLOW}  ! Manual mode with {eligible_count} candidates — consider --html for triage and re-running with a narrower category filter.{Colors.END}\n")
+
+    _run_analyze_and_finalize(client, all_groups)
+
+
 def _run_analyze_and_finalize(client, all_groups):
     sorted_items = sorted(all_groups.items(), key=get_group_sort_key, reverse=(SORT_ORDER == 'desc'))
 
@@ -3286,6 +3378,9 @@ def main():
     print_header()
     print_config()
     client = QBittorrentClient(QBITTORRENT_HOST, QBITTORRENT_USER, QBITTORRENT_PASS, QBITTORRENT_API_KEY)
+    if TRACKER_ERROR_MODE:
+        scan_dead_trackers(client)
+        return
     if NO_HARD_LINKS_MODE:
         check_no_hard_links(client)
         return
