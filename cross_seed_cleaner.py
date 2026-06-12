@@ -3091,6 +3091,13 @@ def export_reports(sorted_items, eligible_ids):
                              external_path = t['_external_path']
                              break
 
+                    if TRACKER_ERROR_MODE:
+                        orig_type = 'DEAD'
+                    elif len(d['crossseeds']) == 0:
+                        orig_type = 'ORPHAN'
+                    else:
+                        orig_type = 'ORIGINAL'
+
                     for t in group_torrents:
                         add_date = format_timestamp(t.get('added_on', 0))
                         seed_time = format_duration(t.get('seeding_time', 0), "d:hh:mm")
@@ -3098,7 +3105,7 @@ def export_reports(sorted_items, eligible_ids):
                         writer.writerow({
                             'Group ID': idx,
                             'Status': status,
-                            'Type': 'ORIGINAL' if t == d['original'] else 'CROSS-SEED',
+                            'Type': orig_type if t == d['original'] else 'CROSS-SEED',
                             'Name': t.get('name', ''),
                             'Size': format_size_smart(t.get('size', 0)),
                             'Tracker': t.get('_tracker_domain') or "Unknown",
