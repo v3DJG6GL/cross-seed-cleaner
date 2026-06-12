@@ -63,6 +63,11 @@ def _validate_config():
             f"ERROR: TRACKER_ERROR_GRACE_MINUTES={TRACKER_ERROR_GRACE_MINUTES!r} must be >= 0.\n"
         )
         sys.exit(1)
+    if TRACKER_ERROR_MIN_INACTIVITY_DAYS < 0:
+        sys.stderr.write(
+            f"ERROR: TRACKER_ERROR_MIN_INACTIVITY_DAYS={TRACKER_ERROR_MIN_INACTIVITY_DAYS!r} must be >= 0.\n"
+        )
+        sys.exit(1)
     if TRACKER_ERROR_MODE and NO_HARD_LINKS_MODE:
         sys.stderr.write(
             "ERROR: TRACKER_ERROR_MODE and NO_HARD_LINKS_MODE are mutually exclusive — pick one.\n"
@@ -109,6 +114,7 @@ def get_config():
     env_tracker_error_mode = str2bool(os.environ.get("TRACKER_ERROR_MODE", str(TRACKER_ERROR_MODE)))
     env_dead_statuses = os.environ.get("DEAD_TRACKER_STATUSES", DEAD_TRACKER_STATUSES)
     env_grace_minutes = int(os.environ.get("TRACKER_ERROR_GRACE_MINUTES", TRACKER_ERROR_GRACE_MINUTES))
+    env_min_inactivity_days = float(os.environ.get("TRACKER_ERROR_MIN_INACTIVITY_DAYS", TRACKER_ERROR_MIN_INACTIVITY_DAYS))
 
     parser = argparse.ArgumentParser(description='Cross-Seed Cleaner: Deduplicate and cleanup torrents.')
     parser.add_argument('--host', default=env_host, help='qBittorrent Host')
@@ -132,6 +138,7 @@ def get_config():
     parser.add_argument('--tracker-error-mode', action='store_true', default=env_tracker_error_mode, help='Enable mode that selects torrents whose every real tracker reports an error')
     parser.add_argument('--dead-tracker-statuses', type=str, default=env_dead_statuses, help='Comma-separated tracker status codes that count as "dead" (default "4,5,6"). Valid: 0,1,2,4,5,6')
     parser.add_argument('--tracker-error-grace-minutes', type=int, default=env_grace_minutes, help='Skip torrents added less than this many minutes ago in tracker-error mode (default 60; 0 disables)')
+    parser.add_argument('--tracker-error-min-inactivity-days', type=float, default=env_min_inactivity_days, help='Skip torrents whose last peer activity is less than this many days ago in tracker-error mode (default 7; 0 disables)')
 
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--dry-run', action='store_true', help='Force Dry Run')
@@ -283,6 +290,7 @@ EXTERNAL_MEDIA_PATHS = smart_split_paths(ARGS.external_media_paths) if ARGS.exte
 TRACKER_ERROR_MODE = ARGS.tracker_error_mode
 DEAD_TRACKER_STATUSES = _parse_dead_statuses(ARGS.dead_tracker_statuses)
 TRACKER_ERROR_GRACE_MINUTES = ARGS.tracker_error_grace_minutes
+TRACKER_ERROR_MIN_INACTIVITY_DAYS = ARGS.tracker_error_min_inactivity_days
 
 CATEGORY_FILTER_MODE = os.environ.get("CATEGORY_FILTER_MODE", CATEGORY_FILTER_MODE)
 SORT_BY = os.environ.get("SORT_BY", SORT_BY)
@@ -990,6 +998,10 @@ def evaluate_dead_trackers(d, now_ts):
             reasons.append("NO_ADDED_TIME")
         elif TRACKER_ERROR_GRACE_MINUTES > 0 and (now_ts - added) < TRACKER_ERROR_GRACE_MINUTES * 60:
             reasons.append("TRACKER_GRACE")
+        last_act = int(t.get('last_activity', 0) or 0)
+        if (TRACKER_ERROR_MIN_INACTIVITY_DAYS > 0 and last_act > 0
+                and (now_ts - last_act) < TRACKER_ERROR_MIN_INACTIVITY_DAYS * 86400):
+            reasons.append("RECENT_ACTIVITY")
         if any(bool(tr.get('updating')) for tr in real):
             reasons.append("TRACKER_UPDATING")
         if any(int(tr.get('status', 0) or 0) not in DEAD_TRACKER_STATUSES for tr in real):
@@ -1016,6 +1028,7 @@ def _reason_text(code):
     if code == "TRACKER_UPDATING": return "A tracker is currently updating — outcome unknown"
     if code == "NO_REAL_TRACKERS": return "No real trackers (only DHT/PeX/LSD); unsafe to declare dead"
     if code == "NO_ADDED_TIME": return "Torrent has no added_on timestamp; cannot apply grace period safely"
+    if code == "RECENT_ACTIVITY": return f"Recent peer activity (within last {TRACKER_ERROR_MIN_INACTIVITY_DAYS} days) — DHT/PeX may still be feeding peers"
     return code
 
 
@@ -1032,6 +1045,7 @@ _REASON_CLI_COLOR = {
     "TRACKER_UPDATING": Colors.BLUE,
     "NO_REAL_TRACKERS": Colors.ORANGE,
     "NO_ADDED_TIME": Colors.ORANGE,
+    "RECENT_ACTIVITY": Colors.GREEN,
 }
 
 _REASON_HTML_ICON = {
@@ -1047,6 +1061,7 @@ _REASON_HTML_ICON = {
     "TRACKER_UPDATING": "🔄",
     "NO_REAL_TRACKERS": "🚫",
     "NO_ADDED_TIME": "❓",
+    "RECENT_ACTIVITY": "📡",
 }
 
 _SORT_KEY_MAP = {
@@ -1135,6 +1150,7 @@ def print_config():
         [bold("Tracker Error Mode"), c(TRACKER_ERROR_MODE)],
         [bold("Dead Statuses"), ','.join(str(s) for s in sorted(DEAD_TRACKER_STATUSES))],
         [bold("Tracker Error Grace"), f"{TRACKER_ERROR_GRACE_MINUTES} min"],
+        [bold("Min Inactivity"), f"{TRACKER_ERROR_MIN_INACTIVITY_DAYS} days"],
         [bold("HTML Export"), c(HTML_EXPORT or "Disabled")],
         [bold("CSV Export"), c(CSV_EXPORT or "Disabled")],
     ]
@@ -1506,6 +1522,7 @@ def export_reports(sorted_items, eligible_ids):
         f"<b>Tracker Error Mode:</b> {TRACKER_ERROR_MODE}",
         f"<b>Dead Statuses:</b> {','.join(str(s) for s in sorted(DEAD_TRACKER_STATUSES))}",
         f"<b>Tracker Error Grace:</b> {TRACKER_ERROR_GRACE_MINUTES} min",
+        f"<b>Min Inactivity:</b> {TRACKER_ERROR_MIN_INACTIVITY_DAYS} days",
         f"<b>HTML Export:</b> {html_out_str}",
         f"<b>CSV Export:</b> {csv_out_str}",
         f"<b>External Media Paths:</b> {external_media_paths_html}",
@@ -1926,6 +1943,7 @@ def export_reports(sorted_items, eligible_ids):
                                 <label><input type="checkbox" value="TRACKER_UPDATING" data-filter-reason>🔄 Tracker updating</label>
                                 <label><input type="checkbox" value="NO_REAL_TRACKERS" data-filter-reason>🚫 No real trackers</label>
                                 <label><input type="checkbox" value="NO_ADDED_TIME" data-filter-reason>❓ No added_on timestamp</label>
+                                <label><input type="checkbox" value="RECENT_ACTIVITY" data-filter-reason>📡 Recent peer activity</label>
                             </div>
                         </div>
                         <div class="fcell" data-col="1"></div>

@@ -14,11 +14,14 @@ def _tr(url='http://t/announce', status=5, updating=False, msg=''):
     return {'url': url, 'status': status, 'updating': updating, 'msg': msg}
 
 
-def _torrent(h='h1', trackers=None, category='', added=OLD, **extra):
+def _torrent(h='h1', trackers=None, category='', added=OLD, last_activity=0, **extra):
     """Build a torrent dict with `_trackers` stashed (as the production
-    fetch path does)."""
+    fetch path does). last_activity defaults to 0 (no activity recorded)
+    so the recent-activity check defaults to "skip" — tests that need it
+    pass last_activity explicitly."""
     d = {
         'hash': h, 'name': h, 'category': category, 'added_on': added,
+        'last_activity': last_activity,
         'size': 100, 'num_complete': 0, 'num_incomplete': 0, 'tracker': '',
         '_trackers': trackers or [],
     }
@@ -136,6 +139,54 @@ def test_reasons_combine_when_multiple_apply(csc):
     r = _eval(csc, t)
     assert r['eligible'] is False
     assert set(r['reasons']) == {'TRACKER_GRACE', 'TRACKER_ALIVE'}
+
+
+# ─── recent-activity guardrail ───────────────────────────────────────────────
+
+def test_excluded_when_recent_activity(csc):
+    """Default min-inactivity is 7 days. A torrent with peers swapping
+    data 1 day ago is protected — DHT/PeX may be keeping it alive even
+    if the tracker is dead."""
+    t = _torrent(trackers=[_tr(status=5)], last_activity=NOW - 24 * 3600)
+    r = _eval(csc, t)
+    assert r['eligible'] is False
+    assert 'RECENT_ACTIVITY' in r['reasons']
+
+
+def test_eligible_when_last_activity_is_old(csc):
+    """Activity 30 days ago — well past the 7-day default. Eligible."""
+    t = _torrent(trackers=[_tr(status=5)], last_activity=NOW - 30 * 24 * 3600)
+    r = _eval(csc, t)
+    assert r['eligible'] is True
+
+
+def test_eligible_when_last_activity_zero(csc):
+    """last_activity = 0 means "never seen any peers" — qBittorrent emits
+    this for torrents that have never exchanged data. The inactivity
+    check skips, and the added_on grace covers freshness instead."""
+    t = _torrent(trackers=[_tr(status=5)], last_activity=0)
+    r = _eval(csc, t)
+    assert r['eligible'] is True
+
+
+def test_inactivity_check_disabled_when_zero_days(csc):
+    """Setting TRACKER_ERROR_MIN_INACTIVITY_DAYS=0 turns the check off
+    entirely — even a torrent with activity right now becomes eligible
+    purely on tracker state."""
+    reconfigure(csc, TRACKER_ERROR_MIN_INACTIVITY_DAYS=0)
+    t = _torrent(trackers=[_tr(status=5)], last_activity=NOW - 60)
+    r = _eval(csc, t)
+    assert r['eligible'] is True
+
+
+def test_inactivity_threshold_configurable(csc):
+    """Lower the threshold to 1 day: a torrent inactive for 2 days is
+    now eligible; one inactive for 12h is still protected."""
+    reconfigure(csc, TRACKER_ERROR_MIN_INACTIVITY_DAYS=1)
+    eligible_t = _torrent(trackers=[_tr(status=5)], last_activity=NOW - 2 * 24 * 3600)
+    assert _eval(csc, eligible_t)['eligible'] is True
+    protected_t = _torrent(trackers=[_tr(status=5)], last_activity=NOW - 12 * 3600)
+    assert 'RECENT_ACTIVITY' in _eval(csc, protected_t)['reasons']
 
 
 # ─── scan_dead_trackers: pipeline integration ────────────────────────────────

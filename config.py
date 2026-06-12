@@ -86,6 +86,15 @@ DEAD_TRACKER_STATUSES = "4,5,6"
 # look dead briefly). 60 min comfortably covers both. Set to 0 to disable.
 TRACKER_ERROR_GRACE_MINUTES = 60
 
+# Skip torrents whose last peer activity (qBittorrent's "Last Activity"
+# column / last_activity field) is more recent than this many days. The
+# field updates on ANY peer data exchange — including DHT / PeX / LSD —
+# so this catches public torrents that are healthy via DHT even when
+# every tracker is dead, and protects against tracker outages that span
+# a few days but where peers are still being found through other means.
+# Defaults to 7 days. Set to 0 to disable the check.
+TRACKER_ERROR_MIN_INACTIVITY_DAYS = 7
+
 
 # ─── NO-HARD-LINKS MODE ────────────────────────────────────────────────────
 # When enabled, the script finds torrents in selected qBittorrent categories that have NO hard-links.
