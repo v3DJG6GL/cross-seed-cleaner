@@ -6,7 +6,7 @@ from conftest import FakeClient, reconfigure
 
 
 NOW = 1_700_000_000          # arbitrary "now" used in unit tests
-OLD = NOW - 30 * 24 * 3600   # 30 days ago — safely past the default grace
+OLD = NOW - 30 * 24 * 3600   # 30 days ago — safely past the default min-age window
 
 
 def _tr(url='http://t/announce', status=5, updating=False, msg=''):
@@ -78,17 +78,17 @@ def test_excluded_when_only_sticky_trackers(csc):
     assert r['reasons'] == ['NO_REAL_TRACKERS']
 
 
-def test_excluded_inside_grace_window(csc):
-    """A torrent added 5 minutes ago is well within the default 60-min grace."""
+def test_excluded_when_added_recently(csc):
+    """A torrent added 5 minutes ago is well within the default 60-min min-age."""
     t = _torrent(trackers=[_tr(status=5)], added=NOW - 5 * 60)
     r = _eval(csc, t)
     assert r['eligible'] is False
-    assert 'TRACKER_GRACE' in r['reasons']
+    assert 'RECENTLY_ADDED' in r['reasons']
 
 
-def test_grace_can_be_disabled(csc):
-    """TRACKER_ERROR_GRACE_MINUTES = 0 disables the grace check entirely."""
-    reconfigure(csc, TRACKER_ERROR_GRACE_MINUTES=0)
+def test_min_age_can_be_disabled(csc):
+    """TRACKER_ERROR_MIN_AGE_MINUTES = 0 disables the min-age check entirely."""
+    reconfigure(csc, TRACKER_ERROR_MIN_AGE_MINUTES=0)
     t = _torrent(trackers=[_tr(status=5)], added=NOW - 5)   # added 5 seconds ago
     r = _eval(csc, t)
     assert r['eligible'] is True
@@ -131,14 +131,14 @@ def test_configurable_dead_set_inclusive(csc):
 
 
 def test_reasons_combine_when_multiple_apply(csc):
-    """Both grace AND tracker-alive can fire on the same torrent."""
+    """Both min-age AND tracker-alive can fire on the same torrent."""
     t = _torrent(
         trackers=[_tr(status=5), _tr(url='http://b/announce', status=2)],
         added=NOW - 60,
     )
     r = _eval(csc, t)
     assert r['eligible'] is False
-    assert set(r['reasons']) == {'TRACKER_GRACE', 'TRACKER_ALIVE'}
+    assert set(r['reasons']) == {'RECENTLY_ADDED', 'TRACKER_ALIVE'}
 
 
 # ─── recent-activity guardrail ───────────────────────────────────────────────
@@ -163,7 +163,7 @@ def test_eligible_when_last_activity_is_old(csc):
 def test_eligible_when_last_activity_zero(csc):
     """last_activity = 0 means "never seen any peers" — qBittorrent emits
     this for torrents that have never exchanged data. The inactivity
-    check skips, and the added_on grace covers freshness instead."""
+    check skips, and the added_on min-age covers freshness instead."""
     t = _torrent(trackers=[_tr(status=5)], last_activity=0)
     r = _eval(csc, t)
     assert r['eligible'] is True
@@ -203,7 +203,7 @@ def _setup_scan(csc, monkeypatch, torrents, trackers_by_hash, **client_kwargs):
 
 def test_scan_passes_dead_to_finalize(csc, monkeypatch):
     """End-to-end: a torrent with all dead trackers reaches finalize as eligible."""
-    # added_on must be old enough to clear the grace window — use a real recent past
+    # added_on must be old enough to clear the min-age window — use a real recent past
     old = int(time.time()) - 24 * 3600
     tor = {'hash': 'h1', 'name': 'dead-one', 'category': '', 'added_on': old,
            'size': 100, 'num_complete': 0, 'num_incomplete': 0, 'tracker': ''}

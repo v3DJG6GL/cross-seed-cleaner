@@ -79,12 +79,13 @@ TRACKER_ERROR_MODE = False
 # never a real tracker — leave it out. Defaults to {4, 5, 6}.
 DEAD_TRACKER_STATUSES = "4,5,6"
 
-# Skip torrents added less than this many minutes ago. Protects against
-# deleting freshly-added torrents that simply haven't announced yet (right
-# after qBittorrent starts up, every tracker is "Not contacted yet" for a
-# bit; transient tracker outages and DNS TTLs can also make every tracker
-# look dead briefly). 60 min comfortably covers both. Set to 0 to disable.
-TRACKER_ERROR_GRACE_MINUTES = 60
+# Minimum age (in minutes since added) before a torrent is eligible.
+# Protects against deleting freshly-added torrents that simply haven't
+# announced yet — right after qBittorrent starts up, every tracker is
+# "Not contacted yet" for a bit, and transient tracker outages plus DNS
+# TTLs can also make every tracker look dead briefly. 60 min comfortably
+# covers both. Set to 0 to disable.
+TRACKER_ERROR_MIN_AGE_MINUTES = 60
 
 # Skip torrents whose last peer activity (qBittorrent's "Last Activity"
 # column / last_activity field) is more recent than this many days. The
