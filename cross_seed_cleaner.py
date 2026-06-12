@@ -1011,6 +1011,11 @@ def _reason_text(code):
     if code == "LOW_TIME": return f"Short seed time (< {MIN_ORIGINAL_SEED_TIME_DAYS} days)"
     if code == "TOO_MANY": return f"Large group (≥ {MAX_TORRENTS_IN_GROUP} items)"
     if code == "CATEGORY_FILTER": return "Category not in cleanup allowlist"
+    if code == "TRACKER_ALIVE": return "At least one real tracker is still working or not yet contacted"
+    if code == "TRACKER_GRACE": return f"Within grace window (added < {TRACKER_ERROR_GRACE_MINUTES} min ago)"
+    if code == "TRACKER_UPDATING": return "A tracker is currently updating — outcome unknown"
+    if code == "NO_REAL_TRACKERS": return "No real trackers (only DHT/PeX/LSD); unsafe to declare dead"
+    if code == "NO_ADDED_TIME": return "Torrent has no added_on timestamp; cannot apply grace period safely"
     return code
 
 
@@ -1022,6 +1027,11 @@ _REASON_CLI_COLOR = {
     "LOW_TIME": Colors.RED,
     "TOO_MANY": Colors.ORANGE,
     "CATEGORY_FILTER": Colors.ORANGE,
+    "TRACKER_ALIVE": Colors.GREEN,
+    "TRACKER_GRACE": Colors.YELLOW,
+    "TRACKER_UPDATING": Colors.BLUE,
+    "NO_REAL_TRACKERS": Colors.ORANGE,
+    "NO_ADDED_TIME": Colors.ORANGE,
 }
 
 _REASON_HTML_ICON = {
@@ -1032,6 +1042,11 @@ _REASON_HTML_ICON = {
     "LOW_TIME": "⏳",
     "TOO_MANY": "📦",
     "CATEGORY_FILTER": "🏷️",
+    "TRACKER_ALIVE": "✅",
+    "TRACKER_GRACE": "⏰",
+    "TRACKER_UPDATING": "🔄",
+    "NO_REAL_TRACKERS": "🚫",
+    "NO_ADDED_TIME": "❓",
 }
 
 _SORT_KEY_MAP = {
@@ -1179,7 +1194,9 @@ def print_group(client, d, num, total):
 
     for t in sort_torrents(orig, xs, SORT_BY, SORT_ORDER):
         if '_tracker_cache' not in t:
-            t['_tracker_cache'] = get_tracker_name(client, t)
+            base = get_tracker_name(client, t)
+            msg = t.get('_tracker_msg') or ''
+            t['_tracker_cache'] = f"{base} ({msg[:18]})" if msg else base
         is_orig = (t == orig)
         seeders = t.get('_seeder_count', 0)
         size = t.get('size', 0)
@@ -1197,7 +1214,12 @@ def print_group(client, d, num, total):
         name_str = t.get('name', '')[:105]
 
         if is_orig:
-            type_label = f"{Colors.BOLD}[ORPHAN]{Colors.END}" if NO_HARD_LINKS_MODE else f"{Colors.BOLD}[ORIGINAL]{Colors.END}"
+            if TRACKER_ERROR_MODE:
+                type_label = f"{Colors.BOLD}{Colors.RED}[DEAD]{Colors.END}"
+            elif NO_HARD_LINKS_MODE:
+                type_label = f"{Colors.BOLD}[ORPHAN]{Colors.END}"
+            else:
+                type_label = f"{Colors.BOLD}[ORIGINAL]{Colors.END}"
         else:
             type_label = f"{Colors.DIM}[CROSS]{Colors.END}"
         rows.append([
@@ -1431,7 +1453,12 @@ def export_reports(sorted_items, eligible_ids):
     ts_str = ts_now.strftime("%Y.%m.%d_%H.%M.%S")
     ts_display = ts_now.strftime("%Y.%m.%d %H:%M:%S")
 
-    mode_str = "NO HARD LINKS" if NO_HARD_LINKS_MODE else "STANDARD"
+    if TRACKER_ERROR_MODE:
+        mode_str = "DEAD TRACKERS"
+    elif NO_HARD_LINKS_MODE:
+        mode_str = "NO HARD LINKS"
+    else:
+        mode_str = "STANDARD"
     dry_run_str = "DRY RUN" if DRY_RUN else "LIVE DELETION"
     dry_run_class = "dry-run" if DRY_RUN else "live-mode"
 
@@ -1443,7 +1470,12 @@ def export_reports(sorted_items, eligible_ids):
     grad_keep = f"linear-gradient(90deg, rgba(76, 175, 80, 0.15) {keep_pct}%, transparent {keep_pct}%)"
     grad_torrents_del = f"linear-gradient(90deg, rgba(255, 82, 82, 0.15) {del_torrents_pct}%, transparent {del_torrents_pct}%)"
     grad_torrents_keep = f"linear-gradient(90deg, rgba(76, 175, 80, 0.15) {keep_torrents_pct}%, transparent {keep_torrents_pct}%)"
-    filtering_orphans_grouping_torrents_label = "Filtering for orphans" if NO_HARD_LINKS_MODE else "Grouping torrents & hardlinks"
+    if TRACKER_ERROR_MODE:
+        filtering_orphans_grouping_torrents_label = "Evaluating tracker status"
+    elif NO_HARD_LINKS_MODE:
+        filtering_orphans_grouping_torrents_label = "Filtering for orphans"
+    else:
+        filtering_orphans_grouping_torrents_label = "Grouping torrents & hardlinks"
 
     unreliable_str = _h(', '.join(UNRELIABLE_TRACKERS)) if UNRELIABLE_TRACKERS else 'None'
     no_hard_links_cat = _h(', '.join(NO_HARD_LINKS_CATEGORIES)) if NO_HARD_LINKS_CATEGORIES else 'None'
@@ -1697,6 +1729,7 @@ def export_reports(sorted_items, eligible_ids):
         .type-badge { padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: bold; }
         .type-orig { color: #bbdefb; }
         .type-orphan { color: #fff9c4; }
+        .type-dead { color: #ff8a80; }
         .type-cross { color: #bdbdbd; }
         .name-cell { color: #fff; }
         .path-cell { color: #666; font-family: monospace; font-size: 11px; }
@@ -1882,6 +1915,11 @@ def export_reports(sorted_items, eligible_ids):
                                 <label><input type="checkbox" value="EXTERNAL_LINK" data-filter-reason>🔗 External hardlink</label>
                                 <label><input type="checkbox" value="PATH_ERROR" data-filter-reason>⚠️ Path error</label>
                                 <label><input type="checkbox" value="CATEGORY_FILTER" data-filter-reason>🏷️ Category filter</label>
+                                <label><input type="checkbox" value="TRACKER_ALIVE" data-filter-reason>✅ Tracker still alive</label>
+                                <label><input type="checkbox" value="TRACKER_GRACE" data-filter-reason>⏰ In grace window</label>
+                                <label><input type="checkbox" value="TRACKER_UPDATING" data-filter-reason>🔄 Tracker updating</label>
+                                <label><input type="checkbox" value="NO_REAL_TRACKERS" data-filter-reason>🚫 No real trackers</label>
+                                <label><input type="checkbox" value="NO_ADDED_TIME" data-filter-reason>❓ No added_on timestamp</label>
                             </div>
                         </div>
                         <div class="fcell" data-col="1"></div>
@@ -2048,11 +2086,12 @@ def export_reports(sorted_items, eligible_ids):
         for i, t in enumerate(torrents_to_list):
             is_orig = (i == 0)
             if is_orig:
-                type_badge = (
-                    '<span class="type-badge type-orphan" style="border:1px solid #555;">ORPHAN</span>'
-                    if len(d['crossseeds']) == 0
-                    else '<span class="type-badge type-orig" style="border:1px solid #555;">ORIGINAL</span>'
-                )
+                if TRACKER_ERROR_MODE:
+                    type_badge = '<span class="type-badge type-dead" style="border:1px solid #555;">DEAD</span>'
+                elif len(d['crossseeds']) == 0:
+                    type_badge = '<span class="type-badge type-orphan" style="border:1px solid #555;">ORPHAN</span>'
+                else:
+                    type_badge = '<span class="type-badge type-orig" style="border:1px solid #555;">ORIGINAL</span>'
             else:
                 type_badge = '<span class="type-badge type-cross" style="border:1px solid #555;">CROSS</span>'
 
@@ -2082,8 +2121,21 @@ def export_reports(sorted_items, eligible_ids):
             t_path = t.get('content_path', '')
             name_h = _h(t_name)
             path_h = _h(t_path)
-            type_text = ('ORPHAN' if (is_orig and len(d['crossseeds']) == 0)
-                         else 'ORIGINAL' if is_orig else 'CROSS')
+            if is_orig:
+                if TRACKER_ERROR_MODE:
+                    type_text = 'DEAD'
+                elif len(d['crossseeds']) == 0:
+                    type_text = 'ORPHAN'
+                else:
+                    type_text = 'ORIGINAL'
+            else:
+                type_text = 'CROSS'
+            tracker_msg = t.get('_tracker_msg') or ''
+            tracker_cell = (
+                f'<span class="rejection-icon" data-tip="{_h(tracker_msg)}">{_h(tracker_clean)}</span>'
+                if tracker_msg
+                else _h(tracker_clean)
+            )
             sk = _sort_attrs(
                 status_text, type_text, cur_seeds, t.get('ratio', 0),
                 t_size, t.get('uploaded', 0), t_time, t.get('added_on', 0),
@@ -2099,7 +2151,7 @@ def export_reports(sorted_items, eligible_ids):
                 <div class="cell">{format_size_smart(t.get('uploaded', 0))}</div>
                 <div class="cell"><span class="{c_time}">{format_duration(t_time)}</span></div>
                 <div class="cell" style="font-size:11px; color:#888;">{added_ts}</div>
-                <div class="cell">{_h(tracker_clean)}</div>
+                <div class="cell">{tracker_cell}</div>
                 <div class="cell"><span class="{c_cat}">{_h(t_cat)}</span></div>
                 <div class="cell name-cell">{name_h}</div>
                 <div class="cell path-cell">{path_h}</div>
@@ -3000,13 +3052,17 @@ def export_reports(sorted_items, eligible_ids):
         print(f"{Colors.BOLD}[INFO]{Colors.END} Exporting CSV report to {csv_filename}...")
         try:
             with open(csv_filename, 'w', newline='', encoding='utf-8') as csvfile:
-                fieldnames = ['Group ID', 'Status', 'Type', 'Name', 'Size', 'Tracker', 'Category', 'Added', 'Seeding Time', 'Ratio', 'Seeders', 'Path']
+                fieldnames = ['Group ID', 'Status', 'Type', 'Name', 'Size', 'Tracker', 'Category', 'Added', 'Seeding Time', 'Ratio', 'Seeders', 'Reasons', 'Path']
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                 writer.writeheader()
 
                 for idx, (h, d) in enumerate(sorted_items, 1):
                     is_del_group = idx in eligible_ids
                     status = "DELETE" if is_del_group else "KEEP"
+
+                    if '_evaluation' not in d:
+                        d['_evaluation'] = evaluate_group(d)
+                    reasons_str = ','.join(d['_evaluation']['reasons'])
 
                     group_torrents = [d['original']] + d['crossseeds']
 
@@ -3032,6 +3088,7 @@ def export_reports(sorted_items, eligible_ids):
                             'Seeding Time': seed_time,
                             'Ratio': f"{t.get('ratio', 0):.2f}",
                             'Seeders': t.get('_seeder_count', 0),
+                            'Reasons': reasons_str,
                             'Path': t.get('content_path', '')
                         })
 
@@ -3048,6 +3105,7 @@ def export_reports(sorted_items, eligible_ids):
                             'Seeding Time': '',
                             'Ratio': '',
                             'Seeders': '',
+                            'Reasons': reasons_str,
                             'Path': external_path
                         })
 
