@@ -249,6 +249,43 @@ def test_category_blocklist_protects_dead_torrent(csc, monkeypatch):
     assert 'CATEGORY_FILTER' in cap['h1']['_evaluation']['reasons']
 
 
+def test_ignore_category_filter_flag_makes_blocked_torrent_eligible(csc, monkeypatch):
+    """--tracker-error-mode-ignore-category-filter bypasses the blocklist
+    (and allowlist) in tracker-error mode, so a dead torrent in a
+    blocked category becomes eligible. Other modes are unaffected."""
+    reconfigure(csc,
+                CATEGORY_FILTER_MODE='block',
+                CATEGORY_BLOCKLIST=['protected'],
+                TRACKER_ERROR_MODE_IGNORE_CATEGORY_FILTER=True)
+    old = int(time.time()) - 2 * 24 * 3600
+    tor = {'hash': 'h1', 'name': 'dead-in-blocked-cat', 'category': 'protected',
+           'added_on': old, 'size': 100, 'num_complete': 0, 'num_incomplete': 0,
+           'tracker': ''}
+    fake, cap = _setup_scan(csc, monkeypatch, [tor],
+                            {'h1': [_tr(status=5)]})
+    csc.scan_dead_trackers(fake)
+    assert cap['h1']['_evaluation']['eligible'] is True
+    assert 'CATEGORY_FILTER' not in cap['h1']['_evaluation']['reasons']
+
+
+def test_ignore_category_filter_flag_also_bypasses_allowlist(csc, monkeypatch):
+    """Symmetric: an allowlist that would normally exclude the torrent's
+    category is also bypassed when the ignore flag is on."""
+    reconfigure(csc,
+                CATEGORY_FILTER_MODE='allow',
+                CATEGORY_ALLOWLIST=['movies'],
+                TRACKER_ERROR_MODE_IGNORE_CATEGORY_FILTER=True)
+    old = int(time.time()) - 2 * 24 * 3600
+    tor = {'hash': 'h1', 'name': 'dead-not-on-allowlist', 'category': 'random',
+           'added_on': old, 'size': 100, 'num_complete': 0, 'num_incomplete': 0,
+           'tracker': ''}
+    fake, cap = _setup_scan(csc, monkeypatch, [tor],
+                            {'h1': [_tr(status=5)]})
+    csc.scan_dead_trackers(fake)
+    assert cap['h1']['_evaluation']['eligible'] is True
+    assert 'CATEGORY_FILTER' not in cap['h1']['_evaluation']['reasons']
+
+
 def test_bulk_path_used_when_supported(csc, monkeypatch):
     old = int(time.time()) - 2 * 24 * 3600   # 2 days ago — past the 1-day default min-age
     tors = [{'hash': f'h{i}', 'name': f'h{i}', 'category': '', 'added_on': old,

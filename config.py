@@ -97,6 +97,14 @@ TRACKER_ERROR_MIN_AGE_DAYS = 1
 # Defaults to 30 days (conservative). Set to 0 to disable the check.
 TRACKER_ERROR_MIN_INACTIVITY_DAYS = 30
 
+# When True, tracker-error mode ignores CATEGORY_FILTER_MODE / ALLOWLIST /
+# BLOCKLIST and scans every torrent regardless of category. Useful when you
+# want to find dead torrents anywhere in your library and don't want your
+# allowlist / blocklist (designed for the standard cross-seed cleanup) to
+# restrict the sweep. Defaults to False — the safe choice is to honour the
+# user's hands-off categories. Only affects tracker-error mode.
+TRACKER_ERROR_MODE_IGNORE_CATEGORY_FILTER = False
+
 
 # ─── NO-HARD-LINKS MODE ────────────────────────────────────────────────────
 # When enabled, the script finds torrents in selected qBittorrent categories that have NO hard-links.

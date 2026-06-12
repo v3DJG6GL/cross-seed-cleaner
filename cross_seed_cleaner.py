@@ -115,6 +115,7 @@ def get_config():
     env_dead_statuses = os.environ.get("DEAD_TRACKER_STATUSES", DEAD_TRACKER_STATUSES)
     env_min_age_days = float(os.environ.get("TRACKER_ERROR_MIN_AGE_DAYS", TRACKER_ERROR_MIN_AGE_DAYS))
     env_min_inactivity_days = float(os.environ.get("TRACKER_ERROR_MIN_INACTIVITY_DAYS", TRACKER_ERROR_MIN_INACTIVITY_DAYS))
+    env_ignore_category_filter = str2bool(os.environ.get("TRACKER_ERROR_MODE_IGNORE_CATEGORY_FILTER", str(TRACKER_ERROR_MODE_IGNORE_CATEGORY_FILTER)))
 
     parser = argparse.ArgumentParser(description='Cross-Seed Cleaner: Deduplicate and cleanup torrents.')
     parser.add_argument('--host', default=env_host, help='qBittorrent Host')
@@ -139,6 +140,7 @@ def get_config():
     parser.add_argument('--dead-tracker-statuses', type=str, default=env_dead_statuses, help='Comma-separated tracker status codes that count as "dead" (default "4,5,6"). Valid: 0,1,2,4,5,6')
     parser.add_argument('--tracker-error-min-age-days', type=float, default=env_min_age_days, help='Min days since added before a torrent is eligible in tracker-error mode. Decimals supported (e.g. 0.0417 = 1h). Default 1; 0 disables.')
     parser.add_argument('--tracker-error-min-inactivity-days', type=float, default=env_min_inactivity_days, help='Skip torrents whose last peer activity is less than this many days ago in tracker-error mode (default 30; 0 disables)')
+    parser.add_argument('--tracker-error-mode-ignore-category-filter', action=argparse.BooleanOptionalAction, default=env_ignore_category_filter, help='In tracker-error mode, ignore CATEGORY_FILTER_MODE / ALLOWLIST / BLOCKLIST and scan every torrent regardless of category')
 
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--dry-run', action='store_true', help='Force Dry Run')
@@ -285,6 +287,7 @@ TRACKER_ERROR_MODE = ARGS.tracker_error_mode
 DEAD_TRACKER_STATUSES = _parse_dead_statuses(ARGS.dead_tracker_statuses)
 TRACKER_ERROR_MIN_AGE_DAYS = ARGS.tracker_error_min_age_days
 TRACKER_ERROR_MIN_INACTIVITY_DAYS = ARGS.tracker_error_min_inactivity_days
+TRACKER_ERROR_MODE_IGNORE_CATEGORY_FILTER = ARGS.tracker_error_mode_ignore_category_filter
 
 CATEGORY_FILTER_MODE = os.environ.get("CATEGORY_FILTER_MODE", CATEGORY_FILTER_MODE)
 SORT_BY = os.environ.get("SORT_BY", SORT_BY)
@@ -988,7 +991,7 @@ def evaluate_dead_trackers(d, now_ts):
     real = [tr for tr in trackers if _domain_from_tracker_url(tr.get('url', ''))]
 
     reasons = []
-    if not category_allowed(t.get('category', '')):
+    if not TRACKER_ERROR_MODE_IGNORE_CATEGORY_FILTER and not category_allowed(t.get('category', '')):
         reasons.append("CATEGORY_FILTER")
     if not real:
         reasons.append("NO_REAL_TRACKERS")
@@ -1151,6 +1154,7 @@ def print_config():
         [bold("Dead Statuses"), ','.join(str(s) for s in sorted(DEAD_TRACKER_STATUSES))],
         [bold("Min Age"), f"{TRACKER_ERROR_MIN_AGE_DAYS} days"],
         [bold("Min Inactivity"), f"{TRACKER_ERROR_MIN_INACTIVITY_DAYS} days"],
+        [bold("Ignore Cat Filter"), c(TRACKER_ERROR_MODE_IGNORE_CATEGORY_FILTER)],
         [bold("HTML Export"), c(HTML_EXPORT or "Disabled")],
         [bold("CSV Export"), c(CSV_EXPORT or "Disabled")],
     ]
@@ -1523,6 +1527,7 @@ def export_reports(sorted_items, eligible_ids):
         f"<b>Dead Statuses:</b> {','.join(str(s) for s in sorted(DEAD_TRACKER_STATUSES))}",
         f"<b>Min Age:</b> {TRACKER_ERROR_MIN_AGE_DAYS} days",
         f"<b>Min Inactivity:</b> {TRACKER_ERROR_MIN_INACTIVITY_DAYS} days",
+        f"<b>Ignore Cat Filter:</b> {TRACKER_ERROR_MODE_IGNORE_CATEGORY_FILTER}",
         f"<b>HTML Export:</b> {html_out_str}",
         f"<b>CSV Export:</b> {csv_out_str}",
         f"<b>External Media Paths:</b> {external_media_paths_html}",
