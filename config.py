@@ -60,6 +60,33 @@ DEBUG_MODE = False
 DRY_RUN = True
 
 
+# ─── TRACKER-ERROR MODE ────────────────────────────────────────────────────
+# When enabled, the script scans every torrent and selects for deletion any
+# whose REAL trackers (excluding the sticky DHT/PeX/LSD pseudo-entries) all
+# report an error state — i.e. torrents the tracker has removed, that
+# qBittorrent's main view still shows as "Seeding". Standard size/seeder/
+# seed-time/group-size limits are bypassed in this mode (they don't apply to
+# dead torrents). Category allow/block list is still honored.
+TRACKER_ERROR_MODE = False
+
+# Which tracker status codes count as "dead". See the qBittorrent WebAPI:
+#   1 = Not contacted yet  (do NOT include — torrent may still be alive)
+#   2 = Working            (do NOT include)
+#   4 = Not working        (e.g. "host not found", "timed out")
+#   5 = Tracker error      (e.g. "torrent not registered" — the literal red label)
+#   6 = Unreachable        (network failure)
+# Status 0 is the sticky DHT/PeX/LSD pseudo-tracker "Disabled" state and is
+# never a real tracker — leave it out. Defaults to {4, 5, 6}.
+DEAD_TRACKER_STATUSES = "4,5,6"
+
+# Skip torrents added less than this many minutes ago. Protects against
+# deleting freshly-added torrents that simply haven't announced yet (right
+# after qBittorrent starts up, every tracker is "Not contacted yet" for a
+# bit; transient tracker outages and DNS TTLs can also make every tracker
+# look dead briefly). 60 min comfortably covers both. Set to 0 to disable.
+TRACKER_ERROR_GRACE_MINUTES = 60
+
+
 # ─── NO-HARD-LINKS MODE ────────────────────────────────────────────────────
 # When enabled, the script finds torrents in selected qBittorrent categories that have NO hard-links.
 # Category selection supports:

@@ -73,6 +73,11 @@ def reconfigure(csc, **overrides):
             csc._NO_HARD_LINKS_CATEGORY_SPECS = csc._compile_specs(val, "NO_HARD_LINKS_CATEGORIES")
         elif key == "CATEGORY_FILTER_MODE":
             csc._CATEGORY_FILTER_MODE_LC = val.lower()
+        elif key == "DEAD_TRACKER_STATUSES":
+            # accept a CSV string (matches config.py form) or any iterable of ints
+            csc.DEAD_TRACKER_STATUSES = (
+                csc._parse_dead_statuses(val) if isinstance(val, str) else frozenset(val)
+            )
     return csc
 
 

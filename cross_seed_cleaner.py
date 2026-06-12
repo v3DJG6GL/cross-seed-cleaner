@@ -50,6 +50,40 @@ def _validate_config():
             f"ERROR: SORT_ORDER={SORT_ORDER!r} is invalid. Expected 'asc' or 'desc'.\n"
         )
         sys.exit(1)
+    valid_statuses = {0, 1, 2, 4, 5, 6}
+    if not DEAD_TRACKER_STATUSES or not DEAD_TRACKER_STATUSES.issubset(valid_statuses):
+        sys.stderr.write(
+            f"ERROR: DEAD_TRACKER_STATUSES={sorted(DEAD_TRACKER_STATUSES)!r} is invalid. "
+            f"Each entry must be one of {sorted(valid_statuses)}; the set must be non-empty.\n"
+        )
+        sys.exit(1)
+    if TRACKER_ERROR_GRACE_MINUTES < 0:
+        sys.stderr.write(
+            f"ERROR: TRACKER_ERROR_GRACE_MINUTES={TRACKER_ERROR_GRACE_MINUTES!r} must be >= 0.\n"
+        )
+        sys.exit(1)
+    if TRACKER_ERROR_MODE and NO_HARD_LINKS_MODE:
+        sys.stderr.write(
+            "ERROR: TRACKER_ERROR_MODE and NO_HARD_LINKS_MODE are mutually exclusive — pick one.\n"
+        )
+        sys.exit(1)
+
+
+def _parse_dead_statuses(raw):
+    """Parse a CSV string like '4,5,6' into a frozenset of ints. Empty/invalid returns frozenset()."""
+    if not raw:
+        return frozenset()
+    out = set()
+    for tok in str(raw).split(','):
+        tok = tok.strip()
+        if not tok:
+            continue
+        try:
+            out.add(int(tok))
+        except ValueError:
+            sys.stderr.write(f"ERROR: DEAD_TRACKER_STATUSES contains non-integer entry {tok!r}.\n")
+            sys.exit(1)
+    return frozenset(out)
 
 
 def get_config():
@@ -71,6 +105,9 @@ def get_config():
     env_no_hard_links_mode = str2bool(os.environ.get("NO_HARD_LINKS_MODE", str(NO_HARD_LINKS_MODE)))
     env_no_hard_links_cats = os.environ.get("NO_HARD_LINKS_CATEGORIES", NO_HARD_LINKS_CATEGORIES)
     env_ext_media_paths = os.environ.get("EXTERNAL_MEDIA_PATHS", EXTERNAL_MEDIA_PATHS)
+    env_tracker_error_mode = str2bool(os.environ.get("TRACKER_ERROR_MODE", str(TRACKER_ERROR_MODE)))
+    env_dead_statuses = os.environ.get("DEAD_TRACKER_STATUSES", DEAD_TRACKER_STATUSES)
+    env_grace_minutes = int(os.environ.get("TRACKER_ERROR_GRACE_MINUTES", TRACKER_ERROR_GRACE_MINUTES))
 
     parser = argparse.ArgumentParser(description='Cross-Seed Cleaner: Deduplicate and cleanup torrents.')
     parser.add_argument('--host', default=env_host, help='qBittorrent Host')
@@ -90,6 +127,10 @@ def get_config():
     parser.add_argument('--no-hard-links-categories', type=str, default=env_no_hard_links_cats, help='Comma-separated categories for no-hard-links mode; prefix "r:" for regex (e.g. "r:autobrr-.*")')
     parser.add_argument('--external-media-paths', type=str, default=env_ext_media_paths,
                         help='Paths to scan for hardlinks. Supports commas, wildcards (*), and braces ({a,b}). E.g., "/mnt/{movies,tv},/mnt/users/*"')
+
+    parser.add_argument('--tracker-error-mode', action='store_true', default=env_tracker_error_mode, help='Enable mode that selects torrents whose every real tracker reports an error')
+    parser.add_argument('--dead-tracker-statuses', type=str, default=env_dead_statuses, help='Comma-separated tracker status codes that count as "dead" (default "4,5,6"). Valid: 0,1,2,4,5,6')
+    parser.add_argument('--tracker-error-grace-minutes', type=int, default=env_grace_minutes, help='Skip torrents added less than this many minutes ago in tracker-error mode (default 60; 0 disables)')
 
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--dry-run', action='store_true', help='Force Dry Run')
@@ -237,6 +278,10 @@ if HTML_EXPORT:
 NO_HARD_LINKS_MODE = ARGS.no_hard_links_mode
 NO_HARD_LINKS_CATEGORIES = [c.strip().lower() for c in ARGS.no_hard_links_categories.split(',') if c.strip()] if ARGS.no_hard_links_categories else []
 EXTERNAL_MEDIA_PATHS = smart_split_paths(ARGS.external_media_paths) if ARGS.external_media_paths else []
+
+TRACKER_ERROR_MODE = ARGS.tracker_error_mode
+DEAD_TRACKER_STATUSES = _parse_dead_statuses(ARGS.dead_tracker_statuses)
+TRACKER_ERROR_GRACE_MINUTES = ARGS.tracker_error_grace_minutes
 
 CATEGORY_FILTER_MODE = os.environ.get("CATEGORY_FILTER_MODE", CATEGORY_FILTER_MODE)
 SORT_BY = os.environ.get("SORT_BY", SORT_BY)
