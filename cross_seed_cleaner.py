@@ -1318,7 +1318,6 @@ def print_group(client, d, num, total):
     result = _ensure_evaluation(d)
     eligible = result['eligible']
     all_t = result['all_torrents']
-    is_externally_linked = result['externally_linked']
 
     if not eligible:
         return eligible, all_t
@@ -1378,20 +1377,6 @@ def print_group(client, d, num, total):
             t['_tracker_cache'][:30],
             f"{c_cat}{t.get('category', '')[:20]}{Colors.END}",
             name_str
-        ])
-
-    if is_externally_linked:
-        rows.append([
-            f"{Colors.BLUE}{Colors.BOLD}[LIBRARY]{Colors.END}",
-            f"{Colors.DIM}-{Colors.END}",
-            f"{Colors.DIM}-{Colors.END}",
-            f"{Colors.BOLD}{format_size_smart(orig.get('size', 0))}{Colors.END}",
-            f"{Colors.DIM}-{Colors.END}",
-            f"{Colors.DIM}-{Colors.END}",
-            f"{Colors.DIM}-{Colors.END}",
-            f"{Colors.DIM}-{Colors.END}",
-            f"{Colors.DIM}-{Colors.END}",
-            f"{Colors.BOLD}{orig.get('name', '')[:105]}{Colors.END}"
         ])
 
     Table.render(headers, rows, widths, aligns)
