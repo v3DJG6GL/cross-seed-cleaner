@@ -56,6 +56,7 @@ class XSSEscapingTest(unittest.TestCase):
     XSS_UNRELIABLE = '<img src=x onerror=alert("xss-unreliable")>'
     XSS_CAT_ALLOW = '<script>alert("xss-cat-allow")</script>'
     XSS_CAT_BLOCK = '<img src=x onerror=alert("xss-cat-block")>'
+    XSS_MHL_CAT = '<img src=x onerror=alert("xss-mhl-cat")>'
 
     def setUp(self):
         self.csc = _load_module()
@@ -67,6 +68,7 @@ class XSSEscapingTest(unittest.TestCase):
         self.csc.UNRELIABLE_TRACKERS = [self.XSS_UNRELIABLE]
         self.csc.CATEGORY_ALLOWLIST = [self.XSS_CAT_ALLOW]
         self.csc.CATEGORY_BLOCKLIST = [self.XSS_CAT_BLOCK]
+        self.csc.MISSING_HARD_LINKS_CATEGORIES = [self.XSS_MHL_CAT]
 
     def _render(self):
         torrent = {
@@ -123,9 +125,11 @@ class XSSEscapingTest(unittest.TestCase):
         self.assertNotIn('onerror=alert("xss-unreliable")', html, "unreliable-trackers payload survived unescaped")
         self.assertNotIn('<script>alert("xss-cat-allow")', html, "category-allowlist payload survived unescaped")
         self.assertNotIn('onerror=alert("xss-cat-block")', html, "category-blocklist payload survived unescaped")
+        self.assertNotIn('onerror=alert("xss-mhl-cat")', html, "missing-hard-links category payload survived unescaped")
         self.assertIn('alert(&quot;xss-unreliable&quot;)', html)
         self.assertIn('&lt;script&gt;alert(&quot;xss-cat-allow&quot;)', html)
         self.assertIn('alert(&quot;xss-cat-block&quot;)', html)
+        self.assertIn('alert(&quot;xss-mhl-cat&quot;)', html)
 
     def test_no_script_breakout_in_inline_js(self):
         html = self._render()
