@@ -3359,7 +3359,7 @@ def scan_external_libraries(paths):
         debug_log(f"[SCAN] > Walking: {p}...")
         try:
             for root, dirs, files in os.walk(p, onerror=_on_walk_error):
-                dirs[:] = [d for d in dirs if not d.startswith('.') and d.lower() not in ('@eaDir', '#recycle')]
+                dirs[:] = [d for d in dirs if not d.startswith('.') and d.lower() not in ('@eadir', '#recycle')]
 
                 for f in files:
                     total_files_scanned += 1
