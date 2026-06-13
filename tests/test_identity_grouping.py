@@ -170,6 +170,20 @@ def test_grouping_pairs_same_identity(csc, monkeypatch):
     assert [c["hash"] for c in g["crossseeds"]] == ["b"]
 
 
+def test_grouping_tolerates_null_added_on(csc, monkeypatch):
+    # qBittorrent can report added_on as an explicit null (the codebase guards it
+    # everywhere else: evaluate_dead_trackers / format_timestamp). A group mixing a
+    # null and an int added_on must not crash the oldest-first sort that picks the
+    # original; the null is treated as 0 (oldest), matching int(... or 0).
+    tors = [_tor("inode:1:1", "a", None), _tor("inode:1:1", "b", 200)]
+    _wire(csc, monkeypatch, tors)
+    groups = csc.load_and_group_torrents(FakeClient())
+    assert len(groups) == 1
+    g = next(iter(groups.values()))
+    assert g["original"]["hash"] == "a"             # null added_on sorts oldest
+    assert [c["hash"] for c in g["crossseeds"]] == ["b"]
+
+
 def test_grouping_drops_singletons(csc, monkeypatch):
     tors = [_tor("inode:1:1", "a", 100), _tor("inode:2:2", "lonely", 100)]
     _wire(csc, monkeypatch, tors + [_tor("inode:1:1", "b", 200)])

@@ -916,7 +916,7 @@ def load_and_group_torrents(client):
         if is_external_linked:
             protected_by_external += 1
 
-        group.sort(key=lambda t: t.get('added_on', 0))
+        group.sort(key=lambda t: int(t.get('added_on', 0) or 0))
         original = group[0]
         crossseeds = group[1:]
 
