@@ -2597,6 +2597,11 @@ def export_reports(sorted_items, eligible_ids):
                     if (icon) return icon.getAttribute('data-tip') || '';
                     const cell = el.closest('.cell');
                     if (cell && cell.previousElementSibling && cell.scrollWidth > cell.clientWidth + 1) {{
+                        // A cell whose content carries its own native title (the Type
+                        // and EXT badges do) already shows a browser tooltip; firing
+                        // the custom overflow tip too would stack two tooltips on a
+                        // hand-narrowed column. Let the native title handle it.
+                        if (cell.querySelector('[title]')) return '';
                         return cell.textContent.trim();
                     }}
                     return '';

@@ -182,3 +182,43 @@ test('sortTable(2) orders groups by seeds ascending then descending', () => {
   const desc = groupSeedKeys(window.document);
   assert.deepEqual(desc, [...desc].sort((a, b) => b - a));
 });
+
+// The type/EXT badges carry a native `title`; the generic overflow tooltip also
+// fires on any clipped cell. Without a guard, a hand-narrowed Type column would
+// show both at once. jsdom has no layout engine, so stub the width getters to
+// simulate clipping and drive the real mouseover handler.
+function forceClipped(el) {
+  Object.defineProperty(el, 'scrollWidth', { value: 200, configurable: true });
+  Object.defineProperty(el, 'clientWidth', { value: 20, configurable: true });
+}
+
+test('overflow tooltip is suppressed on a clipped cell that has a native title', () => {
+  const { window } = load();
+  const doc = window.document;
+  const tip = doc.getElementById('rsnTip');
+  assert.ok(tip, '#rsnTip not created');
+
+  const badge = doc.querySelector('.type-badge[title]');   // CROSS or EXT
+  assert.ok(badge, 'no titled type badge in fixture');
+  forceClipped(badge.closest('.cell'));
+
+  badge.dispatchEvent(new window.MouseEvent('mouseover', { bubbles: true }));
+  assert.equal(tip.classList.contains('visible'), false,
+    'custom overflow tooltip fired on a cell that already has a native title (double tooltip)');
+});
+
+test('overflow tooltip still fires on a clipped cell with no native title', () => {
+  const { window } = load();
+  const doc = window.document;
+  const tip = doc.getElementById('rsnTip');
+
+  const nameCell = doc.querySelector('.name-cell');
+  assert.ok(nameCell, 'no name cell in fixture');
+  assert.equal(nameCell.querySelector('[title]'), null, 'name cell unexpectedly has a titled child');
+  forceClipped(nameCell);
+
+  nameCell.dispatchEvent(new window.MouseEvent('mouseover', { bubbles: true }));
+  assert.equal(tip.classList.contains('visible'), true,
+    'overflow tooltip should still work for cells without a native title');
+  assert.ok(tip.textContent.length > 0, 'overflow tooltip text empty');
+});
