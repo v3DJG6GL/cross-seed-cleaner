@@ -1253,8 +1253,6 @@ def print_group(client, d, num, total):
         if is_orig:
             c_size = Colors.GREEN if size >= MIN_SIZE_BYTES else Colors.RED
             c_time = Colors.GREEN if seed_time >= MIN_ORIGINAL_SEED_TIME_SECONDS else Colors.RED
-            if NO_HARD_LINKS_MODE and t.get('_path_error'):
-                c_cat = Colors.RED
 
         name_str = t.get('name', '')[:105]
 
