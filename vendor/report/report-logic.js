@@ -69,8 +69,11 @@ function matchesReasonFilter(groupReasons, selectedReasons, mode) {
         for (const r of groupReasons) if (!selectedReasons.has(r)) return false;
         return true;
     }
-    for (const r of groupReasons) if (selectedReasons.has(r)) return true;
-    return false;
+    if (mode === 'any') {
+        for (const r of groupReasons) if (selectedReasons.has(r)) return true;
+        return false;
+    }
+    throw new Error("matchesReasonFilter: unknown mode " + String(mode) + "; expected 'any' or 'only'");
 }
 
 if (typeof module !== 'undefined' && module.exports) {

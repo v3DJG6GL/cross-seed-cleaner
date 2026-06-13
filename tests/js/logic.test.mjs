@@ -105,3 +105,14 @@ test('matchesReasonFilter only-mode with multiple selected: subset wins', () => 
   assert.equal(L.matchesReasonFilter(new Set(['CATEGORY_FILTER', 'TRACKER_ALIVE']), sel, 'only'), true);
   assert.equal(L.matchesReasonFilter(new Set(['CATEGORY_FILTER', 'LOW_SEEDS']),     sel, 'only'), false);
 });
+
+test('matchesReasonFilter throws on unknown mode (surface typos loudly)', () => {
+  // The empty-selection / empty-reasons short-circuits run BEFORE the mode
+  // check, so a typo'd mode is masked on those paths. The throw must fire
+  // only when the function actually applies the mode (both sets non-empty).
+  const grp = new Set(['CATEGORY_FILTER']);
+  const sel = new Set(['CATEGORY_FILTER']);
+  assert.throws(() => L.matchesReasonFilter(grp, sel, 'every'),    /unknown mode/);
+  assert.throws(() => L.matchesReasonFilter(grp, sel, undefined),  /unknown mode/);
+  assert.throws(() => L.matchesReasonFilter(grp, sel, ''),         /unknown mode/);
+});
