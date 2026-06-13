@@ -1,5 +1,6 @@
 """External-library hardlink scanning and missing-hard-links orphan detection
 (cross_seed_cleaner.py:3011-3166)."""
+import errno
 import os
 
 import pytest
@@ -62,6 +63,54 @@ def test_scan_aborted_walk_flags_incomplete(csc, tmp_path, monkeypatch):
     monkeypatch.setattr(csc.os, "walk", _boom)
     csc.scan_external_libraries([str(lib)])
     assert csc.SCAN_STATS['scan_incomplete'] is True
+
+
+def test_scan_unreadable_dir_routed_to_onerror_flags_incomplete(csc, tmp_path, monkeypatch):
+    # os.walk does NOT raise when it can't enter a directory — it calls the
+    # onerror callback and skips that subtree. The skipped subtree's protected
+    # inodes are missing, so the scan must still be flagged incomplete.
+    lib = tmp_path / "lib"
+    lib.mkdir()
+
+    def _walk_with_dir_error(path, **kwargs):
+        onerror = kwargs.get("onerror")
+        if onerror is not None:
+            onerror(OSError(errno.EACCES, "Permission denied", str(lib / "locked")))
+        return iter(())
+
+    monkeypatch.setattr(csc.os, "walk", _walk_with_dir_error)
+    csc.scan_external_libraries([str(lib)])
+    assert csc.SCAN_STATS['scan_incomplete'] is True
+
+
+def test_scan_unreadable_file_flags_incomplete(csc, tmp_path, monkeypatch):
+    # A file that exists but can't be stat'd (permission denied / stale NFS /
+    # I/O error) may have been a protected hardlink we're now missing.
+    lib = tmp_path / "lib"
+    lib.mkdir()
+    (lib / "movie.mkv").write_bytes(b"x" * 100)
+
+    def _stat_denied(path, *a, **k):
+        raise OSError(errno.EACCES, "Permission denied", str(path))
+
+    monkeypatch.setattr(csc.os, "stat", _stat_denied)
+    csc.scan_external_libraries([str(lib)])
+    assert csc.SCAN_STATS['scan_incomplete'] is True
+
+
+def test_scan_missing_file_enoent_not_flagged(csc, tmp_path, monkeypatch):
+    # A broken symlink / a file that vanished mid-walk (ENOENT) protects
+    # nothing, so it must NOT block deletion with a false positive.
+    lib = tmp_path / "lib"
+    lib.mkdir()
+    (lib / "movie.mkv").write_bytes(b"x" * 100)
+
+    def _stat_missing(path, *a, **k):
+        raise OSError(errno.ENOENT, "No such file", str(path))
+
+    monkeypatch.setattr(csc.os, "stat", _stat_missing)
+    csc.scan_external_libraries([str(lib)])
+    assert csc.SCAN_STATS['scan_incomplete'] is False
 
 
 def test_finalize_deletion_blocked_on_incomplete_scan(csc, monkeypatch):

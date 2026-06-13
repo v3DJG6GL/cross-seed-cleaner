@@ -11,6 +11,7 @@ import re
 import os
 import argparse
 import csv
+import errno
 import glob
 import html
 import threading
@@ -3396,6 +3397,12 @@ def scan_external_libraries(paths):
     start_time = datetime.now()
 
     def _on_walk_error(err):
+        # os.walk does NOT raise when it can't enter a directory (permission
+        # denied, vanished mid-walk); it routes the error here and skips that
+        # subtree. The protected inodes in the skipped subtree are now missing
+        # from the set, so mark the scan incomplete and let _finalize_deletion
+        # refuse to delete rather than risk removing a still-linked file.
+        SCAN_STATS['scan_incomplete'] = True
         print(f"{Colors.YELLOW}  ! {err}{Colors.END}")
 
     for p in final_paths:
@@ -3419,7 +3426,14 @@ def scan_external_libraries(paths):
                             if inode_tuple not in inodes:
                                 debug_log(f"[SCAN]   + Found Link: {f} (Inode: {stat.st_ino})")
                                 inodes[inode_tuple] = file_path
-                    except OSError:
+                    except OSError as e:
+                        # A file that exists but can't be stat'd (permission
+                        # denied, stale NFS handle, I/O error) may have been a
+                        # protected hardlink we're now missing — fail closed.
+                        # A missing file (ENOENT: a broken symlink, or one that
+                        # vanished mid-walk) protects nothing, so don't block on it.
+                        if e.errno != errno.ENOENT:
+                            SCAN_STATS['scan_incomplete'] = True
                         continue
         except Exception as e:
             # The walk aborted partway: the inode set is now incomplete, so a
