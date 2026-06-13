@@ -2973,6 +2973,7 @@ def export_reports(sorted_items, eligible_ids):
                     }}
 
                     const needsRowScan = trackersSet.size || categoriesSet.size;
+                    let visibilityChanged = false;
 
                     for (let i = 0; i < groups.length; i++) {{
                         const g = groups[i];
@@ -3020,12 +3021,15 @@ def export_reports(sorted_items, eligible_ids):
                             if (hide) g.classList.add('filtered-hidden');
                             else      g.classList.remove('filtered-hidden');
                             _lastHidden[i] = next;
+                            visibilityChanged = true;
                         }}
                     }}
                     updateFilterCounts();
-                    // Visible set changed → DELETE-only / KEEP-only / mixed
-                    // samples may carry different max content widths.
-                    if (typeof recomputeNarrowColumns === 'function') recomputeNarrowColumns();
+                    // Narrow-column widths depend on the visible content sample, so only
+                    // recompute when the visible set actually changed — recomputeNarrowColumns
+                    // forces synchronous layout across ~150 sampled rows × 8 cells, which is
+                    // the dominant cost of a keystroke at scale.
+                    if (visibilityChanged && typeof recomputeNarrowColumns === 'function') recomputeNarrowColumns();
                 }}
 
                 const filterCountsEl = document.getElementById('filterCounts');
