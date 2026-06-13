@@ -211,6 +211,10 @@ def test_csv_safe_unit(csc):
     assert csc.csv_safe("+1") == "'+1"
     assert csc.csv_safe("-rm") == "'-rm"
     assert csc.csv_safe("@x") == "'@x"
+    assert csc.csv_safe("\tcmd") == "'\tcmd"                  # leading tab (0x09)
+    assert csc.csv_safe("\rcmd") == "'\rcmd"                  # leading CR (0x0D)
+    assert csc.csv_safe("\n=cmd") == "'\n=cmd"                # leading LF (0x0A) — OWASP trigger
+    assert csc.csv_safe(" =cmd") == " =cmd"                   # leading space keeps it text, not a trigger
     assert csc.csv_safe("My-Movie 2024") == "My-Movie 2024"   # interior trigger untouched
     assert csc.csv_safe("") == ""
     assert csc.csv_safe(None) == ""
