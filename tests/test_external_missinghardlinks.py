@@ -139,6 +139,27 @@ def test_finalize_dry_run_incomplete_scan_no_disabled_warning(csc, capsys):
     assert "DRY RUN" in out
 
 
+def test_finalize_manual_dry_run_incomplete_scan_enters_loop(csc, monkeypatch, capsys):
+    # A --manual dry-run also deletes nothing (delete_torrents returns "dry_run"),
+    # so an incomplete scan must NOT claim "Deletion is DISABLED" or skip the
+    # manual preview — the user still gets the interactive loop. Only a run that
+    # actually deletes (live, manual or auto) is blocked.
+    csc.DRY_RUN = True
+    csc.MANUAL_MODE = True
+    csc.SCAN_STATS['scan_incomplete'] = True
+    prompts = []
+    def _quit(*a, **k):
+        prompts.append(a[0] if a else "")
+        return "q"  # leave the manual loop immediately
+    monkeypatch.setattr(csc, "input", _quit, raising=False)
+    client = FakeClient()
+    csc._finalize_deletion(client, {1: [{"hash": "a"}]})
+    out = capsys.readouterr().out
+    assert "DISABLED" not in out   # not blocked as a deletion run
+    assert prompts                 # the manual preview loop was actually entered
+    assert client.deleted == []    # quit before deleting anything
+
+
 def test_scan_brace_expansion(csc, tmp_path):
     base = tmp_path / "base"
     for sub in ("a", "b"):
