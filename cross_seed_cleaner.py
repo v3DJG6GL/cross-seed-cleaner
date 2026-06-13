@@ -2963,6 +2963,9 @@ def export_reports(sorted_items, eligible_ids):
                             g._reasonSet = new Set((g.dataset.reasons || '').split(/\\s+/).filter(Boolean));
                             g._seedsMin = g.dataset.seedsMin;
                             g._search = g.dataset.search || '';
+                            // groupRows(g) walks .children every call; the row set is static
+                            // after render so we snapshot it here and reuse the array.
+                            g._rows = groupRows(g);
                         }}
                     }}
                     if (!_lastHidden || _lastHidden.length !== groups.length) {{
@@ -2988,7 +2991,7 @@ def export_reports(sorted_items, eligible_ids):
                                       || upMinBytes !== null || upMaxBytes !== null
                                       || seededMinSec !== null || seededMaxSec !== null
                                       || addedFromSec !== null || addedToSec !== null)) {{
-                            const rows = groupRows(g);
+                            const rows = g._rows;
                             const orig = rows[0];
                             if (!orig) hide = true;
                             else {{
@@ -3002,7 +3005,7 @@ def export_reports(sorted_items, eligible_ids):
 
                         if (!hide && needsRowScan) {{
                             let ok = false;
-                            for (const tr of groupRows(g)) {{
+                            for (const tr of g._rows) {{
                                 if (trackersSet.size && !trackersSet.has(getAttr(tr, 8))) continue;
                                 if (categoriesSet.size && !categoriesSet.has(getAttr(tr, 9))) continue;
                                 ok = true; break;
