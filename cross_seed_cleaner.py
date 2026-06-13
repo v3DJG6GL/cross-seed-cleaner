@@ -844,9 +844,6 @@ def load_and_group_torrents(client):
             t['_external_hardlink'] = is_external_linked
             t['_external_path'] = matched_path
 
-        if is_external_linked:
-            protected_by_external += 1
-
         if len(group) < 2:
             skipped_singles += 1
             s_name = group[0].get('name', 'Unknown')
@@ -856,6 +853,12 @@ def load_and_group_torrents(client):
             else:
                  debug_log(f"[GROUP] Skipping singleton: '{s_name}' ({identity})")
             continue
+
+        # Counter feeds the "{N} groups matched external hardlinks" status line,
+        # which a user reads as "N groups they can act on". Count only after the
+        # singleton drop so the figure matches the groups actually returned.
+        if is_external_linked:
+            protected_by_external += 1
 
         group.sort(key=lambda t: t.get('added_on', 0))
         original = group[0]
