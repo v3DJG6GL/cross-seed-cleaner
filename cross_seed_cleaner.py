@@ -719,13 +719,22 @@ def get_seeder_count(client, torrent):
         return num_complete
 
 def _fetch_and_filter_torrents(client):
-    """Fetch torrents. Category filtering is done per-group in evaluate_group()."""
+    """Fetch torrents with their tracker lists pre-populated.
+
+    Uses the bulk get_torrents_with_trackers helper so '_trackers' is set on
+    every torrent in a single round-trip (qBit >= 2.11) or via the helper's
+    threaded per-hash fan-out on older versions. This lets the downstream
+    get_tracker_domain (called from _fetch_seeders_phase) read the cached
+    list instead of issuing a serial per-hash /torrents/trackers request
+    for every torrent whose announce field is empty — a real concern for
+    libraries with freshly-added, not-yet-announced torrents.
+    """
     t_start = datetime.now()
-    print(f"{Colors.BOLD}[1/6]{Colors.END} Fetching torrents...")
+    print(f"{Colors.BOLD}[1/6]{Colors.END} Fetching torrents and trackers...")
 
     result = {}
     def _worker():
-        result['torrents'] = client.get_torrents()
+        result['torrents'] = client.get_torrents_with_trackers()
     thr = threading.Thread(target=_worker, daemon=True)
     thr.start()
 
