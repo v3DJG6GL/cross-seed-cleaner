@@ -979,7 +979,11 @@ def format_duration(seconds, fmt="d:hh"):
 
 
 def format_timestamp(ts):
-    if ts <= 0:
+    if not ts or ts <= 0:
+        # `not ts` catches None (and 0) before the comparison: a torrent dict
+        # with added_on=None — which evaluate_dead_trackers already treats as
+        # reachable via `int(... or 0)` — would otherwise raise TypeError here
+        # and abort the whole report/print run.
         return "N/A"
     try:
         return datetime.fromtimestamp(ts).strftime("%Y.%m.%d | %H:%M")

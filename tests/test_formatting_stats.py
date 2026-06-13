@@ -62,6 +62,12 @@ def test_format_timestamp_out_of_range(csc):
     assert csc.format_timestamp(99999999999999) == "N/A"
 
 
+def test_format_timestamp_none(csc):
+    # A missing added_on (None) must degrade to N/A, not raise TypeError on the
+    # `<= 0` comparison and abort the whole report/print run.
+    assert csc.format_timestamp(None) == "N/A"
+
+
 # ─── sort_torrents ───────────────────────────────────────────────────────────
 
 def _t(name, seeds):
