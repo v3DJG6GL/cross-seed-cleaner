@@ -106,7 +106,7 @@ class XSSEscapingTest(unittest.TestCase):
         # Payload markers must appear only in escaped form.
         self.assertNotIn('<script>alert("xss-name")', html, "name payload survived unescaped")
         self.assertNotIn('<script>alert("xss-ext")',  html, "external path payload survived unescaped")
-        self.assertNotIn('<script>alert("xss-cat")',  html, "category payload survived unescaped")
+        self.assertNotIn('onerror=alert("xss-cat")',  html, "category payload survived unescaped")
         self.assertNotIn('<script>alert("xss-js")',   html, "tracker payload survived unescaped")
         self.assertNotIn('onmouseover="alert',        html, "attribute-break payload survived unescaped")
         self.assertNotIn('onclick="alert(\'xss-tmsg\')"', html,
