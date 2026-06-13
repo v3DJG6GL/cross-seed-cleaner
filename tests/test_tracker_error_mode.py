@@ -393,3 +393,26 @@ def test_print_group_unknown_seeds_shows_na(csc, capsys):
     assert 'N/A' in seeds_cell
     assert '-1' not in seeds_cell
     assert csc.Colors.RED not in seeds_cell
+
+
+# ─── _ensure_evaluation: mode-aware fallback for an unstamped group ──────────
+
+def test_ensure_evaluation_uses_dead_tracker_evaluator_in_tracker_mode(csc):
+    """An unstamped group in tracker-error mode must be evaluated by
+    evaluate_dead_trackers (dead-tracker reason codes), not evaluate_group —
+    which would emit standard-mode codes and re-decide eligibility wrongly."""
+    csc.TRACKER_ERROR_MODE = True
+    t = _torrent(trackers=[])                       # no real trackers
+    d = {'original': t, 'crossseeds': []}
+    result = csc._ensure_evaluation(d)
+    assert 'NO_REAL_TRACKERS' in result['reasons']  # only evaluate_dead_trackers emits this
+    assert d['_evaluation'] is result               # cached on the dict
+
+
+def test_ensure_evaluation_uses_evaluate_group_in_standard_mode(csc):
+    """In standard mode the fallback stays evaluate_group."""
+    t = _torrent(trackers=[_tr(status=5)])          # default csc: TRACKER_ERROR_MODE False
+    d = {'original': t, 'crossseeds': []}
+    result = csc._ensure_evaluation(d)
+    assert 'SMALL_SIZE' in result['reasons']        # standard evaluator ran (100 B < 15 GiB)
+    assert 'NO_REAL_TRACKERS' not in result['reasons']

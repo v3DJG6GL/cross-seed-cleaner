@@ -1136,6 +1136,24 @@ def evaluate_dead_trackers(d, now_ts):
     }
 
 
+def _ensure_evaluation(d):
+    """Return d['_evaluation'], computing it with the ACTIVE mode's evaluator
+    if a group somehow reached a consumer unstamped.
+
+    Tracker-error groups are normally pre-stamped in scan_dead_trackers, but a
+    fallback that hardcodes evaluate_group would emit standard-mode reason codes
+    (LOW_SEEDS/SMALL_SIZE/…) and re-decide eligibility under the wrong rules for
+    a dead-tracker group. Dispatch on the mode so the CLI/HTML/CSV consumers all
+    agree. evaluate_group already handles standard and missing-hard-links modes.
+    """
+    if '_evaluation' not in d:
+        if TRACKER_ERROR_MODE:
+            d['_evaluation'] = evaluate_dead_trackers(d, int(datetime.now().timestamp()))
+        else:
+            d['_evaluation'] = evaluate_group(d)
+    return d['_evaluation']
+
+
 def _reason_text(code):
     if code == "EXTERNAL_LINK": return "Hardlinked to external library"
     if code == "PATH_ERROR": return "Path error — could not verify hardlinks"
@@ -1297,9 +1315,7 @@ def print_config():
 def print_group(client, d, num, total):
     orig = d['original']
     xs = d['crossseeds']
-    if '_evaluation' not in d:
-        d['_evaluation'] = evaluate_group(d)
-    result = d['_evaluation']
+    result = _ensure_evaluation(d)
     eligible = result['eligible']
     all_t = result['all_torrents']
     is_externally_linked = result['externally_linked']
@@ -1536,9 +1552,7 @@ def export_reports(sorted_items, eligible_ids):
 
         rejection_reasons = []
         if not is_del_group:
-            if '_evaluation' not in d:
-                d['_evaluation'] = evaluate_group(d)
-            for code in d['_evaluation']['reasons']:
+            for code in _ensure_evaluation(d)['reasons']:
                 rejection_reasons.append({'code': code, 'icon': _REASON_HTML_ICON[code], 'text': _reason_text(code)})
 
         report_rows.append({
@@ -3276,9 +3290,7 @@ def export_reports(sorted_items, eligible_ids):
                     is_del_group = idx in eligible_ids
                     status = "DELETE" if is_del_group else "KEEP"
 
-                    if '_evaluation' not in d:
-                        d['_evaluation'] = evaluate_group(d)
-                    reasons_str = ','.join(d['_evaluation']['reasons'])
+                    reasons_str = ','.join(_ensure_evaluation(d)['reasons'])
 
                     # Sort cross-seeds by the configured field like the CLI/HTML;
                     # sort_torrents pins the original first so i==0 stays the original.
