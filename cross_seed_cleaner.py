@@ -2149,7 +2149,8 @@ def export_reports(sorted_items, eligible_ids):
         )
 
     group_idx = 0
-    total_torrents = 0
+    total_rows = 0  # rendered rows incl. EXT pseudo-rows; distinct from the
+                    # torrent-count `total_torrents` used by the header tile
     ds_seeds_min = ds_seeds_max = None
     ds_ratio_min = ds_ratio_max = None
     ds_size_min = ds_size_max = None
@@ -2228,7 +2229,7 @@ def export_reports(sorted_items, eligible_ids):
         search_path_blob = _h(' '.join(path_tokens))
 
         row_count = len(torrents_to_list) + (1 if ext_path_for_search else 0)
-        total_torrents += row_count
+        total_rows += row_count
 
         html_parts.append(
             f'<div class="{group_class}" data-status="{status_attr}" '
@@ -2690,7 +2691,7 @@ def export_reports(sorted_items, eligible_ids):
             const UNIQUE_TRACKERS = {_js(sorted(unique_trackers))};
             const UNIQUE_CATEGORIES = {_js(sorted(unique_categories))};
             const TOTAL_GROUPS = {_js(group_idx)};
-            const TOTAL_TORRENTS = {_js(total_torrents)};
+            const TOTAL_ROWS = {_js(total_rows)};
             // Slider bounds: [min, max, step, displayConverter] per range filter.
             // Size/Uploaded show GiB but the data-sk attrs are bytes — input values
             // and slider thumb values are in GiB (whole-units), filter converts.
@@ -3155,13 +3156,13 @@ def export_reports(sorted_items, eligible_ids):
                     // not torrents in the library. Label it "rows" so it matches the
                     // header "Total Analyzed" tile (which honestly counts torrents).
                     filterCountsEl.append('Showing ', _visGNode, ' / ' + TOTAL_GROUPS + ' groups · ',
-                                          _visTNode, ' / ' + TOTAL_TORRENTS + ' rows');
+                                          _visTNode, ' / ' + TOTAL_ROWS + ' rows');
                 }}
                 function updateFilterCounts() {{
                     const groups = _groupsCache;
                     let visG, visT;
                     if (!groups || !_lastHidden) {{
-                        visG = TOTAL_GROUPS; visT = TOTAL_TORRENTS;
+                        visG = TOTAL_GROUPS; visT = TOTAL_ROWS;
                     }} else {{
                         visG = 0; visT = 0;
                         for (let i = 0; i < groups.length; i++) {{

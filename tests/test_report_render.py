@@ -96,7 +96,7 @@ def test_injected_constants(csc, tmp_path):
     assert "const NUMERIC_SK = new Set([2, 3, 4, 5, 6, 7]);" in html
     assert "const NARROW = 8;" in html
     assert "const TOTAL_GROUPS = 1;" in html
-    assert "const TOTAL_TORRENTS = 2;" in html
+    assert "const TOTAL_ROWS = 2;" in html
     assert 'const UNIQUE_TRACKERS = ["alpha.cc", "zeta.cc"];' in html   # sorted
     assert 'const UNIQUE_CATEGORIES = ["movies", "tv"];' in html
 
