@@ -1754,7 +1754,7 @@ def export_reports(sorted_items, eligible_ids):
         }
         .filter-group-label { color: #888; font: 11px system-ui; text-transform: uppercase; letter-spacing: 0.5px; padding: 4px 2px 2px; border-top: 1px solid #333; margin-top: 4px; }
         .filter-multi-panel > .filter-group-label:first-child { border-top: 0; margin-top: 0; }
-        .reason-match-toggle { display: inline-flex; background: #1a1a1a; border: 1px solid #333; border-radius: 3px; overflow: hidden; margin: 4px 2px 2px; }
+        .reason-match-toggle { position: relative; display: inline-flex; background: #1a1a1a; border: 1px solid #333; border-radius: 3px; overflow: hidden; margin: 4px 2px 2px; }
         .reason-match-toggle label { display: inline-block; margin: 0; padding: 4px 12px; color: #888; font: 11px system-ui; cursor: pointer; white-space: nowrap; }
         .reason-match-toggle label:hover { background: #2a2a2a; color: #ddd; }
         .reason-match-toggle input[type="radio"] { position: absolute; opacity: 0; pointer-events: none; }
