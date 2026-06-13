@@ -94,6 +94,20 @@ def test_mhl_target_category_regex_and_literal(csc, monkeypatch):
     assert set(cap) == {"a", "b"}
 
 
+def test_mhl_category_regex_case_insensitive_and_metachar_preserved(csc, monkeypatch):
+    # A regex pattern must match the category case-insensitively and keep its
+    # metacharacters intact. Lowercasing the pattern string would both break the
+    # uppercase literal "TV-" against a real category and flip \D (non-digit)
+    # into \d (digit), so "Sonarr" would stop matching and "1080" would start.
+    tors = [
+        _tor("a", "inode:1:1", "TV-Sonarr"),     # \D+ matches "Sonarr"
+        _tor("b", "inode:2:2", "TV-1080"),        # digits -> \D+ must NOT match
+    ]
+    cap = _setup_mhl(csc, monkeypatch, tors, [r"r:TV-\D+"])
+    csc.check_missing_hard_links(FakeClient())
+    assert set(cap) == {"a"}
+
+
 def test_mhl_sibling_identity_skipped(csc, monkeypatch):
     # Target torrent shares an identity with another torrent -> has a sibling -> not orphan.
     tors = [

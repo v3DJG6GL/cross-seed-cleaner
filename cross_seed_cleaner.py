@@ -299,7 +299,7 @@ if HTML_EXPORT:
 
 
 MISSING_HARD_LINKS_MODE = ARGS.missing_hard_links_mode
-MISSING_HARD_LINKS_CATEGORIES = [c.strip().lower() for c in ARGS.missing_hard_links_categories.split(',') if c.strip()] if ARGS.missing_hard_links_categories else []
+MISSING_HARD_LINKS_CATEGORIES = [c.strip() for c in ARGS.missing_hard_links_categories.split(',') if c.strip()] if ARGS.missing_hard_links_categories else []
 EXTERNAL_MEDIA_PATHS = smart_split_paths(ARGS.external_media_paths) if ARGS.external_media_paths else []
 
 TRACKER_ERROR_MODE = ARGS.tracker_error_mode
@@ -634,7 +634,7 @@ def matches_pattern(text, spec):
 _CATEGORY_ALLOWLIST_SPECS = _compile_specs(CATEGORY_ALLOWLIST, "CATEGORY_ALLOWLIST")
 _CATEGORY_BLOCKLIST_SPECS = _compile_specs(CATEGORY_BLOCKLIST, "CATEGORY_BLOCKLIST")
 _UNRELIABLE_TRACKERS_SPECS = _compile_specs(UNRELIABLE_TRACKERS, "UNRELIABLE_TRACKERS", lower=True)
-_MISSING_HARD_LINKS_CATEGORY_SPECS = _compile_specs(MISSING_HARD_LINKS_CATEGORIES, "MISSING_HARD_LINKS_CATEGORIES")
+_MISSING_HARD_LINKS_CATEGORY_SPECS = _compile_specs(MISSING_HARD_LINKS_CATEGORIES, "MISSING_HARD_LINKS_CATEGORIES", lower=True)
 _CATEGORY_FILTER_MODE_LC = CATEGORY_FILTER_MODE.lower()
 
 @lru_cache(maxsize=1024)
