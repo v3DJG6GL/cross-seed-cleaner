@@ -1212,7 +1212,9 @@ def _torrent_sort_key(torrent, by):
     field = _SORT_KEY_MAP[by]
     if field == 'name':
         return torrent.get('name', '').lower()
-    return torrent.get(field, 0)
+    # A present-but-null numeric field (e.g. added_on) would crash sorted();
+    # treat it as 0 like a missing key. The -1 seeder sentinel stays (truthy).
+    return torrent.get(field, 0) or 0
 
 def sort_torrents(original, crossseeds, by, order):
     rev = (order == "desc")

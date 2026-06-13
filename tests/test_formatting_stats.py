@@ -105,6 +105,16 @@ def test_sort_missing_field_defaults_zero(csc):
     assert result[1]["name"] == "x"
 
 
+def test_sort_null_field_treated_as_zero(csc):
+    # A present-but-null sort field (added_on can be an explicit null) must not
+    # crash the configured sort that orders CLI/HTML/CSV output, mirroring the
+    # group-sort guard. The null sorts as 0 (oldest) like a missing key.
+    orig = _t("orig", 0)
+    xs = [{"name": "n", "added_on": None}, {"name": "v", "added_on": 5}]
+    result = csc.sort_torrents(orig, xs, "added", "asc")
+    assert [t["name"] for t in result[1:]] == ["n", "v"]
+
+
 # ─── calculate_stats ─────────────────────────────────────────────────────────
 
 def test_calculate_stats(csc):
