@@ -38,8 +38,11 @@ def test_format_duration(csc, seconds, fmt, expected):
 
 
 def test_format_duration_unknown_fmt(csc):
-    with pytest.raises(ValueError):
-        csc.format_duration(100, "bogus")
+    # Same error type regardless of the seconds sign (the zero/negative path
+    # used to raise KeyError instead of ValueError).
+    for seconds in (100, 0, -5):
+        with pytest.raises(ValueError):
+            csc.format_duration(seconds, "bogus")
 
 
 # ─── format_timestamp ────────────────────────────────────────────────────────

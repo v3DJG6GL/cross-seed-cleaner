@@ -953,8 +953,11 @@ def format_size_smart(size_bytes):
 
 def format_duration(seconds, fmt="d:hh"):
     """Format seconds as 'd:hh', 'd:hh:mm', or 'days' (e.g. '3.5 days')."""
+    zeroes = {"d:hh": "0:00", "d:hh:mm": "0:00:00", "days": "0.0 days"}
+    if fmt not in zeroes:
+        raise ValueError(f"unknown duration fmt: {fmt!r}")
     if seconds <= 0:
-        return {"d:hh": "0:00", "d:hh:mm": "0:00:00", "days": "0.0 days"}[fmt]
+        return zeroes[fmt]
     if fmt == "days":
         return f"{seconds / 86400:.1f} days"
     total_minutes, _sec = divmod(int(seconds), 60)
@@ -962,9 +965,7 @@ def format_duration(seconds, fmt="d:hh"):
     d, h = divmod(h, 24)
     if fmt == "d:hh":
         return f"{d}:{h:02d}"
-    if fmt == "d:hh:mm":
-        return f"{d}:{h:02d}:{m:02d}"
-    raise ValueError(f"unknown duration fmt: {fmt!r}")
+    return f"{d}:{h:02d}:{m:02d}"
 
 
 def format_timestamp(ts):
