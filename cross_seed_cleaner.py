@@ -690,6 +690,12 @@ def is_unreliable_tracker(tracker_domain):
     if not tracker_domain or not UNRELIABLE_TRACKERS:
         return False
 
+    # _UNRELIABLE_TRACKERS_SPECS were compiled with lower=True (literal specs
+    # lowercased, regex specs flagged IGNORECASE). Today every caller routes
+    # through urlparse().hostname (already lowercase), but lowercasing here
+    # makes the function self-consistent for any future caller that passes
+    # a domain from another source.
+    tracker_domain = tracker_domain.lower()
     for spec in _UNRELIABLE_TRACKERS_SPECS:
         if matches_pattern(tracker_domain, spec):
             debug_log(f"[FETCH] Tracker '{tracker_domain}' matches unreliable pattern")
