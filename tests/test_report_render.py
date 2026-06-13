@@ -193,6 +193,29 @@ def test_csv_header_and_types(csc, tmp_path):
     assert types == {"ORIGINAL", "CROSS", "EXT"}
 
 
+def test_csv_neutralizes_formula_injection(csc, tmp_path):
+    # A name whose first char is a spreadsheet formula trigger is prefixed with
+    # a single quote so it can't execute when the CSV opens in Excel/Sheets; an
+    # ordinary name (incl. a '-' mid-string) is left untouched.
+    import csv as _csv, io
+    std(csc)
+    items = [("g0", {"original": t("=2+5"), "crossseeds": [t("Plain-Name")]})]
+    csv_text = render_csv(csc, items, evaluate(csc, items), tmp_path)
+    names = {r["Name"] for r in _csv.DictReader(io.StringIO(csv_text))}
+    assert "'=2+5" in names          # leading = neutralized
+    assert "Plain-Name" in names     # interior '-' unchanged
+
+
+def test_csv_safe_unit(csc):
+    assert csc.csv_safe("=cmd") == "'=cmd"
+    assert csc.csv_safe("+1") == "'+1"
+    assert csc.csv_safe("-rm") == "'-rm"
+    assert csc.csv_safe("@x") == "'@x"
+    assert csc.csv_safe("My-Movie 2024") == "My-Movie 2024"   # interior trigger untouched
+    assert csc.csv_safe("") == ""
+    assert csc.csv_safe(None) == ""
+
+
 def test_html_badge_tooltips(csc, tmp_path):
     # The abbreviated type badges carry a hover tooltip spelling out the full term.
     std(csc)

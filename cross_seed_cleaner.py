@@ -258,6 +258,14 @@ def html_escape(v):
 def js_string(v):
     return json.dumps(v).replace("</", "<\\/")
 
+def csv_safe(v):
+    """Neutralize CSV/spreadsheet formula injection: a cell whose first char is
+    a formula trigger (= + - @ tab CR) is executed as a formula when the file is
+    opened in Excel/LibreOffice/Sheets. Prefix such a value with a single quote
+    so it stays literal text. Values not starting with a trigger are unchanged."""
+    s = "" if v is None else str(v)
+    return "'" + s if s[:1] in ('=', '+', '-', '@', '\t', '\r') else s
+
 ARGS, DRY_RUN = get_config()
 
 QBITTORRENT_HOST = ARGS.host
@@ -3221,16 +3229,16 @@ def export_reports(sorted_items, eligible_ids):
                             'Group ID': idx,
                             'Status': status,
                             'Type': orig_type if i == 0 else 'CROSS',
-                            'Name': t.get('name', ''),
+                            'Name': csv_safe(t.get('name', '')),
                             'Size': format_size_smart(t.get('size', 0)),
-                            'Tracker': t.get('_tracker_domain') or "Unknown",
-                            'Category': t.get('category', ''),
+                            'Tracker': csv_safe(t.get('_tracker_domain') or "Unknown"),
+                            'Category': csv_safe(t.get('category', '')),
                             'Added': add_date,
                             'Seeding Time': seed_time,
                             'Ratio': f"{t.get('ratio', 0):.2f}",
                             'Seeders': t.get('_seeder_count', 0),
                             'Reasons': reasons_str,
-                            'Path': t.get('content_path', '')
+                            'Path': csv_safe(t.get('content_path', ''))
                         })
 
                     if external_path:
@@ -3238,7 +3246,7 @@ def export_reports(sorted_items, eligible_ids):
                             'Group ID': idx,
                             'Status': status,
                             'Type': 'EXT',
-                            'Name': d['original'].get('name', ''),
+                            'Name': csv_safe(d['original'].get('name', '')),
                             'Size': format_size_smart(d['original'].get('size', 0)),
                             'Tracker': '',
                             'Category': 'External Library',
@@ -3247,7 +3255,7 @@ def export_reports(sorted_items, eligible_ids):
                             'Ratio': '',
                             'Seeders': '',
                             'Reasons': reasons_str,
-                            'Path': external_path
+                            'Path': csv_safe(external_path)
                         })
 
 
