@@ -1266,7 +1266,7 @@ def print_group(client, d, num, total):
             base = get_tracker_name(client, t)
             msg = t.get('_tracker_msg') or ''
             t['_tracker_cache'] = f"{base} ({msg[:18]})" if msg else base
-        is_orig = (t == orig)
+        is_orig = (t is orig)
         seeders = t.get('_seeder_count', 0)
         size = t.get('size', 0)
         seed_time = t.get('seeding_time', 0)
