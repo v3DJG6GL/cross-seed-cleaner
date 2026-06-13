@@ -1016,8 +1016,6 @@ def evaluate_dead_trackers(d, now_ts):
     real = [tr for tr in trackers if _domain_from_tracker_url(tr.get('url', ''))]
 
     reasons = []
-    if not TRACKER_ERROR_MODE_IGNORE_CATEGORY_FILTER and not category_allowed(t.get('category', '')):
-        reasons.append("CATEGORY_FILTER")
     if not real:
         reasons.append("NO_REAL_TRACKERS")
     else:
@@ -1034,6 +1032,11 @@ def evaluate_dead_trackers(d, now_ts):
             reasons.append("TRACKER_UPDATING")
         if any(int(tr.get('status', 0) or 0) not in DEAD_TRACKER_STATUSES for tr in real):
             reasons.append("TRACKER_ALIVE")
+    # CATEGORY_FILTER goes last, mirroring evaluate_group's reason ordering so
+    # the HTML/CSV reports surface the same code in the same position regardless
+    # of which evaluator produced the row.
+    if not TRACKER_ERROR_MODE_IGNORE_CATEGORY_FILTER and not category_allowed(t.get('category', '')):
+        reasons.append("CATEGORY_FILTER")
 
     return {
         "eligible": not reasons,
