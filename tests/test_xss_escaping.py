@@ -139,6 +139,14 @@ class XSSEscapingTest(unittest.TestCase):
         self.assertIsNotNone(block, "inline <script> setup block missing from report")
         inline_js = block.group(1)
         self.assertNotIn("</script>", inline_js, "</script> breakout inside inline JS")
+        # The non-greedy capture above stops at the FIRST </script>, so an injected
+        # </script> in the user-controlled chart data (tracker domains feed the chart
+        # `labels` array) would truncate the captured block *before* the injected tag
+        # rather than include it — leaving the assertNotIn above vacuously green. Pin
+        # that the block still reaches the chart setup emitted after that data, so a
+        # real breakout (which would cut the capture short) is actually detected.
+        self.assertIn("new Chart(ctxGroup", inline_js,
+                      "inline JS block truncated before chart setup — </script> breakout in chart data")
 
     def test_chartjs_is_vendored_not_cdn(self):
         html = self._render()
