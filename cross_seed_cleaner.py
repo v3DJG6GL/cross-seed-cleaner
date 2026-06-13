@@ -92,6 +92,21 @@ def _parse_dead_statuses(raw):
     return frozenset(out)
 
 
+class _SplitBoolHelpFormatter(argparse.HelpFormatter):
+    """Render `--foo` and `--no-foo` on separate lines for easier copy-paste."""
+    def _format_action(self, action):
+        if not isinstance(action, argparse.BooleanOptionalAction):
+            return super()._format_action(action)
+        help_position = min(self._action_max_length + 2, self._max_help_position)
+        help_width = max(self._width - help_position, 11)
+        indent = ' ' * self._current_indent
+        parts = [f'{indent}{s}\n' for s in action.option_strings]
+        if action.help:
+            for line in self._split_lines(self._expand_help(action), help_width):
+                parts.append('%*s%s\n' % (help_position, '', line))
+        return ''.join(parts)
+
+
 def get_config():
     # Read fallbacks via globals().get so a commented-out / missing constant in
     # config.py degrades to a safe default instead of raising NameError (lets
@@ -117,7 +132,10 @@ def get_config():
     env_min_inactivity_days = float(os.environ.get("TRACKER_ERROR_MIN_INACTIVITY_DAYS", TRACKER_ERROR_MIN_INACTIVITY_DAYS))
     env_ignore_category_filter = str2bool(os.environ.get("TRACKER_ERROR_MODE_IGNORE_CATEGORY_FILTER", str(TRACKER_ERROR_MODE_IGNORE_CATEGORY_FILTER)))
 
-    parser = argparse.ArgumentParser(description='Cross-Seed Cleaner: Deduplicate and cleanup torrents.')
+    parser = argparse.ArgumentParser(
+        description='Cross-Seed Cleaner: Deduplicate and cleanup torrents.',
+        formatter_class=_SplitBoolHelpFormatter,
+    )
     parser.add_argument('--host', default=env_host, help='qBittorrent Host')
     parser.add_argument('--user', default=env_user, help='qBittorrent User')
     parser.add_argument('--password', default=env_pass, help='qBittorrent Password')
