@@ -187,8 +187,9 @@ def test_csv_header_and_types(csc, tmp_path):
     csv_text = render_csv(csc, items, evaluate(csc, items), tmp_path)
     assert csv_text.splitlines()[0] == (
         "Group ID,Status,Type,Name,Size,Tracker,Category,Added,Seeding Time,Ratio,Seeders,Reasons,Path")
-    types = set(re.findall(r"(ORIGINAL|CROSS-SEED|MEDIA-LIBRARY)", csv_text))
-    assert types == {"ORIGINAL", "CROSS-SEED", "MEDIA-LIBRARY"}
+    # \b so the EXT type value isn't matched inside reason codes like EXTERNAL_LINK.
+    types = set(re.findall(r"\b(ORIGINAL|CROSS-SEED|EXT)\b", csv_text))
+    assert types == {"ORIGINAL", "CROSS-SEED", "EXT"}
 
 
 # ─── escaping (combined HTML + JS sinks) ─────────────────────────────────────

@@ -3221,7 +3221,7 @@ def export_reports(sorted_items, eligible_ids):
                         writer.writerow({
                             'Group ID': idx,
                             'Status': status,
-                            'Type': 'MEDIA-LIBRARY',
+                            'Type': 'EXT',
                             'Name': d['original'].get('name', ''),
                             'Size': format_size_smart(d['original'].get('size', 0)),
                             'Tracker': '',
