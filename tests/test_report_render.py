@@ -233,6 +233,38 @@ def test_html_badge_tooltips(csc, tmp_path):
     assert "External library" in titles  # EXT badge tooltip
 
 
+# ─── mode-aware threshold cell coloring (HTML) ───────────────────────────────
+
+def _seeds_cell_class(html):
+    """Class on the Seeds-cell span of the only 0-seeder row in the report."""
+    m = re.search(r'<div class="cell"><span class="([^"]*)">0</span></div>', html)
+    assert m, "0-seeder Seeds cell not found in report"
+    return m.group(1)
+
+
+def test_html_tracker_error_mode_neutralizes_seeds_color(csc, tmp_path):
+    # Tracker-error mode bypasses MIN_SEEDERS, so an eligible 0-seeder dead
+    # torrent must NOT render its Seeds cell red in the HTML report (mirrors the
+    # CLI print_group rule). Otherwise the cell contradicts the green DELETE/DEAD
+    # row it sits in.
+    reconfigure(csc, TRACKER_ERROR_MODE=True, MISSING_HARD_LINKS_MODE=False,
+                MIN_SEEDERS=5, MAX_TORRENTS_IN_GROUP=3, MIN_SIZE_GIB=2,
+                MIN_ORIGINAL_SEED_TIME_DAYS=10, CATEGORY_FILTER_MODE="none")
+    items = [("g0", {"original": t("Dead", seeds=0, size=5 * GIB), "crossseeds": []})]
+    html = render_html(csc, items, {1}, tmp_path)
+    assert "text-danger" not in _seeds_cell_class(html)
+
+
+def test_html_standard_mode_low_seeds_color_red(csc, tmp_path):
+    # Counterpart: standard mode genuinely applies MIN_SEEDERS, so the same
+    # 0-seeder original keeps its red Seeds cell.
+    std(csc)
+    reconfigure(csc, TRACKER_ERROR_MODE=False)
+    items = [("g0", {"original": t("Low", seeds=0, size=5 * GIB), "crossseeds": []})]
+    html = render_html(csc, items, {1}, tmp_path)
+    assert _seeds_cell_class(html) == "text-danger"
+
+
 # ─── escaping (combined HTML + JS sinks) ─────────────────────────────────────
 
 def test_combined_payload_escaped_in_both_sinks(csc, tmp_path):

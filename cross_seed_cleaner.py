@@ -2217,7 +2217,13 @@ def export_reports(sorted_items, eligible_ids):
 
             cur_seeds = t.get('_seeder_count', 0)
 
-            c_seeds = "text-success" if cur_seeds >= MIN_SEEDERS else "text-danger"
+            # Tracker-error mode bypasses the MIN_SEEDERS/MIN_SIZE/MIN_TIME limits
+            # (eligibility is tracker-death based), so red/green threshold coloring
+            # would contradict the green DEAD/ELIGIBLE status — a dead torrent with
+            # 0 seeders would show a RED Seeds cell. Render those cells neutral in
+            # that mode, mirroring print_group. Category stays colored (live filter).
+            threshold_coloring = not TRACKER_ERROR_MODE
+            c_seeds = ("text-success" if cur_seeds >= MIN_SEEDERS else "text-danger") if threshold_coloring else ""
             c_size = ""
             c_time = ""
             c_cat = ""
@@ -2228,8 +2234,9 @@ def export_reports(sorted_items, eligible_ids):
             c_cat = "text-success" if category_allowed(t_cat) else "text-danger"
 
             if is_orig:
-                c_size = "text-success" if t_size >= MIN_SIZE_BYTES else "text-danger"
-                c_time = "text-success" if t_time >= MIN_ORIGINAL_SEED_TIME_SECONDS else "text-danger"
+                if threshold_coloring:
+                    c_size = "text-success" if t_size >= MIN_SIZE_BYTES else "text-danger"
+                    c_time = "text-success" if t_time >= MIN_ORIGINAL_SEED_TIME_SECONDS else "text-danger"
 
                 if t.get('_path_error'):
                     c_cat = "text-danger"
