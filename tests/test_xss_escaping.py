@@ -57,6 +57,12 @@ class XSSEscapingTest(unittest.TestCase):
     XSS_CAT_ALLOW = '<script>alert("xss-cat-allow")</script>'
     XSS_CAT_BLOCK = '<img src=x onerror=alert("xss-cat-block")>'
     XSS_MHL_CAT = '<img src=x onerror=alert("xss-mhl-cat")>'
+    # External media paths and path mappings are operator config rendered into
+    # the same config panel via _h(); without coverage, dropping that _h() wrapper
+    # leaves every test green (same failure mode the lists above guard against).
+    XSS_EXT_MEDIA = '<img src=x onerror=alert("xss-extmedia")>'
+    XSS_MAP_KEY = '<img src=x onerror=alert("xss-mapkey")>'
+    XSS_MAP_VAL = '<script>alert("xss-mapval")</script>'
 
     def setUp(self):
         self.csc = _load_module()
@@ -69,6 +75,8 @@ class XSSEscapingTest(unittest.TestCase):
         self.csc.CATEGORY_ALLOWLIST = [self.XSS_CAT_ALLOW]
         self.csc.CATEGORY_BLOCKLIST = [self.XSS_CAT_BLOCK]
         self.csc.MISSING_HARD_LINKS_CATEGORIES = [self.XSS_MHL_CAT]
+        self.csc.EXTERNAL_MEDIA_PATHS = [self.XSS_EXT_MEDIA]
+        self.csc.PATH_MAPPINGS = {self.XSS_MAP_KEY: self.XSS_MAP_VAL}
 
     def _render(self):
         torrent = {
@@ -130,6 +138,14 @@ class XSSEscapingTest(unittest.TestCase):
         self.assertIn('&lt;script&gt;alert(&quot;xss-cat-allow&quot;)', html)
         self.assertIn('alert(&quot;xss-cat-block&quot;)', html)
         self.assertIn('alert(&quot;xss-mhl-cat&quot;)', html)
+
+        # External media paths and path mappings (operator config in the panel).
+        self.assertNotIn('onerror=alert("xss-extmedia")', html, "external-media-path payload survived unescaped")
+        self.assertNotIn('onerror=alert("xss-mapkey")', html, "path-mapping key payload survived unescaped")
+        self.assertNotIn('<script>alert("xss-mapval")', html, "path-mapping value payload survived unescaped")
+        self.assertIn('alert(&quot;xss-extmedia&quot;)', html)
+        self.assertIn('alert(&quot;xss-mapkey&quot;)', html)
+        self.assertIn('&lt;script&gt;alert(&quot;xss-mapval&quot;)', html)
 
     def test_no_script_breakout_in_inline_js(self):
         html = self._render()
