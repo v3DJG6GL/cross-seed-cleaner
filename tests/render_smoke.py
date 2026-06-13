@@ -79,7 +79,10 @@ def main():
     # computed exactly the way the production pipeline does it.
     eligible_ids = set()
     reason_counts = {}
-    for idx, (_gid, d) in enumerate(sorted_items):
+    # export_reports enumerates groups 1-based and tests membership via
+    # `idx in eligible_ids`, so build eligible_ids with the same 1-based index
+    # (production does `enumerate(sorted_items, 1)`).
+    for idx, (_gid, d) in enumerate(sorted_items, 1):
         ev = csc.evaluate_group(d)
         d["_evaluation"] = ev
         if ev["eligible"]:
