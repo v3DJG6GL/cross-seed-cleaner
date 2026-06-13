@@ -2154,7 +2154,10 @@ def export_reports(sorted_items, eligible_ids):
                 )
 
         status_cell_content = f'<div class="status-container">{badge_html}{reasons_html}</div>'
-        torrents_to_list = [d['original']] + d['crossseeds']
+        # Order the cross-seeds by the configured sort field, matching the CLI
+        # (print_group also goes through sort_torrents). sort_torrents keeps the
+        # original pinned first, so the is_orig=(i==0) checks below stay valid.
+        torrents_to_list = sort_torrents(d['original'], d['crossseeds'], SORT_BY, SORT_ORDER)
 
         status_attr = 'delete' if is_del_group else 'keep'
         reason_codes = ' '.join(r['code'] for r in row.get('reasons', []))
@@ -3243,7 +3246,9 @@ def export_reports(sorted_items, eligible_ids):
                         d['_evaluation'] = evaluate_group(d)
                     reasons_str = ','.join(d['_evaluation']['reasons'])
 
-                    group_torrents = [d['original']] + d['crossseeds']
+                    # Sort cross-seeds by the configured field like the CLI/HTML;
+                    # sort_torrents pins the original first so i==0 stays the original.
+                    group_torrents = sort_torrents(d['original'], d['crossseeds'], SORT_BY, SORT_ORDER)
 
                     external_path = None
                     for t in group_torrents:

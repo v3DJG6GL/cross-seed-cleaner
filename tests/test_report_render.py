@@ -283,3 +283,39 @@ def test_combined_payload_escaped_in_both_sinks(csc, tmp_path):
     html = render_html(csc, items, evaluate(csc, items), tmp_path)
     assert '<script>alert("x")' not in html            # not raw anywhere
     assert "<\\/script>" in html                         # JS-escaped in inline JS
+
+
+# ─── within-group cross-seed ordering ────────────────────────────────────────
+
+def _sorted_items(csc):
+    return reconfigure(csc, MIN_SEEDERS=5, MAX_TORRENTS_IN_GROUP=9, MIN_SIZE_GIB=2,
+                       MIN_ORIGINAL_SEED_TIME_DAYS=10, CATEGORY_FILTER_MODE="none",
+                       MISSING_HARD_LINKS_MODE=False, SORT_BY="name", SORT_ORDER="asc")
+
+
+def test_html_crossseeds_render_in_sort_order(csc, tmp_path):
+    # The HTML report must order a group's cross-seeds by the configured sort
+    # field (name asc here), with the original pinned first — matching the CLI.
+    # Given out-of-order cross-seeds the report has to reorder them, not emit
+    # them in their raw add-order.
+    _sorted_items(csc)
+    items = [("g0", {"original": t("Orig"),
+                     "crossseeds": [t("Zeta"), t("alpha"), t("Mike")]})]
+    html = render_html(csc, items, evaluate(csc, items), tmp_path)
+    names = [a["data-sk-10"] for a in data_rows(ReportHTML(html))]
+    assert names[0] == "orig"                          # original first
+    assert names[1:] == ["alpha", "mike", "zeta"]      # cross-seeds name-sorted
+
+
+def test_csv_crossseeds_render_in_sort_order(csc, tmp_path):
+    # Same contract for the CSV export.
+    import csv as _csv
+    import io
+    _sorted_items(csc)
+    items = [("g0", {"original": t("Orig"),
+                     "crossseeds": [t("Zeta"), t("alpha"), t("Mike")]})]
+    csv_text = render_csv(csc, items, evaluate(csc, items), tmp_path)
+    rows = list(_csv.DictReader(io.StringIO(csv_text)))
+    names = [r["Name"] for r in rows]
+    assert names[0] == "Orig"                          # original first
+    assert names[1:] == ["alpha", "Mike", "Zeta"]      # cross-seeds name-sorted
