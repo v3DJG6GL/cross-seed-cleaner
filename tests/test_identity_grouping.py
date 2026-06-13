@@ -79,6 +79,29 @@ def test_inode_tie_break_lexicographic(csc, tmp_path):
     assert csc.get_representative_inode(str(tmp_path)) == _inode(str(tmp_path / "a.bin"))
 
 
+def test_inode_tie_break_same_basename_is_walk_order_independent(csc, tmp_path, monkeypatch):
+    # Two distinct files with the SAME size AND the SAME basename in different
+    # subdirs: the basename tie is broken by full path, so the representative
+    # inode (and thus the grouping identity) is stable no matter what order the
+    # directory walk happens to return — otherwise cross-seeds of one release
+    # could pick different inodes and fail to group.
+    (tmp_path / "Disc1").mkdir()
+    (tmp_path / "Disc2").mkdir()
+    (tmp_path / "Disc1" / "video.mkv").write_bytes(b"a" * 500)
+    (tmp_path / "Disc2" / "video.mkv").write_bytes(b"b" * 500)
+    winner = _inode(str(tmp_path / "Disc1" / "video.mkv"))   # smaller full path
+    assert csc.get_representative_inode(str(tmp_path)) == winner
+
+    # Force the opposite traversal order (Disc2 before Disc1); winner must hold.
+    real_walk = os.walk
+    def reversed_walk(top, *a, **k):
+        for root, dirs, files in real_walk(top, *a, **k):
+            dirs.sort(reverse=True)
+            yield root, dirs, files
+    monkeypatch.setattr(os, "walk", reversed_walk)
+    assert csc.get_representative_inode(str(tmp_path)) == winner
+
+
 def test_inode_empty_dir_falls_back_to_dir(csc, tmp_path):
     d = tmp_path / "empty"
     d.mkdir()

@@ -568,7 +568,14 @@ def get_representative_inode(path):
                         largest_file = f_path
                         largest_stat = stat
                     elif size == max_size and largest_file:
-                        if os.path.basename(f_path) < os.path.basename(largest_file):
+                        # Tie-break on basename first (unchanged), then full path.
+                        # Basename alone is a tie when two distinct same-size files
+                        # share a name in different subdirs, leaving the winner to
+                        # arbitrary os.walk order — so the chosen inode (and thus
+                        # the grouping identity) could differ between runs / between
+                        # cross-seeds. The full-path secondary key makes it
+                        # deterministic without changing any already-decided case.
+                        if (os.path.basename(f_path), f_path) < (os.path.basename(largest_file), largest_file):
                             largest_file = f_path
                             largest_stat = stat
                 except OSError: continue
