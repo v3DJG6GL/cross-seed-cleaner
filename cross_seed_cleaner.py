@@ -108,6 +108,20 @@ class _SplitBoolHelpFormatter(argparse.HelpFormatter):
         return ''.join(parts)
 
 
+def _env_num(name, default, cast):
+    """Coerce a numeric env override, mirroring the cast(os.environ.get(name,
+    default)) the inline reads used to do — but a non-numeric value (a config
+    typo like MIN_SEEDERS=abc) exits with the same friendly ERROR the other
+    config validators emit, instead of an uncaught ValueError traceback."""
+    raw = os.environ.get(name, default)
+    try:
+        return cast(raw)
+    except (ValueError, TypeError):
+        kind = "an integer" if cast is int else "a number"
+        sys.stderr.write(f"ERROR: {name}={raw!r} is invalid. Expected {kind}.\n")
+        sys.exit(1)
+
+
 def get_config():
     # Read fallbacks via globals().get so a commented-out / missing constant in
     # config.py degrades to a safe default instead of raising NameError (lets
@@ -116,10 +130,10 @@ def get_config():
     env_user = os.environ.get("QBITTORRENT_USER", globals().get("QBITTORRENT_USER", ""))
     env_pass = os.environ.get("QBITTORRENT_PASS", globals().get("QBITTORRENT_PASS", ""))
     env_api_key = os.environ.get("QBITTORRENT_API_KEY", globals().get("QBITTORRENT_API_KEY", ""))
-    env_min_seeders = int(os.environ.get("MIN_SEEDERS", MIN_SEEDERS))
-    env_max_group = int(os.environ.get("MAX_TORRENTS_IN_GROUP", MAX_TORRENTS_IN_GROUP))
-    env_min_days = float(os.environ.get("MIN_ORIGINAL_SEED_TIME_DAYS", MIN_ORIGINAL_SEED_TIME_DAYS))
-    env_min_size_gib = float(os.environ.get("MIN_SIZE_GIB", MIN_SIZE_GIB))
+    env_min_seeders = _env_num("MIN_SEEDERS", MIN_SEEDERS, int)
+    env_max_group = _env_num("MAX_TORRENTS_IN_GROUP", MAX_TORRENTS_IN_GROUP, int)
+    env_min_days = _env_num("MIN_ORIGINAL_SEED_TIME_DAYS", MIN_ORIGINAL_SEED_TIME_DAYS, float)
+    env_min_size_gib = _env_num("MIN_SIZE_GIB", MIN_SIZE_GIB, float)
     env_debug = str2bool(os.environ.get("DEBUG_MODE", str(DEBUG_MODE)))
     env_dry_run = str2bool(os.environ.get("DRY_RUN", str(DRY_RUN)))
     env_html_export = os.environ.get("HTML_EXPORT", HTML_EXPORT)
@@ -130,8 +144,8 @@ def get_config():
     env_ext_media_paths = os.environ.get("EXTERNAL_MEDIA_PATHS", EXTERNAL_MEDIA_PATHS)
     env_tracker_error_mode = str2bool(os.environ.get("TRACKER_ERROR_MODE", str(TRACKER_ERROR_MODE)))
     env_dead_statuses = os.environ.get("DEAD_TRACKER_STATUSES", DEAD_TRACKER_STATUSES)
-    env_min_age_days = float(os.environ.get("TRACKER_ERROR_MIN_AGE_DAYS", TRACKER_ERROR_MIN_AGE_DAYS))
-    env_min_inactivity_days = float(os.environ.get("TRACKER_ERROR_MIN_INACTIVITY_DAYS", TRACKER_ERROR_MIN_INACTIVITY_DAYS))
+    env_min_age_days = _env_num("TRACKER_ERROR_MIN_AGE_DAYS", TRACKER_ERROR_MIN_AGE_DAYS, float)
+    env_min_inactivity_days = _env_num("TRACKER_ERROR_MIN_INACTIVITY_DAYS", TRACKER_ERROR_MIN_INACTIVITY_DAYS, float)
     env_ignore_category_filter = str2bool(os.environ.get("TRACKER_ERROR_MODE_IGNORE_CATEGORY_FILTER", str(TRACKER_ERROR_MODE_IGNORE_CATEGORY_FILTER)))
 
     parser = argparse.ArgumentParser(

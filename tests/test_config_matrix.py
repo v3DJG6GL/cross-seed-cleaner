@@ -93,9 +93,21 @@ def test_filter_mode_is_case_insensitive():
 
 # ─── numeric env coercion ────────────────────────────────────────────────────
 
-def test_bad_int_env_raises():
-    with pytest.raises(ValueError):
+def test_bad_int_env_exits_friendly(capsys):
+    # A non-numeric numeric env override is a config typo; it must fail like
+    # every other bad setting — a friendly ERROR + clean exit, not a raw
+    # ValueError traceback.
+    with pytest.raises(SystemExit):
         load_module(env={"MIN_SEEDERS": "abc"})
+    err = capsys.readouterr().err
+    assert "ERROR" in err and "MIN_SEEDERS" in err
+
+
+def test_bad_float_env_exits_friendly(capsys):
+    with pytest.raises(SystemExit):
+        load_module(env={"MIN_SIZE_GIB": "1.2.3"})
+    err = capsys.readouterr().err
+    assert "ERROR" in err and "MIN_SIZE_GIB" in err
 
 
 def test_float_inf_accepted():
