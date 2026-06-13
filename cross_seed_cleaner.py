@@ -2685,6 +2685,13 @@ def export_reports(sorted_items, eligible_ids):
                 document.querySelectorAll('[data-filter-reason]:checked').forEach(cb => reasonsSet.add(cb.value));
                 const _seedReasonMatch = document.querySelector('[data-reason-match]:checked');
                 if (_seedReasonMatch) reasonMatchMode = _seedReasonMatch.value;
+                // Sync the green-highlight class with whichever radio is actually
+                // checked at seed time. The hardcoded `class="is-on"` on the Any
+                // label in the HTML would otherwise lie if a future change ever
+                // pre-checks Only server-side.
+                document.querySelectorAll('[data-reason-match]').forEach(r => {{
+                    r.parentElement.classList.toggle('is-on', r.checked);
+                }});
 
                 function updateStatusBtnLabel() {{
                     const btn = document.querySelector('[data-filter="status"]');
