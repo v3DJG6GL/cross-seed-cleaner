@@ -91,6 +91,7 @@ def test_category_case_sensitive(csc):
     ("http://tracker.opensharing.org:8080/announce", "opensharing.org"),
     ("https://www.example.com/announce", "example.com"),
     ("http://my-tracker.org/announce", "my-tracker.org"),    # substring NOT stripped
+    ("http://tracker.org/announce", "tracker.org"),          # not over-stripped to bare TLD
     ("http://www.tracker.x.org/announce", "x.org"),
     ("", None),
     ("tracker.foo.bar", None),                                # no scheme

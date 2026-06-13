@@ -646,12 +646,13 @@ def _domain_from_tracker_url(url):
     if not host:
         return None
     # Strip only leading 'www.'/'tracker.' labels (not substrings, so
-    # 'my-tracker.org' is left intact).
+    # 'my-tracker.org' is left intact), and only while the remainder still has
+    # a dot — otherwise 'tracker.org' would collapse to the bare TLD 'org'.
     changed = True
     while changed:
         changed = False
         for prefix in ('www.', 'tracker.'):
-            if host.startswith(prefix):
+            if host.startswith(prefix) and '.' in host[len(prefix):]:
                 host = host[len(prefix):]
                 changed = True
     return host
