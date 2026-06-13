@@ -1073,22 +1073,6 @@ def _reason_text(code):
     return code
 
 
-_REASON_CLI_COLOR = {
-    "EXTERNAL_LINK": Colors.BLUE,
-    "PATH_ERROR": Colors.RED,
-    "LOW_SEEDS": Colors.RED,
-    "SMALL_SIZE": Colors.RED,
-    "LOW_TIME": Colors.RED,
-    "TOO_MANY": Colors.ORANGE,
-    "CATEGORY_FILTER": Colors.ORANGE,
-    "TRACKER_ALIVE": Colors.GREEN,
-    "RECENTLY_ADDED": Colors.YELLOW,
-    "TRACKER_UPDATING": Colors.BLUE,
-    "NO_REAL_TRACKERS": Colors.ORANGE,
-    "NO_ADDED_TIME": Colors.ORANGE,
-    "RECENT_ACTIVITY": Colors.GREEN,
-}
-
 _REASON_HTML_ICON = {
     "EXTERNAL_LINK": "🔗",
     "PATH_ERROR": "⚠️",
