@@ -261,13 +261,18 @@ def js_string(v):
 
 def csv_safe(v):
     """Neutralize CSV/spreadsheet formula injection: a cell whose first char is
-    a formula trigger (= + - @ tab CR LF) is executed as a formula when the file
-    is opened in Excel/LibreOffice/Sheets. Prefix such a value with a single
-    quote so it stays literal text. Values not starting with a trigger are
-    unchanged. The set matches OWASP's leading-character list — a leading regular
-    space (0x20) is intentionally NOT a trigger (it keeps the cell as text)."""
+    a formula trigger (= + - @ tab CR LF, plus their full-width variants) is
+    executed as a formula when the file is opened in Excel/LibreOffice/Sheets.
+    Prefix such a value with a single quote so it stays literal text. Values not
+    starting with a trigger are unchanged. The set matches OWASP's leading-
+    character list — a leading regular space (0x20) is intentionally NOT a
+    trigger (it keeps the cell as text). The full-width forms (＝ ＋ － ＠) are
+    interpreted as formulas in some locales (e.g. Japanese Excel)."""
     s = "" if v is None else str(v)
-    return "'" + s if s[:1] in ('=', '+', '-', '@', '\t', '\r', '\n') else s
+    return "'" + s if s[:1] in (
+        '=', '+', '-', '@', '\t', '\r', '\n',
+        '＝', '＋', '－', '＠',   # full-width ＝ ＋ － ＠
+    ) else s
 
 ARGS, DRY_RUN = get_config()
 
