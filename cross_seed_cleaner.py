@@ -3391,7 +3391,7 @@ def scan_external_libraries(paths):
                             inode_tuple = (stat.st_dev, stat.st_ino)
                             if inode_tuple not in inodes:
                                 debug_log(f"[SCAN]   + Found Link: {f} (Inode: {stat.st_ino})")
-                            inodes[inode_tuple] = file_path
+                                inodes[inode_tuple] = file_path
                     except OSError:
                         continue
         except Exception as e:
