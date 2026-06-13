@@ -126,6 +126,24 @@ def test_dry_run_and_delete_mutually_exclusive():
         load_module(argv=["x", "--dry-run", "--delete"])
 
 
+# ─── tracker-error-mode auto-imply ───────────────────────────────────────────
+
+def test_ignore_category_filter_implies_tracker_error_mode():
+    m = load_module(argv=["x", "--tracker-error-mode-ignore-category-filter"])
+    assert m.TRACKER_ERROR_MODE is True
+    assert m.TRACKER_ERROR_MODE_IGNORE_CATEGORY_FILTER is True
+
+
+def test_ignore_category_filter_env_implies_tracker_error_mode():
+    m = load_module(env={"TRACKER_ERROR_MODE_IGNORE_CATEGORY_FILTER": "true"})
+    assert m.TRACKER_ERROR_MODE is True
+
+
+def test_no_implication_when_modifier_absent(csc):
+    assert csc.TRACKER_ERROR_MODE is False
+    assert csc.TRACKER_ERROR_MODE_IGNORE_CATEGORY_FILTER is False
+
+
 # ─── true CLI behavior (subprocess) ──────────────────────────────────────────
 
 def _run(*args):

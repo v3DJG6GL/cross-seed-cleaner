@@ -288,6 +288,13 @@ DEAD_TRACKER_STATUSES = _parse_dead_statuses(ARGS.dead_tracker_statuses)
 TRACKER_ERROR_MIN_AGE_DAYS = ARGS.tracker_error_min_age_days
 TRACKER_ERROR_MIN_INACTIVITY_DAYS = ARGS.tracker_error_min_inactivity_days
 TRACKER_ERROR_MODE_IGNORE_CATEGORY_FILTER = ARGS.tracker_error_mode_ignore_category_filter
+# --tracker-error-mode-ignore-category-filter is a modifier; it's meaningless
+# without tracker-error mode, so imply it rather than silently doing nothing.
+if TRACKER_ERROR_MODE_IGNORE_CATEGORY_FILTER and not TRACKER_ERROR_MODE:
+    TRACKER_ERROR_MODE = True
+    sys.stderr.write(
+        "NOTE: --tracker-error-mode-ignore-category-filter implies --tracker-error-mode; enabling it.\n"
+    )
 
 CATEGORY_FILTER_MODE = os.environ.get("CATEGORY_FILTER_MODE", CATEGORY_FILTER_MODE)
 SORT_BY = os.environ.get("SORT_BY", SORT_BY)
