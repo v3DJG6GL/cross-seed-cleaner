@@ -41,15 +41,30 @@ def t(name, seeds, tr, cat, **extra):
     return d
 
 
+# Each group's ORIGINAL carries DISTINCT ratio/size/uploaded/seed-time/added-on
+# values so the numeric-range and date filters (which read the original's
+# data-sk-* cells) can select an observable subset. g0 keeps the defaults so it
+# stays delete-eligible and the seeds-sort test is unaffected. All keep-group
+# size/seed-time stay above MIN_SIZE/MIN_TIME so the only rejection reasons are
+# LOW_SEEDS (+ EXTERNAL_LINK for g2), which the reason-filter tests rely on.
+# Per-group originals → ratio / size / uploaded / seeded-days / added_on:
+#   g0 1.5 /  3 GiB /  3 GiB /  30 d / 1700000000 (2023-11-14)
+#   g1 0.5 /  8 GiB /  1 GiB / 100 d / 1500000000 (2017-07-14)
+#   g2 3.0 / 20 GiB / 10 GiB /   5 d / 1600000000 (2020-09-13 12:26:40 UTC)
 items = [
     ("g0", {"original": t("DelA", 100, "aaa.cc", "movies"),
             "crossseeds": [t("DelB", 80, "bbb.cc", "tv")]}),
-    ("g1", {"original": t("KeepLow", 1, "ccc.cc", "music"), "crossseeds": []}),
+    ("g1", {"original": t("KeepLow", 1, "ccc.cc", "music",
+                          ratio=0.5, size=8 * GIB, uploaded=1 * GIB,
+                          seeding_time=100 * 86400, added_on=1500000000),
+            "crossseeds": []}),
     # ExtO has BOTH a low seeder count AND an external hardlink so the group
     # carries two rejection reasons. The Any/Only reason-filter test relies on
     # this multi-reason group to differentiate the two match modes.
     ("g2", {"original": t("ExtO", 1, "ddd.cc", "games",
-                          _external_hardlink=True, _external_path="/mnt/lib/ExtO"),
+                          _external_hardlink=True, _external_path="/mnt/lib/ExtO",
+                          ratio=3.0, size=20 * GIB, uploaded=10 * GIB,
+                          seeding_time=5 * 86400, added_on=1600000000),
             "crossseeds": [t("ExtX", 60, "eee.cc", "books")]}),
 ]
 

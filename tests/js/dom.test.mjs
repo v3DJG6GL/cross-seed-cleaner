@@ -227,6 +227,127 @@ test('name and path search boxes are scoped to their own column', async () => {
   assert.equal(visibleGroups(doc).length, 1);
 });
 
+// ── Range / date / dropdown filters ─────────────────────────────────────────
+// Exercise the numeric range inputs (seeds/ratio/size/uploaded/seeded), the date
+// filter (incl. its inclusive end-of-day), and the tracker/category dropdowns —
+// paths the smoke tests above never touched. The three fixture-group originals
+// carry distinct values for each dimension (see make_report.py).
+function dropDelete(doc, window) {
+  // Remove the pre-checked DELETE status filter so all three groups are candidates.
+  const cb = doc.querySelector('[data-filter-status][value="delete"]');
+  cb.checked = false;
+  cb.dispatchEvent(new window.Event('change', { bubbles: true }));
+}
+
+async function setInput(window, doc, name, value) {
+  // Range/date inputs apply on the same 120ms debounce as the text boxes.
+  const el = doc.querySelector(`[data-filter="${name}"]`);
+  el.value = value;
+  el.dispatchEvent(new window.Event('input', { bubbles: true }));
+  await new Promise(r => setTimeout(r, 170));
+}
+
+function selectDropdown(window, doc, panel, value) {
+  const cb = [...doc.querySelectorAll(`[data-filter-panel="${panel}"] input[type="checkbox"]`)]
+    .find(c => c.value === value);
+  assert.ok(cb, `no ${panel} dropdown option for "${value}"`);
+  cb.checked = true;
+  cb.dispatchEvent(new window.Event('change', { bubbles: true }));
+}
+
+function soleVisibleName(doc) {
+  const vis = visibleGroups(doc);
+  assert.equal(vis.length, 1, `expected exactly one visible group, got ${vis.length}`);
+  return vis[0].querySelector('.name-cell').textContent.trim();
+}
+
+test('seeds range filter selects by the group worst-case seed count', async () => {
+  const { window } = load();
+  const doc = window.document;
+  dropDelete(doc, window);
+  // group seeds-min: g0=80, g1=1, g2=1 → min 50 keeps only g0.
+  await setInput(window, doc, 'seedsMin', '50');
+  const vis = visibleGroups(doc);
+  assert.equal(vis.length, 1);
+  assert.equal(vis[0].dataset.seedsMin, '80');
+});
+
+test('size range filter reads the group original size in GiB', async () => {
+  const { window } = load();
+  const doc = window.document;
+  dropDelete(doc, window);
+  // original sizes: g0=3, g1=8, g2=20 GiB → min 10 keeps only g2.
+  await setInput(window, doc, 'sizeMin', '10');
+  assert.ok(soleVisibleName(doc).includes('ExtO'));
+});
+
+test('ratio range filter reads the group original ratio', async () => {
+  const { window } = load();
+  const doc = window.document;
+  dropDelete(doc, window);
+  // original ratios: g0=1.5, g1=0.5, g2=3.0 → min 2 keeps only g2.
+  await setInput(window, doc, 'ratioMin', '2');
+  assert.ok(soleVisibleName(doc).includes('ExtO'));
+});
+
+test('uploaded range filter reads the group original uploaded total', async () => {
+  const { window } = load();
+  const doc = window.document;
+  dropDelete(doc, window);
+  // original uploaded: g0=3, g1=1, g2=10 GiB → min 5 keeps only g2.
+  await setInput(window, doc, 'upMin', '5');
+  assert.ok(soleVisibleName(doc).includes('ExtO'));
+});
+
+test('seeded-time range filter reads the group original seed time in days', async () => {
+  const { window } = load();
+  const doc = window.document;
+  dropDelete(doc, window);
+  // original seed days: g0=30, g1=100, g2=5 → min 50 keeps only g1.
+  await setInput(window, doc, 'seededMin', '50');
+  assert.ok(soleVisibleName(doc).includes('KeepLow'));
+});
+
+test('date "from" filter keeps groups added on or after the date', async () => {
+  const { window } = load();
+  const doc = window.document;
+  dropDelete(doc, window);
+  // added: g0=2023-11, g1=2017-07, g2=2020-09 → from 2023-01-01 keeps only g0.
+  await setInput(window, doc, 'addedFrom', '2023-01-01');
+  assert.ok(soleVisibleName(doc).includes('DelA'));
+});
+
+test('date "to" filter includes events on the end date itself (inclusive end-of-day)', async () => {
+  const { window } = load();
+  const doc = window.document;
+  dropDelete(doc, window);
+  // g2 was added 2020-09-13 12:26:40 UTC — AFTER that day's midnight, so it only
+  // survives a "to 2020-09-13" bound because the filter extends it to end-of-day.
+  await setInput(window, doc, 'addedFrom', '2020-01-01');
+  await setInput(window, doc, 'addedTo', '2020-09-13');
+  assert.ok(soleVisibleName(doc).includes('ExtO'));
+});
+
+test('tracker dropdown shows only groups with a row on the chosen tracker', async () => {
+  const { window } = load();
+  const doc = window.document;
+  dropDelete(doc, window);
+  // ccc.cc is g1's only tracker (KeepLow); g0=aaa/bbb, g2=ddd/eee.
+  selectDropdown(window, doc, 'tracker', 'ccc.cc');
+  await new Promise(r => setTimeout(r, 10));
+  assert.ok(soleVisibleName(doc).includes('KeepLow'));
+});
+
+test('category dropdown shows only groups with a row in the chosen category', async () => {
+  const { window } = load();
+  const doc = window.document;
+  dropDelete(doc, window);
+  // "games" is ExtO's category in g2; g0=movies/tv, g1=music.
+  selectDropdown(window, doc, 'category', 'games');
+  await new Promise(r => setTimeout(r, 10));
+  assert.ok(soleVisibleName(doc).includes('ExtO'));
+});
+
 // The type/EXT badges carry a native `title`; the generic overflow tooltip also
 // fires on any clipped cell. Without a guard, a hand-narrowed Type column would
 // show both at once. jsdom has no layout engine, so stub the width getters to
