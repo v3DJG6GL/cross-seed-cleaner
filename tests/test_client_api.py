@@ -65,5 +65,31 @@ class ClientNonListBodyTest(unittest.TestCase):
         self.assertEqual(out[0]["_trackers"], [{"url": "http://t.example/announce"}])
 
 
+class SeederCountNullGuardTest(unittest.TestCase):
+    """get_seeder_count must not crash when num_complete/num_incomplete arrive
+    as null (present-but-None), and must preserve the -1 'unscraped' sentinel."""
+
+    def setUp(self):
+        self.csc = _load_module()
+
+    def _count(self, **fields):
+        # '_trackers': [] -> get_tracker_domain returns None -> reliable branch,
+        # so no network and num_complete is returned verbatim.
+        torrent = {"_trackers": [], "name": "t", **fields}
+        return self.csc.get_seeder_count(client=None, torrent=torrent)
+
+    def test_none_count_treated_as_zero(self):
+        self.assertEqual(self._count(num_complete=None), 0)
+
+    def test_missing_count_treated_as_zero(self):
+        self.assertEqual(self._count(), 0)
+
+    def test_unscraped_minus_one_preserved(self):
+        self.assertEqual(self._count(num_complete=-1), -1)
+
+    def test_real_count_passthrough(self):
+        self.assertEqual(self._count(num_complete=7), 7)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -748,8 +748,13 @@ def get_seeder_count(client, torrent):
 
     tracker_domain = get_tracker_domain(client, torrent)
     torrent['_tracker_domain'] = tracker_domain
-    num_complete = torrent.get('num_complete', 0)
-    num_incomplete = torrent.get('num_incomplete', 0)
+    # qBittorrent numeric fields can arrive as null; guard with `or 0` like
+    # every other numeric read (e.g. int(t.get('added_on', 0) or 0)). A
+    # present-but-None count would otherwise crash the unreliable branch
+    # (None + None) or leak None into the >= MIN_SEEDERS comparison. The -1
+    # "unscraped" sentinel is truthy, so it is preserved.
+    num_complete = int(torrent.get('num_complete', 0) or 0)
+    num_incomplete = int(torrent.get('num_incomplete', 0) or 0)
     name = torrent.get('name', 'Unknown')
 
     if is_unreliable_tracker(tracker_domain):
