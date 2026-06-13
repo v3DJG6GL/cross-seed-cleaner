@@ -154,7 +154,7 @@ def get_config():
     parser.add_argument('--external-media-paths', type=str, default=env_ext_media_paths,
                         help='Paths to scan for hardlinks. Supports commas, wildcards (*), and braces ({a,b}). E.g., "/mnt/{movies,tv},/mnt/users/*"')
 
-    parser.add_argument('--tracker-error-mode', action='store_true', default=env_tracker_error_mode, help='Enable mode that selects torrents whose every real tracker reports an error')
+    parser.add_argument('--tracker-error-mode', action=argparse.BooleanOptionalAction, default=env_tracker_error_mode, help='Enable mode that selects torrents whose every real tracker reports an error')
     parser.add_argument('--dead-tracker-statuses', type=str, default=env_dead_statuses, help='Comma-separated tracker status codes that count as "dead" (default "4,5,6"). Valid: 0,1,2,4,5,6')
     parser.add_argument('--tracker-error-min-age-days', type=float, default=env_min_age_days, help='Min days since added before a torrent is eligible in tracker-error mode. Decimals supported (e.g. 0.0417 = 1h). Default 1; 0 disables.')
     parser.add_argument('--tracker-error-min-inactivity-days', type=float, default=env_min_inactivity_days, help='Skip torrents whose last peer activity is less than this many days ago in tracker-error mode (default 30; 0 disables)')

@@ -144,6 +144,16 @@ def test_no_implication_when_modifier_absent(csc):
     assert csc.TRACKER_ERROR_MODE_IGNORE_CATEGORY_FILTER is False
 
 
+def test_tracker_error_mode_cli_can_override_env_true():
+    """If TRACKER_ERROR_MODE=true is set in env (or config.py), the CLI must
+    still be able to disable the mode for an ad-hoc run via the BooleanOptionalAction
+    negation `--no-tracker-error-mode`. Without this, env-true permanently
+    locks the flag on."""
+    m = load_module(env={"TRACKER_ERROR_MODE": "true"},
+                    argv=["x", "--no-tracker-error-mode"])
+    assert m.TRACKER_ERROR_MODE is False
+
+
 # ─── true CLI behavior (subprocess) ──────────────────────────────────────────
 
 def _run(*args):
