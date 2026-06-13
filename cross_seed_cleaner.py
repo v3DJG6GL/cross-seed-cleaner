@@ -2177,7 +2177,7 @@ def export_reports(sorted_items, eligible_ids):
                 else:
                     type_badge = '<span class="type-badge type-orig" style="border:1px solid #555;">ORIGINAL</span>'
             else:
-                type_badge = '<span class="type-badge type-cross" style="border:1px solid #555;">CROSS</span>'
+                type_badge = '<span class="type-badge type-cross" style="border:1px solid #555;" title="Cross-seed">CROSS</span>'
 
             added_ts = format_timestamp(t.get('added_on', 0))
             tracker_clean = t.get('_tracker_domain') or "Unknown"
@@ -2254,7 +2254,7 @@ def export_reports(sorted_items, eligible_ids):
             html_parts.append(f"""
             <div class="grid-row"{ext_sk}>
                 <div class="cell">{status_cell_content}</div>
-                <div class="cell"><span class="type-badge" style="color:#aaa; border:1px solid #555;">EXT</span></div>
+                <div class="cell"><span class="type-badge" style="color:#aaa; border:1px solid #555;" title="External library">EXT</span></div>
                 <div class="cell" style="text-align:center; color:#555; justify-content:center;">-</div>
                 <div class="cell" style="text-align:center; color:#555; justify-content:center;">-</div>
                 <div class="cell"><span class="text-success">{format_size_smart(orig_size)}</span></div>
@@ -3213,7 +3213,7 @@ def export_reports(sorted_items, eligible_ids):
                         writer.writerow({
                             'Group ID': idx,
                             'Status': status,
-                            'Type': orig_type if i == 0 else 'CROSS-SEED',
+                            'Type': orig_type if i == 0 else 'CROSS',
                             'Name': t.get('name', ''),
                             'Size': format_size_smart(t.get('size', 0)),
                             'Tracker': t.get('_tracker_domain') or "Unknown",

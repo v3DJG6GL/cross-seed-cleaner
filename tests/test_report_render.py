@@ -188,8 +188,20 @@ def test_csv_header_and_types(csc, tmp_path):
     assert csv_text.splitlines()[0] == (
         "Group ID,Status,Type,Name,Size,Tracker,Category,Added,Seeding Time,Ratio,Seeders,Reasons,Path")
     # \b so the EXT type value isn't matched inside reason codes like EXTERNAL_LINK.
-    types = set(re.findall(r"\b(ORIGINAL|CROSS-SEED|EXT)\b", csv_text))
-    assert types == {"ORIGINAL", "CROSS-SEED", "EXT"}
+    # The cross-seed row is labelled "CROSS" to match the HTML badge and CLI table.
+    types = set(re.findall(r"\b(ORIGINAL|CROSS|EXT)\b", csv_text))
+    assert types == {"ORIGINAL", "CROSS", "EXT"}
+
+
+def test_html_badge_tooltips(csc, tmp_path):
+    # The abbreviated type badges carry a hover tooltip spelling out the full term.
+    std(csc)
+    items = [("g0", {"original": t("Ext", _external_hardlink=True, _external_path="/mnt/lib/Ext"),
+                     "crossseeds": [t("ExtX")]})]
+    html = render_html(csc, items, evaluate(csc, items), tmp_path)
+    titles = {a.get("title") for (_tag, a) in ReportHTML(html).with_class("type-badge")}
+    assert "Cross-seed" in titles        # CROSS badge tooltip
+    assert "External library" in titles  # EXT badge tooltip
 
 
 # ─── escaping (combined HTML + JS sinks) ─────────────────────────────────────
