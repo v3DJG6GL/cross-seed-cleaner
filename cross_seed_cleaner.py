@@ -1253,7 +1253,7 @@ def print_group(client, d, num, total):
 
     print(f"\n{Colors.BOLD}{Colors.BLUE}{'─' * 262}{Colors.END}")
     print(f"{Colors.BOLD}Group {num}/{total}: "
-          f"{Colors.CYAN}{orig.get('name')[:140]}{Colors.END} "
+          f"{Colors.CYAN}{orig.get('name', '')[:140]}{Colors.END} "
           f"({Colors.GREEN}✓ ELIGIBLE{Colors.END})")
 
     headers = ["Type", "Seeds", "Ratio", "Size", "Uploaded", "Seeded (D:H)", "Added", "Tracker", "Category", "Name"]
