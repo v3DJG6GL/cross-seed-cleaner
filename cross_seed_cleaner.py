@@ -942,7 +942,10 @@ def format_size_smart(size_bytes):
     units = ("B", "KiB", "MiB", "GiB", "TiB", "PiB")
     i = 0
     p = size_bytes
-    while p >= 1024 and i < len(units) - 1:
+    # Compare the rounded value so a size that rounds up to 1024.00 in the
+    # current unit rolls over to the next one (e.g. 1024**2-1 -> "1.00 MiB",
+    # not "1024.00 KiB").
+    while round(p, 2) >= 1024 and i < len(units) - 1:
         p /= 1024
         i += 1
     return f"{p:.2f} {units[i]}"

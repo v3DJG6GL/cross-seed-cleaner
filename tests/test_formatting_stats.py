@@ -13,6 +13,8 @@ import pytest
     (1024 ** 5, "1.00 PiB"),
     (1024 ** 6, "1024.00 PiB"),   # caps at PiB
     (-5, "-5.00 B"),              # negative: no scaling loop
+    (1024 ** 2 - 1, "1.00 MiB"),  # rounds up to a unit boundary -> roll over
+    (1024 ** 3 - 1, "1.00 GiB"),
 ])
 def test_format_size_smart(csc, size, expected):
     assert csc.format_size_smart(size) == expected
