@@ -25,7 +25,7 @@ csc.MIN_ORIGINAL_SEED_TIME_DAYS = 1
 csc.MIN_ORIGINAL_SEED_TIME_SECONDS = 86400
 csc.CATEGORY_FILTER_MODE = "none"
 csc._CATEGORY_FILTER_MODE_LC = "none"
-csc.NO_HARD_LINKS_MODE = False
+csc.MISSING_HARD_LINKS_MODE = False
 csc.DRY_RUN = True
 csc.CHARTJS_SOURCE = "/* chart.js stripped for tests */"
 

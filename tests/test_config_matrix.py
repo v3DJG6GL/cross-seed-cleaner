@@ -154,6 +154,15 @@ def test_tracker_error_mode_cli_can_override_env_true():
     assert m.TRACKER_ERROR_MODE is False
 
 
+def test_missing_hard_links_mode_cli_can_override_env_true():
+    """Symmetric to the tracker-error case: with the rename from
+    --no-hard-links-mode to --missing-hard-links-mode, the cancel form
+    --no-missing-hard-links-mode now exists and must beat env-true."""
+    m = load_module(env={"MISSING_HARD_LINKS_MODE": "true"},
+                    argv=["x", "--no-missing-hard-links-mode"])
+    assert m.MISSING_HARD_LINKS_MODE is False
+
+
 # ─── true CLI behavior (subprocess) ──────────────────────────────────────────
 
 def _run(*args):

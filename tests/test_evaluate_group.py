@@ -1,7 +1,7 @@
 """Exhaustive coverage of evaluate_group — the safety-critical eligibility
 decision that determines which torrents get deleted. Pins every reason code,
 the exact boundary operators/units, multi-reason ordering, and the normal vs
-no-hard-links mode split (cross_seed_cleaner.py:786-831)."""
+missing-hard-links mode split (cross_seed_cleaner.py:786-831)."""
 import pytest
 
 from conftest import reconfigure
@@ -24,7 +24,7 @@ def ev(csc):
         MIN_SIZE_GIB=MIN_GIB,
         MIN_ORIGINAL_SEED_TIME_DAYS=MIN_DAYS,
         CATEGORY_FILTER_MODE="none",
-        NO_HARD_LINKS_MODE=False,
+        MISSING_HARD_LINKS_MODE=False,
     )
 
 
@@ -114,7 +114,7 @@ def test_one_low_crossseed_blocks_whole_group(ev):
 def test_blocked_category_on_any_member(csc):
     reconfigure(csc, MIN_SEEDERS=MIN_SEEDERS, MAX_TORRENTS_IN_GROUP=MAX_GROUP,
                 MIN_SIZE_GIB=MIN_GIB, MIN_ORIGINAL_SEED_TIME_DAYS=MIN_DAYS,
-                NO_HARD_LINKS_MODE=False,
+                MISSING_HARD_LINKS_MODE=False,
                 CATEGORY_FILTER_MODE="block", CATEGORY_BLOCKLIST=["games"])
     r = csc.evaluate_group(grp(t(category="movies"), [t(category="games")]))
     assert r["reasons"] == ["CATEGORY_FILTER"]
@@ -134,7 +134,7 @@ def test_empty_original_defaults_to_zero(ev):
 def test_min_size_zero_is_no_limit(csc):
     reconfigure(csc, MIN_SEEDERS=0, MAX_TORRENTS_IN_GROUP=99, MIN_SIZE_GIB=0,
                 MIN_ORIGINAL_SEED_TIME_DAYS=0, CATEGORY_FILTER_MODE="none",
-                NO_HARD_LINKS_MODE=False)
+                MISSING_HARD_LINKS_MODE=False)
     assert csc.evaluate_group(grp(t(size=0, seeded=0, seeds=0)))["reasons"] == []
 
 
@@ -143,7 +143,7 @@ def test_min_size_zero_is_no_limit(csc):
 def test_multi_reason_order_normal(csc):
     reconfigure(csc, MIN_SEEDERS=MIN_SEEDERS, MAX_TORRENTS_IN_GROUP=2,
                 MIN_SIZE_GIB=MIN_GIB, MIN_ORIGINAL_SEED_TIME_DAYS=MIN_DAYS,
-                NO_HARD_LINKS_MODE=False,
+                MISSING_HARD_LINKS_MODE=False,
                 CATEGORY_FILTER_MODE="block", CATEGORY_BLOCKLIST=["games"])
     bad = t(seeds=0, size=0, seeded=0, category="games", _external_hardlink=True)
     # group of 3 (orig + 2 cross) >= MAX(2) -> TOO_MANY too
@@ -154,7 +154,7 @@ def test_multi_reason_order_normal(csc):
     assert r["eligible"] is False
 
 
-# ─── no-hard-links mode ──────────────────────────────────────────────────────
+# ─── missing-hard-links mode ─────────────────────────────────────────────────
 
 @pytest.fixture
 def nhl(csc):
@@ -165,7 +165,7 @@ def nhl(csc):
         MIN_SIZE_GIB=MIN_GIB,
         MIN_ORIGINAL_SEED_TIME_DAYS=MIN_DAYS,
         CATEGORY_FILTER_MODE="none",
-        NO_HARD_LINKS_MODE=True,
+        MISSING_HARD_LINKS_MODE=True,
     )
 
 
@@ -199,7 +199,7 @@ def test_nhl_external_link(nhl):
 def test_nhl_multi_reason_order(csc):
     reconfigure(csc, MIN_SEEDERS=MIN_SEEDERS, MAX_TORRENTS_IN_GROUP=MAX_GROUP,
                 MIN_SIZE_GIB=MIN_GIB, MIN_ORIGINAL_SEED_TIME_DAYS=MIN_DAYS,
-                NO_HARD_LINKS_MODE=True,
+                MISSING_HARD_LINKS_MODE=True,
                 CATEGORY_FILTER_MODE="block", CATEGORY_BLOCKLIST=["games"])
     bad = t(seeds=0, size=0, seeded=0, category="games",
             _external_hardlink=True, _path_error=True)

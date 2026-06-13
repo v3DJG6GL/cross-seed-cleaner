@@ -1,4 +1,4 @@
-"""External-library hardlink scanning and no-hard-links orphan detection
+"""External-library hardlink scanning and missing-hard-links orphan detection
 (cross_seed_cleaner.py:3011-3166)."""
 import os
 
@@ -53,12 +53,12 @@ def test_scan_brace_expansion(csc, tmp_path):
     assert _inode(str(base / "b" / "f.mkv")) in result
 
 
-# ─── check_no_hard_links orphan detection ────────────────────────────────────
+# ─── check_missing_hard_links orphan detection ───────────────────────────────
 
-def _setup_nhl(csc, monkeypatch, torrents, categories, external=None):
-    """Wire check_no_hard_links phases and capture the all_groups it produces."""
-    reconfigure(csc, NO_HARD_LINKS_CATEGORIES=categories)
-    csc.NO_HARD_LINKS_MODE = True
+def _setup_mhl(csc, monkeypatch, torrents, categories, external=None):
+    """Wire check_missing_hard_links phases and capture the all_groups it produces."""
+    reconfigure(csc, MISSING_HARD_LINKS_CATEGORIES=categories)
+    csc.MISSING_HARD_LINKS_MODE = True
     monkeypatch.setattr(csc, "_fetch_and_filter_torrents", lambda client: torrents)
     monkeypatch.setattr(csc, "_scan_external_libs_phase", lambda: external or {})
     monkeypatch.setattr(csc, "_fetch_seeders_phase", lambda client, t: None)
@@ -75,55 +75,55 @@ def _tor(h, identity, category, **extra):
     return d
 
 
-def test_nhl_no_categories_early_return(csc, monkeypatch):
-    reconfigure(csc, NO_HARD_LINKS_CATEGORIES=[])
+def test_mhl_no_categories_early_return(csc, monkeypatch):
+    reconfigure(csc, MISSING_HARD_LINKS_CATEGORIES=[])
     called = []
     monkeypatch.setattr(csc, "_fetch_and_filter_torrents", lambda c: called.append(1) or [])
-    csc.check_no_hard_links(FakeClient())
+    csc.check_missing_hard_links(FakeClient())
     assert called == []                  # returned before fetching
 
 
-def test_nhl_target_category_regex_and_literal(csc, monkeypatch):
+def test_mhl_target_category_regex_and_literal(csc, monkeypatch):
     tors = [
         _tor("a", "inode:1:1", "cross-seed"),     # literal target
         _tor("b", "inode:2:2", "autobrr-x"),      # regex target
         _tor("c", "inode:3:3", "movies"),         # not target
     ]
-    cap = _setup_nhl(csc, monkeypatch, tors, ["cross-seed", "r:autobrr-.*"])
-    csc.check_no_hard_links(FakeClient())
+    cap = _setup_mhl(csc, monkeypatch, tors, ["cross-seed", "r:autobrr-.*"])
+    csc.check_missing_hard_links(FakeClient())
     assert set(cap) == {"a", "b"}
 
 
-def test_nhl_sibling_identity_skipped(csc, monkeypatch):
+def test_mhl_sibling_identity_skipped(csc, monkeypatch):
     # Target torrent shares an identity with another torrent -> has a sibling -> not orphan.
     tors = [
         _tor("a", "inode:5:5", "cross-seed"),
         _tor("b", "inode:5:5", "movies"),          # non-category sibling, same identity
     ]
-    cap = _setup_nhl(csc, monkeypatch, tors, ["cross-seed"])
-    csc.check_no_hard_links(FakeClient())
+    cap = _setup_mhl(csc, monkeypatch, tors, ["cross-seed"])
+    csc.check_missing_hard_links(FakeClient())
     assert cap == {}                                # 'a' skipped (sibling count >= 2)
 
 
-def test_nhl_heuristic_sets_path_error(csc, monkeypatch):
+def test_mhl_heuristic_sets_path_error(csc, monkeypatch):
     tors = [_tor("a", "heuristic:100:a", "cross-seed")]
-    cap = _setup_nhl(csc, monkeypatch, tors, ["cross-seed"])
-    csc.check_no_hard_links(FakeClient())
+    cap = _setup_mhl(csc, monkeypatch, tors, ["cross-seed"])
+    csc.check_missing_hard_links(FakeClient())
     assert cap["a"]["original"]["_path_error"] is True
 
 
-def test_nhl_external_match_preserved(csc, monkeypatch):
+def test_mhl_external_match_preserved(csc, monkeypatch):
     tors = [_tor("a", "inode:1:2", "cross-seed")]
-    cap = _setup_nhl(csc, monkeypatch, tors, ["cross-seed"], external={(1, 2): "/mnt/lib/x"})
-    csc.check_no_hard_links(FakeClient())
+    cap = _setup_mhl(csc, monkeypatch, tors, ["cross-seed"], external={(1, 2): "/mnt/lib/x"})
+    csc.check_missing_hard_links(FakeClient())
     assert cap["a"]["original"]["_external_hardlink"] is True
     assert cap["a"]["original"]["_external_path"] == "/mnt/lib/x"
 
 
-def test_nhl_plain_orphan(csc, monkeypatch):
+def test_mhl_plain_orphan(csc, monkeypatch):
     tors = [_tor("a", "inode:9:9", "cross-seed")]
-    cap = _setup_nhl(csc, monkeypatch, tors, ["cross-seed"])
-    csc.check_no_hard_links(FakeClient())
+    cap = _setup_mhl(csc, monkeypatch, tors, ["cross-seed"])
+    csc.check_missing_hard_links(FakeClient())
     orig = cap["a"]["original"]
     assert orig["_external_hardlink"] is False
     assert "_path_error" not in orig

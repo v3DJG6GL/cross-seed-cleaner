@@ -49,7 +49,7 @@ csc.CATEGORY_FILTER_MODE = "block"
 # category_allowed reads pre-compiled spec lists; re-compile after override.
 csc._CATEGORY_BLOCKLIST_SPECS = csc._compile_specs(csc.CATEGORY_BLOCKLIST, "CATEGORY_BLOCKLIST")
 csc._CATEGORY_ALLOWLIST_SPECS = csc._compile_specs(csc.CATEGORY_ALLOWLIST, "CATEGORY_ALLOWLIST")
-csc.NO_HARD_LINKS_MODE = False
+csc.MISSING_HARD_LINKS_MODE = False
 csc.UNRELIABLE_TRACKERS = ["torrentday.com"]
 
 

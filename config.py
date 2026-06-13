@@ -106,19 +106,22 @@ TRACKER_ERROR_MIN_INACTIVITY_DAYS = 30
 TRACKER_ERROR_MODE_IGNORE_CATEGORY_FILTER = False
 
 
-# ─── NO-HARD-LINKS MODE ────────────────────────────────────────────────────
-# When enabled, the script finds torrents in selected qBittorrent categories that have NO hard-links.
+# ─── MISSING-HARD-LINKS MODE ───────────────────────────────────────────────
+# When enabled, the script finds torrents in selected qBittorrent categories
+# that are MISSING the expected extra hard-link to an external media library
+# (i.e. their data is only referenced by qBit's own copy — orphan torrents
+# from your media library's perspective).
 # Category selection supports:
 # - Exact match:  "cross-seed-links"
 # - Regex match:  prefix with "r:", e.g. "r:autobrr-.*"
 # - Combined:     "cross-seed-category,r:autobrr-.*"
 # Category names and patterns are compared in lowercase — write yours in lowercase to make sure they match.
-NO_HARD_LINKS_MODE = False
-NO_HARD_LINKS_CATEGORIES = "cross-seed-category,r:autobrr-.*"
+MISSING_HARD_LINKS_MODE = False
+MISSING_HARD_LINKS_CATEGORIES = "cross-seed-category,r:autobrr-.*"
 
 
 # ─── EXTERNAL MEDIA PATHS ──────────────────────────────────────────────────
-# Path(s) to external media libraries to scan for hardlinks (used in No-Hard-Links mode).
+# Path(s) to external media libraries to scan for hardlinks (used in Missing-Hard-Links mode).
 # Supports:
 # 1. Comma-separated paths:         "/mnt/movies, /mnt/tv"
 # 2. Wildcards (* = anything, ? = one character, [abc] = one of the listed characters): "/mnt/users/*"

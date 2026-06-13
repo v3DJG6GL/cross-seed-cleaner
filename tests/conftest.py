@@ -69,8 +69,8 @@ def reconfigure(csc, **overrides):
             csc._CATEGORY_BLOCKLIST_SPECS = csc._compile_specs(val, "CATEGORY_BLOCKLIST")
         elif key == "UNRELIABLE_TRACKERS":
             csc._UNRELIABLE_TRACKERS_SPECS = csc._compile_specs(val, "UNRELIABLE_TRACKERS", lower=True)
-        elif key == "NO_HARD_LINKS_CATEGORIES":
-            csc._NO_HARD_LINKS_CATEGORY_SPECS = csc._compile_specs(val, "NO_HARD_LINKS_CATEGORIES")
+        elif key == "MISSING_HARD_LINKS_CATEGORIES":
+            csc._MISSING_HARD_LINKS_CATEGORY_SPECS = csc._compile_specs(val, "MISSING_HARD_LINKS_CATEGORIES")
         elif key == "CATEGORY_FILTER_MODE":
             csc._CATEGORY_FILTER_MODE_LC = val.lower()
         elif key == "DEAD_TRACKER_STATUSES":

@@ -68,9 +68,9 @@ def _validate_config():
             f"ERROR: TRACKER_ERROR_MIN_INACTIVITY_DAYS={TRACKER_ERROR_MIN_INACTIVITY_DAYS!r} must be >= 0.\n"
         )
         sys.exit(1)
-    if TRACKER_ERROR_MODE and NO_HARD_LINKS_MODE:
+    if TRACKER_ERROR_MODE and MISSING_HARD_LINKS_MODE:
         sys.stderr.write(
-            "ERROR: TRACKER_ERROR_MODE and NO_HARD_LINKS_MODE are mutually exclusive — pick one.\n"
+            "ERROR: TRACKER_ERROR_MODE and MISSING_HARD_LINKS_MODE are mutually exclusive — pick one.\n"
         )
         sys.exit(1)
 
@@ -123,8 +123,9 @@ def get_config():
     env_dry_run = str2bool(os.environ.get("DRY_RUN", str(DRY_RUN)))
     env_html_export = os.environ.get("HTML_EXPORT", HTML_EXPORT)
     env_csv_export = os.environ.get("CSV_EXPORT", CSV_EXPORT)
-    env_no_hard_links_mode = str2bool(os.environ.get("NO_HARD_LINKS_MODE", str(NO_HARD_LINKS_MODE)))
-    env_no_hard_links_cats = os.environ.get("NO_HARD_LINKS_CATEGORIES", NO_HARD_LINKS_CATEGORIES)
+    env_missing_hard_links_mode = str2bool(os.environ.get("MISSING_HARD_LINKS_MODE", str(MISSING_HARD_LINKS_MODE)))
+    env_missing_hard_links_cats = os.environ.get("MISSING_HARD_LINKS_CATEGORIES", MISSING_HARD_LINKS_CATEGORIES)
+
     env_ext_media_paths = os.environ.get("EXTERNAL_MEDIA_PATHS", EXTERNAL_MEDIA_PATHS)
     env_tracker_error_mode = str2bool(os.environ.get("TRACKER_ERROR_MODE", str(TRACKER_ERROR_MODE)))
     env_dead_statuses = os.environ.get("DEAD_TRACKER_STATUSES", DEAD_TRACKER_STATUSES)
@@ -149,8 +150,8 @@ def get_config():
     parser.add_argument('--html', type=str, default=env_html_export, help='Path to save HTML report')
     parser.add_argument('--csv', type=str, default=env_csv_export, help='Path to save CSV report')
 
-    parser.add_argument('--no-hard-links-mode', action='store_true', default=env_no_hard_links_mode, help='Enable mode to check for torrents without hard links')
-    parser.add_argument('--no-hard-links-categories', type=str, default=env_no_hard_links_cats, help='Comma-separated categories for no-hard-links mode; prefix "r:" for regex (e.g. "r:autobrr-.*")')
+    parser.add_argument('--missing-hard-links-mode', action=argparse.BooleanOptionalAction, default=env_missing_hard_links_mode, help='Enable mode to find torrents in selected categories that are missing the expected extra hard-link (orphans from the media library)')
+    parser.add_argument('--missing-hard-links-categories', type=str, default=env_missing_hard_links_cats, help='Comma-separated categories for missing-hard-links mode; prefix "r:" for regex (e.g. "r:autobrr-.*")')
     parser.add_argument('--external-media-paths', type=str, default=env_ext_media_paths,
                         help='Paths to scan for hardlinks. Supports commas, wildcards (*), and braces ({a,b}). E.g., "/mnt/{movies,tv},/mnt/users/*"')
 
@@ -297,8 +298,8 @@ if HTML_EXPORT:
     REPORT_LOGIC_SOURCE = _load_vendor_asset(('vendor', 'report', 'report-logic.js'), 'report logic')
 
 
-NO_HARD_LINKS_MODE = ARGS.no_hard_links_mode
-NO_HARD_LINKS_CATEGORIES = [c.strip().lower() for c in ARGS.no_hard_links_categories.split(',') if c.strip()] if ARGS.no_hard_links_categories else []
+MISSING_HARD_LINKS_MODE = ARGS.missing_hard_links_mode
+MISSING_HARD_LINKS_CATEGORIES = [c.strip().lower() for c in ARGS.missing_hard_links_categories.split(',') if c.strip()] if ARGS.missing_hard_links_categories else []
 EXTERNAL_MEDIA_PATHS = smart_split_paths(ARGS.external_media_paths) if ARGS.external_media_paths else []
 
 TRACKER_ERROR_MODE = ARGS.tracker_error_mode
@@ -633,7 +634,7 @@ def matches_pattern(text, spec):
 _CATEGORY_ALLOWLIST_SPECS = _compile_specs(CATEGORY_ALLOWLIST, "CATEGORY_ALLOWLIST")
 _CATEGORY_BLOCKLIST_SPECS = _compile_specs(CATEGORY_BLOCKLIST, "CATEGORY_BLOCKLIST")
 _UNRELIABLE_TRACKERS_SPECS = _compile_specs(UNRELIABLE_TRACKERS, "UNRELIABLE_TRACKERS", lower=True)
-_NO_HARD_LINKS_CATEGORY_SPECS = _compile_specs(NO_HARD_LINKS_CATEGORIES, "NO_HARD_LINKS_CATEGORIES")
+_MISSING_HARD_LINKS_CATEGORY_SPECS = _compile_specs(MISSING_HARD_LINKS_CATEGORIES, "MISSING_HARD_LINKS_CATEGORIES")
 _CATEGORY_FILTER_MODE_LC = CATEGORY_FILTER_MODE.lower()
 
 @lru_cache(maxsize=1024)
@@ -985,7 +986,7 @@ def evaluate_group(d):
     orig = d['original']
     xs = d.get('crossseeds', [])
 
-    if NO_HARD_LINKS_MODE:
+    if MISSING_HARD_LINKS_MODE:
         all_t = [orig]
         externally_linked = bool(orig.get('_external_hardlink'))
         seeds_ok = orig.get('_seeder_count', 0) >= MIN_SEEDERS
@@ -1004,7 +1005,7 @@ def evaluate_group(d):
 
     reasons = []
     if externally_linked: reasons.append("EXTERNAL_LINK")
-    if NO_HARD_LINKS_MODE and not path_ok: reasons.append("PATH_ERROR")
+    if MISSING_HARD_LINKS_MODE and not path_ok: reasons.append("PATH_ERROR")
     if not seeds_ok: reasons.append("LOW_SEEDS")
     if not size_ok: reasons.append("SMALL_SIZE")
     if not time_ok: reasons.append("LOW_TIME")
@@ -1161,7 +1162,7 @@ def print_config():
     mode_text, mode_color = _mode_label_and_color()
 
     unreliable_str = ', '.join(UNRELIABLE_TRACKERS) if UNRELIABLE_TRACKERS else 'None'
-    no_hard_links_cat = ', '.join(NO_HARD_LINKS_CATEGORIES) if NO_HARD_LINKS_CATEGORIES else 'None'
+    missing_hard_links_cat = ', '.join(MISSING_HARD_LINKS_CATEGORIES) if MISSING_HARD_LINKS_CATEGORIES else 'None'
     cat_allow_str = ', '.join(CATEGORY_ALLOWLIST) if CATEGORY_ALLOWLIST else 'None'
     cat_block_str = ', '.join(CATEGORY_BLOCKLIST) if CATEGORY_BLOCKLIST else 'None'
 
@@ -1188,8 +1189,8 @@ def print_config():
         [bold("Unreliable Trackers"), unreliable_str],
         [bold("Dry Run"), c(DRY_RUN)],
         [bold("Debug Mode"), c(DEBUG_MODE)],
-        [bold("No Hard Links Mode"), c(NO_HARD_LINKS_MODE)],
-        [bold("No Hard Links Cat"), no_hard_links_cat if NO_HARD_LINKS_CATEGORIES else c("None")],
+        [bold("Missing Hard Links Mode"), c(MISSING_HARD_LINKS_MODE)],
+        [bold("Missing Hard Links Cat"), missing_hard_links_cat if MISSING_HARD_LINKS_CATEGORIES else c("None")],
         [bold("Tracker Error Mode"), c(TRACKER_ERROR_MODE)],
         [bold("Dead Statuses"), ','.join(str(s) for s in sorted(DEAD_TRACKER_STATUSES))],
         [bold("Min Age"), f"{TRACKER_ERROR_MIN_AGE_DAYS} days"],
@@ -1277,7 +1278,7 @@ def print_group(client, d, num, total):
         if is_orig:
             if TRACKER_ERROR_MODE:
                 type_label = f"{Colors.BOLD}{Colors.RED}[DEAD]{Colors.END}"
-            elif NO_HARD_LINKS_MODE:
+            elif MISSING_HARD_LINKS_MODE:
                 type_label = f"{Colors.BOLD}[ORPHAN]{Colors.END}"
             else:
                 type_label = f"{Colors.BOLD}[ORIGINAL]{Colors.END}"
@@ -1516,8 +1517,8 @@ def export_reports(sorted_items, eligible_ids):
 
     if TRACKER_ERROR_MODE:
         mode_str = "DEAD TRACKERS"
-    elif NO_HARD_LINKS_MODE:
-        mode_str = "NO HARD LINKS"
+    elif MISSING_HARD_LINKS_MODE:
+        mode_str = "MISSING HARD LINKS"
     else:
         mode_str = "STANDARD"
     dry_run_str = "DRY RUN" if DRY_RUN else "LIVE DELETION"
@@ -1533,13 +1534,13 @@ def export_reports(sorted_items, eligible_ids):
     grad_torrents_keep = f"linear-gradient(90deg, rgba(76, 175, 80, 0.15) {keep_torrents_pct}%, transparent {keep_torrents_pct}%)"
     if TRACKER_ERROR_MODE:
         filtering_orphans_grouping_torrents_label = "Evaluating tracker status"
-    elif NO_HARD_LINKS_MODE:
+    elif MISSING_HARD_LINKS_MODE:
         filtering_orphans_grouping_torrents_label = "Filtering for orphans"
     else:
         filtering_orphans_grouping_torrents_label = "Grouping torrents & hardlinks"
 
     unreliable_str = _h(', '.join(UNRELIABLE_TRACKERS)) if UNRELIABLE_TRACKERS else 'None'
-    no_hard_links_cat = _h(', '.join(NO_HARD_LINKS_CATEGORIES)) if NO_HARD_LINKS_CATEGORIES else 'None'
+    missing_hard_links_cat = _h(', '.join(MISSING_HARD_LINKS_CATEGORIES)) if MISSING_HARD_LINKS_CATEGORIES else 'None'
     cat_allow_str = _h(', '.join(CATEGORY_ALLOWLIST)) if CATEGORY_ALLOWLIST else 'None'
     cat_block_str = _h(', '.join(CATEGORY_BLOCKLIST)) if CATEGORY_BLOCKLIST else 'None'
     html_out_str = _h(HTML_EXPORT) if HTML_EXPORT else 'Disabled'
@@ -1559,8 +1560,8 @@ def export_reports(sorted_items, eligible_ids):
         f"<b>Unreliable Trackers:</b> {unreliable_str}",
         f"<b>Dry Run:</b> {DRY_RUN}",
         f"<b>Debug Mode:</b> {DEBUG_MODE}",
-        f"<b>No Hard Links Mode:</b> {NO_HARD_LINKS_MODE}",
-        f"<b>No Hard Links Cat:</b> {no_hard_links_cat}",
+        f"<b>Missing Hard Links Mode:</b> {MISSING_HARD_LINKS_MODE}",
+        f"<b>Missing Hard Links Cat:</b> {missing_hard_links_cat}",
         f"<b>Tracker Error Mode:</b> {TRACKER_ERROR_MODE}",
         f"<b>Dead Statuses:</b> {','.join(str(s) for s in sorted(DEAD_TRACKER_STATUSES))}",
         f"<b>Min Age:</b> {TRACKER_ERROR_MIN_AGE_DAYS} days",
@@ -3395,9 +3396,9 @@ def scan_external_libraries(paths):
 
 
 
-def check_no_hard_links(client):
-    if not NO_HARD_LINKS_CATEGORIES:
-        print(f"{Colors.RED}ERROR: --no-hard-links-categories must be specified to use this mode.{Colors.END}")
+def check_missing_hard_links(client):
+    if not MISSING_HARD_LINKS_CATEGORIES:
+        print(f"{Colors.RED}ERROR: --missing-hard-links-categories must be specified to use this mode.{Colors.END}")
         return
 
     torrents = _fetch_and_filter_torrents(client)
@@ -3406,7 +3407,7 @@ def check_no_hard_links(client):
     def is_target_category(cat):
         if not cat: return False
         cat = cat.lower()
-        for spec in _NO_HARD_LINKS_CATEGORY_SPECS:
+        for spec in _MISSING_HARD_LINKS_CATEGORY_SPECS:
             if matches_pattern(cat, spec):
                 return True
         return False
@@ -3557,8 +3558,8 @@ def main():
     if TRACKER_ERROR_MODE:
         scan_dead_trackers(client)
         return
-    if NO_HARD_LINKS_MODE:
-        check_no_hard_links(client)
+    if MISSING_HARD_LINKS_MODE:
+        check_missing_hard_links(client)
         return
     all_groups = load_and_group_torrents(client)
     _run_analyze_and_finalize(client, all_groups)

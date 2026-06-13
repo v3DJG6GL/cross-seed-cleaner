@@ -36,7 +36,7 @@ def evaluate(csc, items):
 def std(csc):
     return reconfigure(csc, MIN_SEEDERS=5, MAX_TORRENTS_IN_GROUP=3, MIN_SIZE_GIB=2,
                        MIN_ORIGINAL_SEED_TIME_DAYS=10, CATEGORY_FILTER_MODE="none",
-                       NO_HARD_LINKS_MODE=False)
+                       MISSING_HARD_LINKS_MODE=False)
 
 
 def data_rows(parser):
@@ -114,16 +114,16 @@ def test_mode_label_standard(csc, tmp_path):
     std(csc)
     items = [("g0", {"original": t("A"), "crossseeds": [t("B")]})]
     html = render_html(csc, items, evaluate(csc, items), tmp_path)
-    assert "STANDARD" in html and "NO HARD LINKS" not in html
+    assert "STANDARD" in html and "MISSING HARD LINKS" not in html
 
 
-def test_mode_label_no_hard_links(csc, tmp_path):
+def test_mode_label_missing_hard_links(csc, tmp_path):
     reconfigure(csc, MIN_SEEDERS=5, MAX_TORRENTS_IN_GROUP=3, MIN_SIZE_GIB=2,
                 MIN_ORIGINAL_SEED_TIME_DAYS=10, CATEGORY_FILTER_MODE="none",
-                NO_HARD_LINKS_MODE=True)
+                MISSING_HARD_LINKS_MODE=True)
     items = [("g0", {"original": t("A"), "crossseeds": []})]
     html = render_html(csc, items, evaluate(csc, items), tmp_path)
-    assert "NO HARD LINKS" in html
+    assert "MISSING HARD LINKS" in html
 
 
 def test_dry_run_vs_live_class(csc, tmp_path):
