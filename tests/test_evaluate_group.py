@@ -1,7 +1,7 @@
 """Exhaustive coverage of evaluate_group — the safety-critical eligibility
 decision that determines which torrents get deleted. Pins every reason code,
 the exact boundary operators/units, multi-reason ordering, and the normal vs
-missing-hard-links mode split (cross_seed_cleaner.py:786-831)."""
+missing-hard-links mode split (cross_seed_cleaner.py:evaluate_group)."""
 import pytest
 
 from conftest import reconfigure

@@ -1,5 +1,6 @@
-"""Formatting helpers, sort_torrents, and calculate_stats
-(cross_seed_cleaner.py:750-779, 886-894, 1061-1076)."""
+"""Formatting helpers, sort_torrents, and calculate_stats (cross_seed_cleaner.py:
+format_size_smart / format_duration / format_timestamp / sort_torrents /
+calculate_stats)."""
 import pytest
 
 
