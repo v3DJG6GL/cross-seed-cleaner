@@ -57,6 +57,11 @@ def test_format_timestamp_positive(csc):
     assert out != "N/A" and "|" in out
 
 
+def test_format_timestamp_out_of_range(csc):
+    # A corrupt/out-of-range epoch must degrade to N/A, not abort the report.
+    assert csc.format_timestamp(99999999999999) == "N/A"
+
+
 # ─── sort_torrents ───────────────────────────────────────────────────────────
 
 def _t(name, seeds):

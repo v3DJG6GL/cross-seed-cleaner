@@ -970,7 +970,14 @@ def format_duration(seconds, fmt="d:hh"):
 
 
 def format_timestamp(ts):
-    return datetime.fromtimestamp(ts).strftime("%Y.%m.%d | %H:%M") if ts > 0 else "N/A"
+    if ts <= 0:
+        return "N/A"
+    try:
+        return datetime.fromtimestamp(ts).strftime("%Y.%m.%d | %H:%M")
+    except (ValueError, OSError, OverflowError):
+        # An out-of-range epoch (e.g. a corrupt added_on) must not abort the
+        # whole report/print run — degrade to N/A like the non-positive case.
+        return "N/A"
 
 def get_tracker_name(client, torrent):
     domain = get_tracker_domain(client, torrent)
