@@ -194,16 +194,24 @@ def test_csv_header_and_types(csc, tmp_path):
 
 
 def test_csv_neutralizes_formula_injection(csc, tmp_path):
-    # A name whose first char is a spreadsheet formula trigger is prefixed with
+    # A field whose first char is a spreadsheet formula trigger is prefixed with
     # a single quote so it can't execute when the CSV opens in Excel/Sheets; an
-    # ordinary name (incl. a '-' mid-string) is left untouched.
+    # ordinary value (incl. a '-' mid-string) is left untouched. All four
+    # attacker-controlled string columns are guarded, not just Name.
     import csv as _csv, io
     std(csc)
-    items = [("g0", {"original": t("=2+5"), "crossseeds": [t("Plain-Name")]})]
+    items = [("g0", {"original": t("=2+5", tr="=HYPERLINK(1)", cat="+danger",
+                                    content_path="@evil"),
+                     "crossseeds": [t("Plain-Name")]})]
     csv_text = render_csv(csc, items, evaluate(csc, items), tmp_path)
-    names = {r["Name"] for r in _csv.DictReader(io.StringIO(csv_text))}
+    rows = list(_csv.DictReader(io.StringIO(csv_text)))
+    names = {r["Name"] for r in rows}
     assert "'=2+5" in names          # leading = neutralized
     assert "Plain-Name" in names     # interior '-' unchanged
+    orig = next(r for r in rows if r["Name"] == "'=2+5")
+    assert orig["Tracker"] == "'=HYPERLINK(1)"   # tracker domain neutralized
+    assert orig["Category"] == "'+danger"        # category neutralized
+    assert orig["Path"] == "'@evil"              # content path neutralized
 
 
 def test_csv_safe_unit(csc):
