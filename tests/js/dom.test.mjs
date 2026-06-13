@@ -51,6 +51,11 @@ test('report loads under jsdom without throwing and exposes globals', () => {
   assert.equal(typeof window.numericInRange, 'function');
   assert.equal(typeof window.compareSortKeys, 'function');
   assert.equal(typeof window.sortTable, 'function');
+  // matchesReasonFilter is called as a bare global from the inline filter
+  // code; if a vendor-sync ever drops it, the report's filter throws
+  // ReferenceError in the browser but jsdom's smoke tests stay green
+  // unless we assert its presence here too.
+  assert.equal(typeof window.matchesReasonFilter, 'function');
   assert.ok(window.document.querySelectorAll('.group').length === 3);
 });
 
@@ -59,6 +64,44 @@ test('initial DELETE filter hides keep groups', () => {
   // DELETE is pre-checked; only the one eligible group should be visible.
   const vis = visibleGroups(window.document);
   assert.equal(vis.length, 1);
+});
+
+test('Any/Only reason toggle hides multi-reason groups in only-mode', () => {
+  const { window } = load();
+  const doc = window.document;
+
+  function fire(el) {
+    el.dispatchEvent(new window.Event('change', { bubbles: true }));
+  }
+
+  // Drop the default DELETE filter so kept-group visibility is governed by
+  // the reason filter alone.
+  const deleteCb = doc.querySelector('[data-filter-status][value="delete"]');
+  deleteCb.checked = false;
+  fire(deleteCb);
+
+  // Tick LOW_SEEDS only.
+  const lowSeeds = doc.querySelector('[data-filter-reason][value="LOW_SEEDS"]');
+  lowSeeds.checked = true;
+  fire(lowSeeds);
+
+  // Default mode is "any": both single-reason and multi-reason groups whose
+  // reasons overlap LOW_SEEDS should be visible. The fixture has one of each:
+  // g1 (LOW_SEEDS only) and g2 (LOW_SEEDS + EXTERNAL_LINK).
+  const anyMode = visibleGroups(doc).map(g => g.dataset.reasons);
+  assert.equal(anyMode.length, 2);
+  assert.ok(anyMode.some(r => r.split(/\s+/).includes('EXTERNAL_LINK')),
+            'expected a multi-reason group to be visible in any-mode');
+
+  // Flip to "only": only groups whose reasons are a subset of {LOW_SEEDS}
+  // survive — the multi-reason g2 should now be hidden.
+  const onlyRadio = doc.querySelector('[data-reason-match][value="only"]');
+  onlyRadio.checked = true;
+  fire(onlyRadio);
+
+  const onlyMode = visibleGroups(doc).map(g => g.dataset.reasons.trim());
+  assert.equal(onlyMode.length, 1);
+  assert.equal(onlyMode[0], 'LOW_SEEDS');
 });
 
 test('sortTable(2) orders groups by seeds ascending then descending', () => {

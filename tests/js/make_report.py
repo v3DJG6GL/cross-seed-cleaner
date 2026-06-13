@@ -45,7 +45,10 @@ items = [
     ("g0", {"original": t("DelA", 100, "aaa.cc", "movies"),
             "crossseeds": [t("DelB", 80, "bbb.cc", "tv")]}),
     ("g1", {"original": t("KeepLow", 1, "ccc.cc", "music"), "crossseeds": []}),
-    ("g2", {"original": t("ExtO", 50, "ddd.cc", "games",
+    # ExtO has BOTH a low seeder count AND an external hardlink so the group
+    # carries two rejection reasons. The Any/Only reason-filter test relies on
+    # this multi-reason group to differentiate the two match modes.
+    ("g2", {"original": t("ExtO", 1, "ddd.cc", "games",
                           _external_hardlink=True, _external_path="/mnt/lib/ExtO"),
             "crossseeds": [t("ExtX", 60, "eee.cc", "books")]}),
 ]
