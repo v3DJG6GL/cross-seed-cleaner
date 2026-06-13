@@ -3303,6 +3303,15 @@ def manual_loop(client, emap):
 
 def _finalize_deletion(client, emap):
     """Dispatch to manual loop, live auto-delete with confirm, or dry-run notice."""
+    if SCAN_STATS.get('scan_incomplete'):
+        # A library scan aborted partway, so "not externally linked" is no longer
+        # trustworthy — a protected file could be missing from the inode set and
+        # surface as a deletion candidate. Block deletion; the report is already
+        # written, so the user can review and re-run after resolving the error.
+        print(f"\n{Colors.BOLD}{Colors.RED}WARNING: an external library scan was incomplete.{Colors.END}")
+        print(f"{Colors.RED}Deletion is DISABLED for this run to avoid removing a protected file. "
+              f"Resolve the scan error and re-run.{Colors.END}")
+        return
     if MANUAL_MODE:
         manual_loop(client, emap)
         return
@@ -3339,6 +3348,9 @@ def scan_external_libraries(paths):
     Scans external directories for files with hardlinks (nlink > 1).
     """
     inodes = {}
+    # Cleared at entry; set True below if any walk aborts mid-scan, so the
+    # deletion step can refuse to act on a knowingly-incomplete inode set.
+    SCAN_STATS['scan_incomplete'] = False
     if not paths:
         return inodes
     debug_log(f"  > Raw Input Paths: {paths}")
@@ -3395,6 +3407,10 @@ def scan_external_libraries(paths):
                     except OSError:
                         continue
         except Exception as e:
+            # The walk aborted partway: the inode set is now incomplete, so a
+            # protected file may be missing from it. Flag it; _finalize_deletion
+            # blocks deletion rather than risk removing a still-linked file.
+            SCAN_STATS['scan_incomplete'] = True
             print(f"{Colors.RED}  ! Error walking {p}: {e}{Colors.END}")
 
     if not DEBUG_MODE:

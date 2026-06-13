@@ -40,6 +40,42 @@ def test_scan_wildcard_zero_matches(csc, tmp_path):
     assert csc.scan_external_libraries([str(tmp_path / "nope" / "*")]) == {}
 
 
+def test_scan_clean_walk_not_flagged_incomplete(csc, tmp_path):
+    lib = tmp_path / "lib"
+    lib.mkdir()
+    f = lib / "movie.mkv"
+    f.write_bytes(b"x" * 100)
+    os.link(str(f), str(lib / "movie.hardlink.mkv"))
+    csc.scan_external_libraries([str(lib)])
+    assert csc.SCAN_STATS['scan_incomplete'] is False
+
+
+def test_scan_aborted_walk_flags_incomplete(csc, tmp_path, monkeypatch):
+    # A mid-walk failure (not a per-entry OSError, which os.walk routes to the
+    # error handler) must mark the scan incomplete so deletion can be blocked.
+    lib = tmp_path / "lib"
+    lib.mkdir()
+
+    def _boom(*a, **k):
+        raise RuntimeError("walk blew up")
+
+    monkeypatch.setattr(csc.os, "walk", _boom)
+    csc.scan_external_libraries([str(lib)])
+    assert csc.SCAN_STATS['scan_incomplete'] is True
+
+
+def test_finalize_deletion_blocked_on_incomplete_scan(csc, monkeypatch):
+    # Even in live mode with eligible groups, an incomplete library scan must
+    # block deletion entirely (the gate returns before any prompt or API call).
+    csc.DRY_RUN = False
+    csc.MANUAL_MODE = False
+    csc.SCAN_STATS['scan_incomplete'] = True
+    monkeypatch.setattr(csc, "input", lambda *a, **k: pytest.fail("must not prompt"), raising=False)
+    client = FakeClient()
+    csc._finalize_deletion(client, {1: [{"hash": "a"}]})
+    assert client.deleted == []                  # nothing deleted
+
+
 def test_scan_brace_expansion(csc, tmp_path):
     base = tmp_path / "base"
     for sub in ("a", "b"):
