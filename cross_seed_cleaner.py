@@ -2202,21 +2202,19 @@ def export_reports(sorted_items, eligible_ids):
         if ds_seeded_max is None or tv > ds_seeded_max:        ds_seeded_max = tv
         if ds_seeded_min is None or tv < ds_seeded_min:        ds_seeded_min = tv
 
-        # Pre-compute one lowercased searchable blob per group so the JS filter
-        # can do a single dataset.search.includes(q) instead of walking rows.
-        # The search legitimately scans every torrent (cross-seeds may have
-        # different names/paths, and the user expects search to find them).
-        search_tokens = []
-        for t in torrents_to_list:
-            search_tokens.append(t.get('name', '').lower())
-            search_tokens.append(t.get('content_path', '').lower())
-            search_tokens.append((t.get('_tracker_domain') or '').lower())
-            search_tokens.append((t.get('category') or '').lower())
-            search_tokens.append((t.get('_tracker_msg') or '').lower())
+        # Pre-compute one lowercased blob per text-search box so the JS filter
+        # can do a single includes(q) instead of walking rows. The "name" and
+        # "path" boxes are each scoped to their OWN column — tracker and category
+        # have dedicated filter chips, so they are intentionally NOT part of
+        # free-text search. Cross-seeds are included (they may carry different
+        # names/paths and the user expects search to find them).
+        name_tokens = [t.get('name', '').lower() for t in torrents_to_list]
+        path_tokens = [t.get('content_path', '').lower() for t in torrents_to_list]
         ext_path_for_search = d['original'].get('_external_path')
         if ext_path_for_search:
-            search_tokens.append(ext_path_for_search.lower())
-        search_blob = _h(' '.join(search_tokens))
+            path_tokens.append(ext_path_for_search.lower())
+        search_name_blob = _h(' '.join(name_tokens))
+        search_path_blob = _h(' '.join(path_tokens))
 
         row_count = len(torrents_to_list) + (1 if ext_path_for_search else 0)
         total_torrents += row_count
@@ -2224,7 +2222,8 @@ def export_reports(sorted_items, eligible_ids):
         html_parts.append(
             f'<div class="{group_class}" data-status="{status_attr}" '
             f'data-reasons="{_h(reason_codes)}" data-seeds-min="{min_seeds}" '
-            f'data-row-count="{row_count}" data-search="{search_blob}">'
+            f'data-row-count="{row_count}" data-search-name="{search_name_blob}" '
+            f'data-search-path="{search_path_blob}">'
         )
 
         for i, t in enumerate(torrents_to_list):
@@ -3063,7 +3062,8 @@ def export_reports(sorted_items, eligible_ids):
                             g._status = g.dataset.status;
                             g._reasonSet = new Set((g.dataset.reasons || '').split(/\\s+/).filter(Boolean));
                             g._seedsMin = g.dataset.seedsMin;
-                            g._search = g.dataset.search || '';
+                            g._searchName = g.dataset.searchName || '';
+                            g._searchPath = g.dataset.searchPath || '';
                             // groupRows(g) walks .children every call; the row set is static
                             // after render so we snapshot it here and reuse the array.
                             g._rows = groupRows(g);
@@ -3085,8 +3085,8 @@ def export_reports(sorted_items, eligible_ids):
 
                         if (!hide && !numericInRange(g._seedsMin, seedsMin, seedsMax)) hide = true;
 
-                        if (!hide && nameQ && !g._search.includes(nameQ)) hide = true;
-                        if (!hide && pathQ && !g._search.includes(pathQ)) hide = true;
+                        if (!hide && nameQ && !g._searchName.includes(nameQ)) hide = true;
+                        if (!hide && pathQ && !g._searchPath.includes(pathQ)) hide = true;
 
                         if (!hide && (ratioMin !== null || ratioMax !== null
                                       || sizeMinBytes !== null || sizeMaxBytes !== null

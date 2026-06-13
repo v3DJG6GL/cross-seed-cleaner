@@ -183,6 +183,50 @@ test('sortTable(2) orders groups by seeds ascending then descending', () => {
   assert.deepEqual(desc, [...desc].sort((a, b) => b - a));
 });
 
+test('name and path search boxes are scoped to their own column', async () => {
+  const { window } = load();
+  const doc = window.document;
+
+  // Drop the default DELETE filter so all three fixture groups are candidates.
+  const deleteCb = doc.querySelector('[data-filter-status][value="delete"]');
+  deleteCb.checked = false;
+  deleteCb.dispatchEvent(new window.Event('change', { bubbles: true }));
+
+  const nameInput = doc.querySelector('[data-filter="name"]');
+  const pathInput = doc.querySelector('[data-filter="path"]');
+  // The text boxes apply on a 120ms debounce; fire the real 'input' event and
+  // wait it out (drives the report's actual filter path, no internal hooks).
+  async function search(input, q) {
+    input.value = q;
+    input.dispatchEvent(new window.Event('input', { bubbles: true }));
+    await new Promise(r => setTimeout(r, 170));
+  }
+
+  // Fixture g1 is the torrent "KeepLow" on tracker ccc.cc, category music,
+  // content path /d/KeepLow.
+  await search(nameInput, 'keeplow');           // real name → matches
+  assert.equal(visibleGroups(doc).length, 1);
+
+  await search(nameInput, 'ccc.cc');            // its TRACKER → must not match a name
+  assert.equal(visibleGroups(doc).length, 0,
+    'tracker text leaked into the name search (boxes share a blob)');
+
+  await search(nameInput, 'music');             // its CATEGORY → must not match a name
+  assert.equal(visibleGroups(doc).length, 0,
+    'category text leaked into the name search');
+
+  await search(nameInput, '/d/keeplow');        // its PATH → must not match a name
+  assert.equal(visibleGroups(doc).length, 0,
+    'path text leaked into the name search');
+
+  await search(nameInput, '');                  // clear the name box
+  await search(pathInput, '/d/keeplow');        // real path → matches in the path box
+  assert.equal(visibleGroups(doc).length, 1);
+
+  await search(pathInput, '/mnt/lib');          // g2's external_path /mnt/lib/ExtO
+  assert.equal(visibleGroups(doc).length, 1);
+});
+
 // The type/EXT badges carry a native `title`; the generic overflow tooltip also
 // fires on any clipped cell. Without a guard, a hand-narrowed Type column would
 // show both at once. jsdom has no layout engine, so stub the width getters to
