@@ -45,6 +45,11 @@ class XSSEscapingTest(unittest.TestCase):
     XSS_CAT = '<img src=x onerror=alert("xss-cat")>'
     XSS_TRACKER = 'http://evil.example/</script><script>alert("xss-js")</script>/'
     XSS_EXT = '</td><script>alert("xss-ext")</script>'
+    # _tracker_msg is the tracker error string ("Torrent not registered with
+    # this tracker", etc.) surfaced in tracker-error mode reports — populated
+    # by qBittorrent and therefore tracker-attacker-controllable. Rendered into
+    # a data-tip attribute, so attribute-breakout is the main concern.
+    XSS_TRACKER_MSG = '" onclick="alert(\'xss-tmsg\')" x="'
 
     def setUp(self):
         self.csc = _load_module()
@@ -61,6 +66,7 @@ class XSSEscapingTest(unittest.TestCase):
             "category": self.XSS_CAT,
             "tracker": self.XSS_TRACKER,
             "_tracker_domain": self.XSS_TRACKER,
+            "_tracker_msg": self.XSS_TRACKER_MSG,
             "size": 5 * 1024 * 1024 * 1024,
             "ratio": 1.5,
             "uploaded": 1024 * 1024 * 1024,
@@ -94,6 +100,8 @@ class XSSEscapingTest(unittest.TestCase):
         self.assertNotIn('<script>alert("xss-cat")',  html, "category payload survived unescaped")
         self.assertNotIn('<script>alert("xss-js")',   html, "tracker payload survived unescaped")
         self.assertNotIn('onmouseover="alert',        html, "attribute-break payload survived unescaped")
+        self.assertNotIn('onclick="alert(\'xss-tmsg\')"', html,
+                         "tracker_msg attribute-break payload survived unescaped")
 
         # Escaped forms must be present.
         self.assertIn('&lt;script&gt;alert(&quot;xss-name&quot;)', html)
