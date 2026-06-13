@@ -1290,11 +1290,17 @@ def print_group(client, d, num, total):
         seeders = t.get('_seeder_count', 0)
         size = t.get('size', 0)
         seed_time = t.get('seeding_time', 0)
-        c_seeds = Colors.GREEN if seeders >= MIN_SEEDERS else Colors.RED
+        # Tracker-error mode bypasses the MIN_SEEDERS/MIN_SIZE/MIN_TIME limits
+        # (eligibility is tracker-death based), so red/green threshold coloring
+        # would contradict the green "✓ ELIGIBLE" header — a dead torrent with
+        # 0 seeders would show a RED Seeds cell while being deleted. Render those
+        # cells neutral in that mode. Category stays colored (still a live filter).
+        threshold_coloring = not TRACKER_ERROR_MODE
+        c_seeds = (Colors.GREEN if seeders >= MIN_SEEDERS else Colors.RED) if threshold_coloring else Colors.END
         c_size = Colors.END; c_time = Colors.END
         c_cat = Colors.GREEN if category_allowed(t.get('category', '')) else Colors.RED
 
-        if is_orig:
+        if is_orig and threshold_coloring:
             c_size = Colors.GREEN if size >= MIN_SIZE_BYTES else Colors.RED
             c_time = Colors.GREEN if seed_time >= MIN_ORIGINAL_SEED_TIME_SECONDS else Colors.RED
 

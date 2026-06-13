@@ -343,3 +343,36 @@ def test_main_dispatches_to_tracker_error_mode(csc, monkeypatch):
     monkeypatch.setattr(csc, 'load_and_group_torrents', lambda c: called.append('std'))
     csc.main()
     assert called == ['tracker']
+
+
+# ─── print_group cell coloring (mode-aware) ──────────────────────────────────
+
+def test_print_group_eligible_dead_torrent_seeds_cell_not_red(csc, capsys):
+    # Tracker-error mode bypasses MIN_SEEDERS/MIN_SIZE/MIN_TIME, so an eligible
+    # 0-seeder dead torrent must NOT render its Seeds cell red under the green
+    # ✓ ELIGIBLE header. The intentional red [DEAD] type badge is unaffected.
+    csc.TRACKER_ERROR_MODE = True
+    csc.MISSING_HARD_LINKS_MODE = False
+    orig = _torrent(_seeder_count=0, size=5 * 1024**3, seeding_time=10,
+                    ratio=0.0, uploaded=0, _tracker_cache='deadtracker')
+    d = {'original': orig, 'crossseeds': [],
+         '_evaluation': {'eligible': True, 'all_torrents': [orig], 'externally_linked': False}}
+    csc.print_group(FakeClient(), d, 1, 1)
+    out = capsys.readouterr().out
+    seeds_cell = out.split('[DEAD]')[1].split('│')[1]   # 2nd column, after Type
+    assert csc.Colors.RED not in seeds_cell
+
+
+def test_print_group_standard_mode_low_seeds_cell_red(csc, capsys):
+    # Counterpart: in standard mode the same 0-seeder original still colors its
+    # Seeds cell red, because the MIN_SEEDERS threshold genuinely applies there.
+    csc.TRACKER_ERROR_MODE = False
+    csc.MISSING_HARD_LINKS_MODE = False
+    orig = _torrent(_seeder_count=0, size=5 * 1024**3, seeding_time=10,
+                    ratio=0.0, uploaded=0, _tracker_cache='t')
+    d = {'original': orig, 'crossseeds': [],
+         '_evaluation': {'eligible': True, 'all_torrents': [orig], 'externally_linked': False}}
+    csc.print_group(FakeClient(), d, 1, 1)
+    out = capsys.readouterr().out
+    seeds_cell = out.split('[ORIGINAL]')[1].split('│')[1]
+    assert csc.Colors.RED in seeds_cell
