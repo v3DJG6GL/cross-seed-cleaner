@@ -319,3 +319,34 @@ def test_csv_crossseeds_render_in_sort_order(csc, tmp_path):
     names = [r["Name"] for r in rows]
     assert names[0] == "Orig"                          # original first
     assert names[1:] == ["alpha", "Mike", "Zeta"]      # cross-seeds name-sorted
+
+
+# ─── unknown (unscraped) seeder counts ───────────────────────────────────────
+
+def test_html_unknown_seeds_render_na(csc, tmp_path):
+    # qBittorrent reports -1 for an unscraped torrent. The HTML cell must show
+    # N/A (neutral, no color class), not a misleading negative number — while
+    # the numeric sort key keeps the raw value and the seeds-slider lower bound
+    # is clamped to 0 (never negative).
+    std(csc)
+    items = [("g0", {"original": t("A", seeds=-1, size=5 * GIB), "crossseeds": []})]
+    html = render_html(csc, items, evaluate(csc, items), tmp_path)
+    assert '<span class="">N/A</span>' in html       # neutral N/A cell
+    assert ">-1</span>" not in html                   # no raw negative shown
+    parser = ReportHTML(html)
+    orig_row = next(a for a in data_rows(parser) if a["data-sk-10"] == "a")
+    assert orig_row["data-sk-2"] == "-1"              # sort key still numeric/raw
+    grp = next(a for (_tag, a) in parser.tags if "data-seeds-min" in a)
+    assert grp["data-seeds-min"] == "0"               # slider bound clamped
+
+
+def test_csv_unknown_seeds_left_empty(csc, tmp_path):
+    # The CSV leaves an unscraped count blank (not "-1", not "N/A") so the
+    # Seeders column stays numeric-sortable in a spreadsheet.
+    import csv as _csv
+    import io
+    std(csc)
+    items = [("g0", {"original": t("A", seeds=-1, size=5 * GIB), "crossseeds": []})]
+    csv_text = render_csv(csc, items, evaluate(csc, items), tmp_path)
+    rows = list(_csv.DictReader(io.StringIO(csv_text)))
+    assert rows[0]["Seeders"] == ""

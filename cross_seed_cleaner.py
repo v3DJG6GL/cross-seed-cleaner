@@ -1345,7 +1345,7 @@ def print_group(client, d, num, total):
             type_label = f"{Colors.DIM}[CROSS]{Colors.END}"
         rows.append([
             type_label,
-            f"{c_seeds}{seeders}{Colors.END}",
+            f"{Colors.DIM}N/A{Colors.END}" if seeders < 0 else f"{c_seeds}{seeders}{Colors.END}",
             f"{t.get('ratio', 0.0):.2f}",
             f"{c_size}{format_size_smart(size)}{Colors.END}",
             format_size_smart(t.get('uploaded', 0)),
@@ -2175,7 +2175,10 @@ def export_reports(sorted_items, eligible_ids):
 
         status_attr = 'delete' if is_del_group else 'keep'
         reason_codes = ' '.join(r['code'] for r in row.get('reasons', []))
-        min_seeds = min(t.get('_seeder_count', 0) for t in torrents_to_list)
+        # An unscraped torrent reports -1 ("unknown"); clamp the per-group
+        # minimum to 0 so the seeds slider's lower bound and this group's filter
+        # value never go negative (each cell still shows N/A for the raw -1).
+        min_seeds = max(0, min(t.get('_seeder_count', 0) for t in torrents_to_list))
 
         # Slider bounds must reflect what the FILTER actually compares against,
         # not every individual torrent in the dataset. Otherwise an extreme
@@ -2284,6 +2287,11 @@ def export_reports(sorted_items, eligible_ids):
                 if tracker_msg
                 else _h(tracker_clean)
             )
+            # An unscraped torrent reports -1 ("unknown"); show N/A (neutral)
+            # instead of a misleading negative count. The numeric sort key below
+            # keeps the raw cur_seeds so the seeds column still sorts correctly.
+            seeds_disp = "N/A" if cur_seeds < 0 else cur_seeds
+            seeds_cls = "" if cur_seeds < 0 else c_seeds
             sk = _sort_attrs(
                 status_text, type_text, cur_seeds, t.get('ratio', 0),
                 t_size, t.get('uploaded', 0), t_time, t.get('added_on', 0),
@@ -2293,7 +2301,7 @@ def export_reports(sorted_items, eligible_ids):
             <div class="grid-row"{sk}>
                 <div class="cell">{status_cell_content}</div>
                 <div class="cell">{type_badge}</div>
-                <div class="cell"><span class="{c_seeds}">{cur_seeds}</span></div>
+                <div class="cell"><span class="{seeds_cls}">{seeds_disp}</span></div>
                 <div class="cell">{t.get('ratio', 0):.2f}</div>
                 <div class="cell"><span class="{c_size}">{format_size_smart(t_size)}</span></div>
                 <div class="cell">{format_size_smart(t.get('uploaded', 0))}</div>
@@ -3292,7 +3300,9 @@ def export_reports(sorted_items, eligible_ids):
                             'Added': add_date,
                             'Seeding Time': seed_time,
                             'Ratio': f"{t.get('ratio', 0):.2f}",
-                            'Seeders': t.get('_seeder_count', 0),
+                            # Empty (not "N/A") for an unscraped/-1 count so the
+                            # column stays numeric-sortable in a spreadsheet.
+                            'Seeders': '' if t.get('_seeder_count', 0) < 0 else t.get('_seeder_count', 0),
                             'Reasons': reasons_str,
                             'Path': csv_safe(t.get('content_path', ''))
                         })

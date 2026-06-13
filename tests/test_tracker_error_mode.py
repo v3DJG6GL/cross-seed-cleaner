@@ -376,3 +376,20 @@ def test_print_group_standard_mode_low_seeds_cell_red(csc, capsys):
     out = capsys.readouterr().out
     seeds_cell = out.split('[ORIGINAL]')[1].split('│')[1]
     assert csc.Colors.RED in seeds_cell
+
+
+def test_print_group_unknown_seeds_shows_na(csc, capsys):
+    # qBittorrent reports -1 for an unscraped torrent; the Seeds cell must read
+    # N/A (neutral, not red) instead of a misleading negative number.
+    csc.TRACKER_ERROR_MODE = False
+    csc.MISSING_HARD_LINKS_MODE = False
+    orig = _torrent(_seeder_count=-1, size=5 * 1024**3, seeding_time=10,
+                    ratio=0.0, uploaded=0, _tracker_cache='t')
+    d = {'original': orig, 'crossseeds': [],
+         '_evaluation': {'eligible': True, 'all_torrents': [orig], 'externally_linked': False}}
+    csc.print_group(FakeClient(), d, 1, 1)
+    out = capsys.readouterr().out
+    seeds_cell = out.split('[ORIGINAL]')[1].split('│')[1]
+    assert 'N/A' in seeds_cell
+    assert '-1' not in seeds_cell
+    assert csc.Colors.RED not in seeds_cell
