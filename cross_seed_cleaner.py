@@ -889,6 +889,12 @@ def load_and_group_torrents(client):
 
 
 def category_allowed(cat):
+    # In tracker-error mode the modifier flag bypasses the entire category
+    # filter so the report (and the category cell coloring it drives) stays
+    # consistent with eligibility — a torrent that's eligible for deletion
+    # should not have its category cell rendered red.
+    if TRACKER_ERROR_MODE and TRACKER_ERROR_MODE_IGNORE_CATEGORY_FILTER:
+        return True
     mode = _CATEGORY_FILTER_MODE_LC
     if mode == "none":
         return True
@@ -1015,6 +1021,10 @@ def evaluate_dead_trackers(d, now_ts):
     trackers = t.get('_trackers') or []
     real = [tr for tr in trackers if _domain_from_tracker_url(tr.get('url', ''))]
 
+    # Note: when TRACKER_ERROR_MODE_IGNORE_CATEGORY_FILTER is set, category_allowed()
+    # itself returns True (the modifier short-circuits the filter), so the explicit
+    # guard here keeps the reason out of the report even though category_allowed
+    # would already evaluate to True.
     reasons = []
     if not real:
         reasons.append("NO_REAL_TRACKERS")

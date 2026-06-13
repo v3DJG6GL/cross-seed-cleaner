@@ -286,6 +286,26 @@ def test_ignore_category_filter_flag_also_bypasses_allowlist(csc, monkeypatch):
     assert 'CATEGORY_FILTER' not in cap['h1']['_evaluation']['reasons']
 
 
+def test_ignore_flag_makes_category_allowed_true_for_blocked_cat(csc):
+    """category_allowed() drives the CLI/HTML category-cell coloring. When
+    tracker-error mode + ignore-flag are on, an eligible torrent in a
+    blocked category must not be rendered as red. Anchor the helper so
+    a future refactor can't silently restore the visual inconsistency."""
+    reconfigure(csc,
+                CATEGORY_FILTER_MODE='block',
+                CATEGORY_BLOCKLIST=['protected'],
+                TRACKER_ERROR_MODE=True,
+                TRACKER_ERROR_MODE_IGNORE_CATEGORY_FILTER=True)
+    assert csc.category_allowed('protected') is True
+    # Sanity: without the ignore flag, the blocklist still applies.
+    reconfigure(csc,
+                CATEGORY_FILTER_MODE='block',
+                CATEGORY_BLOCKLIST=['protected'],
+                TRACKER_ERROR_MODE=True,
+                TRACKER_ERROR_MODE_IGNORE_CATEGORY_FILTER=False)
+    assert csc.category_allowed('protected') is False
+
+
 def test_bulk_path_used_when_supported(csc, monkeypatch):
     old = int(time.time()) - 2 * 24 * 3600   # 2 days ago — past the 1-day default min-age
     tors = [{'hash': f'h{i}', 'name': f'h{i}', 'category': '', 'added_on': old,
