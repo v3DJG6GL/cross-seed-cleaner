@@ -3045,8 +3045,12 @@ def export_reports(sorted_items, eligible_ids):
                 if (filterCountsEl) {{
                     _visGNode = document.createElement('strong');
                     _visTNode = document.createElement('strong');
+                    // The right-hand count comes from data-row-count, which includes
+                    // the EXT row each group may have — i.e. it counts rendered rows,
+                    // not torrents in the library. Label it "rows" so it matches the
+                    // header "Total Analyzed" tile (which honestly counts torrents).
                     filterCountsEl.append('Showing ', _visGNode, ' / ' + TOTAL_GROUPS + ' groups · ',
-                                          _visTNode, ' / ' + TOTAL_TORRENTS + ' torrents');
+                                          _visTNode, ' / ' + TOTAL_TORRENTS + ' rows');
                 }}
                 function updateFilterCounts() {{
                     const groups = _groupsCache;
