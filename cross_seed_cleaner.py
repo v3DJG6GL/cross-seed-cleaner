@@ -2904,7 +2904,10 @@ def export_reports(sorted_items, eligible_ids):
                         // portaled to <body> via document.body.appendChild(targetPanel).
                         document.querySelectorAll('.filter-row input, .filter-multi-panel input').forEach(i => {{
                             if (i.type === 'checkbox')   i.checked = false;
-                            else if (i.type !== 'range') i.value = '';   // sliders reset via slot._reset()
+                            // radios (the Any/Only reason-match toggle) carry a fixed
+                            // value attribute; reset them via .checked, never by wiping
+                            // .value, or the next change feeds an empty mode to the filter.
+                            else if (i.type !== 'range' && i.type !== 'radio') i.value = '';   // sliders reset via slot._reset()
                         }});
                         statusSet.clear(); reasonsSet.clear();
                         trackersSet.clear(); categoriesSet.clear();

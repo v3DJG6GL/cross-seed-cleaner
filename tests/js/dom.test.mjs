@@ -104,6 +104,38 @@ test('Any/Only reason toggle hides multi-reason groups in only-mode', () => {
   assert.equal(onlyMode[0], 'LOW_SEEDS');
 });
 
+test('Clear all keeps the Any/Only reason filter working', () => {
+  const { window } = load();
+  const doc = window.document;
+
+  function fire(el) {
+    el.dispatchEvent(new window.Event('change', { bubbles: true }));
+  }
+
+  // "Clear all" must not blank out the reason-match radios' value attribute;
+  // they live inside a .filter-multi-panel, so a naive value-wipe would set
+  // them to "" and the next toggle would feed an unknown mode to the filter.
+  const clearBtn = doc.getElementById('filterClearBtn');
+  clearBtn.click();
+
+  const anyRadio = doc.querySelector('[data-reason-match][value="any"]');
+  const onlyRadio = doc.querySelector('[data-reason-match][value="only"]');
+  assert.equal(anyRadio.value, 'any');
+  assert.equal(onlyRadio.value, 'only');
+
+  // After clearing, select a reason then flip Any -> Only. This must not throw
+  // (it would if the radio value had been wiped to "").
+  const lowSeeds = doc.querySelector('[data-filter-reason][value="LOW_SEEDS"]');
+  lowSeeds.checked = true;
+  fire(lowSeeds);
+  assert.doesNotThrow(() => { onlyRadio.checked = true; fire(onlyRadio); });
+
+  // Only-mode with LOW_SEEDS selected leaves just the single-reason group.
+  const onlyMode = visibleGroups(doc).map(g => g.dataset.reasons.trim());
+  assert.equal(onlyMode.length, 1);
+  assert.equal(onlyMode[0], 'LOW_SEEDS');
+});
+
 test('sortTable(2) orders groups by seeds ascending then descending', () => {
   const { window } = load();
   window.sortTable(2);                 // seeds, first click = ascending
