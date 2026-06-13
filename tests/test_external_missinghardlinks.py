@@ -1,5 +1,5 @@
 """External-library hardlink scanning and missing-hard-links orphan detection
-(cross_seed_cleaner.py:3011-3166)."""
+(cross_seed_cleaner.py: scan_external_libraries / check_missing_hard_links)."""
 import errno
 import os
 

@@ -1,5 +1,6 @@
 """Pattern compilation, category filtering, tracker-domain normalization, and
-seeder counting (cross_seed_cleaner.py:446-549, 708-745)."""
+seeder counting (cross_seed_cleaner.py: _compile_specs / matches_pattern
+/ category_allowed / _domain_from_tracker_url / get_seeder_count)."""
 import pytest
 
 from conftest import reconfigure, FakeClient

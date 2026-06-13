@@ -1,5 +1,6 @@
 """Path mapping, representative-inode selection, identity parsing, and the
-grouping pipeline (cross_seed_cleaner.py:342-449, 611-723)."""
+grouping pipeline (cross_seed_cleaner.py: apply_path_mapping / get_representative_inode
+/ get_path_identity / load_and_group_torrents)."""
 import os
 
 import pytest

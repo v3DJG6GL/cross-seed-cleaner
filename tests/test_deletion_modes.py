@@ -1,5 +1,5 @@
 """Interactive manual loop and auto-delete finalize paths
-(cross_seed_cleaner.py:2908-3003). Deletion is destructive, so the gating and
+(cross_seed_cleaner.py: manual_loop / _finalize_deletion). Deletion is destructive, so the gating and
 the success/failure reporting are safety-critical."""
 import builtins
 

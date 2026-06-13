@@ -1,6 +1,6 @@
 """Configuration surface: str2bool, path splitting/brace expansion, config<env<CLI
-precedence, validation exits, and CLI behavior (cross_seed_cleaner.py:26-154,
-191-234)."""
+precedence, validation exits, and CLI behavior (cross_seed_cleaner.py: get_config
+/ _validate_config / str2bool / smart_split_paths / expand_braces)."""
 import subprocess
 import sys
 

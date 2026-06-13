@@ -1,5 +1,5 @@
 """Python-assertable coverage of the HTML/CSV report generator
-(cross_seed_cleaner.py:1104-2924): the data-attribute contract the JS depends
+(cross_seed_cleaner.py:export_reports): the data-attribute contract the JS depends
 on, injected JS constants, render branches, CSV format, and escaping sinks.
 
 eligible_ids are 1-BASED group indices (export_reports enumerates with start=1,
