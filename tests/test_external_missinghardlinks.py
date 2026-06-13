@@ -126,6 +126,23 @@ def test_finalize_deletion_blocked_on_incomplete_scan(csc, monkeypatch, capsys):
     assert "DISABLED" in capsys.readouterr().out  # and the user is told why
 
 
+def test_finalize_manual_live_blocked_on_incomplete_scan(csc, monkeypatch, capsys):
+    # The highest-stakes cell: a manual LIVE run (--manual, not dry) with an
+    # incomplete scan must be BLOCKED before the manual loop — the gate returns
+    # before any prompt or delete, so a possibly-still-protected file is never
+    # removed against a knowingly-incomplete inode set. (The gate is `not DRY_RUN`,
+    # which is True here; a regression scoping it to auto-only would let this
+    # through to a real deletion.)
+    csc.DRY_RUN = False
+    csc.MANUAL_MODE = True
+    csc.SCAN_STATS['scan_incomplete'] = True
+    monkeypatch.setattr(csc, "input", lambda *a, **k: pytest.fail("must not prompt"), raising=False)
+    client = FakeClient()
+    csc._finalize_deletion(client, {1: [{"hash": "a"}]})
+    assert client.deleted == []                  # nothing deleted
+    assert "DISABLED" in capsys.readouterr().out  # blocked, with the reason shown
+
+
 def test_finalize_dry_run_incomplete_scan_no_disabled_warning(csc, capsys):
     # Dry-run deletes nothing regardless, so an incomplete scan must NOT claim
     # "Deletion is DISABLED" (a run that was never going to delete). The normal
