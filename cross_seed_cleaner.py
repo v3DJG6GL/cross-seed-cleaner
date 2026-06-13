@@ -3393,6 +3393,12 @@ def manual_loop(client, emap):
 
 def _finalize_deletion(client, emap):
     """Dispatch to manual loop, live auto-delete with confirm, or dry-run notice."""
+    if not emap:
+        # Nothing eligible — nothing can be deleted regardless of mode or scan
+        # state, so say so plainly. Checked first so an incomplete scan with no
+        # candidates doesn't claim "Deletion is DISABLED" (nothing was at risk).
+        print(f"{Colors.GREEN}Nothing to delete.{Colors.END}")
+        return
     if SCAN_STATS.get('scan_incomplete') and not DRY_RUN:
         # A library scan aborted partway, so "not externally linked" is no longer
         # trustworthy — a protected file could be missing from the inode set and
@@ -3409,9 +3415,6 @@ def _finalize_deletion(client, emap):
         return
     if MANUAL_MODE:
         manual_loop(client, emap)
-        return
-    if not emap:
-        print(f"{Colors.GREEN}Nothing to delete.{Colors.END}")
         return
     if DRY_RUN:
         print(f"{Colors.YELLOW}DRY RUN. Use --manual or --delete.{Colors.END}")

@@ -143,6 +143,24 @@ def test_finalize_manual_live_blocked_on_incomplete_scan(csc, monkeypatch, capsy
     assert "DISABLED" in capsys.readouterr().out  # blocked, with the reason shown
 
 
+def test_finalize_empty_set_incomplete_scan_says_nothing_to_delete(csc, monkeypatch, capsys):
+    # A live run with an incomplete scan but NO eligible groups was at no risk
+    # (nothing to delete), so it must say "Nothing to delete" — not the alarming
+    # "Deletion is DISABLED" warning. The empty-set check runs before the
+    # incomplete-scan block; the block still fires when there ARE candidates
+    # (covered by the blocked-on-incomplete-scan tests above).
+    csc.DRY_RUN = False
+    csc.MANUAL_MODE = False
+    csc.SCAN_STATS['scan_incomplete'] = True
+    monkeypatch.setattr(csc, "input", lambda *a, **k: pytest.fail("must not prompt"), raising=False)
+    client = FakeClient()
+    csc._finalize_deletion(client, {})
+    out = capsys.readouterr().out
+    assert client.deleted == []
+    assert "Nothing to delete" in out
+    assert "DISABLED" not in out
+
+
 def test_finalize_dry_run_incomplete_scan_no_disabled_warning(csc, capsys):
     # Dry-run deletes nothing regardless, so an incomplete scan must NOT claim
     # "Deletion is DISABLED" (a run that was never going to delete). The normal
