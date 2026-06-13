@@ -350,3 +350,18 @@ def test_csv_unknown_seeds_left_empty(csc, tmp_path):
     csv_text = render_csv(csc, items, evaluate(csc, items), tmp_path)
     rows = list(_csv.DictReader(io.StringIO(csv_text)))
     assert rows[0]["Seeders"] == ""
+
+
+def test_tracker_message_is_path_searchable(csc, tmp_path):
+    # The tracker error message renders only as a tooltip and has no filter chip,
+    # so it must stay reachable from free-text search. It lives in the PATH box as
+    # availability context; the NAME box stays scoped to torrent names. (Regression:
+    # the name/path search-blob split once dropped the message from both boxes.)
+    std(csc)
+    items = [("g0", {"original": t("ReleaseTitle",
+                                   _tracker_msg="Torrent not registered with this tracker"),
+                     "crossseeds": []})]
+    html = render_html(csc, items, evaluate(csc, items), tmp_path)
+    grp = next(a for (_tag, a) in ReportHTML(html).tags if "data-search-path" in a)
+    assert "not registered" in grp["data-search-path"]      # findable via the path box
+    assert "not registered" not in grp["data-search-name"]  # name box stays scoped to names

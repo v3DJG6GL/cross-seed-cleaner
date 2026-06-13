@@ -2204,12 +2204,16 @@ def export_reports(sorted_items, eligible_ids):
 
         # Pre-compute one lowercased blob per text-search box so the JS filter
         # can do a single includes(q) instead of walking rows. The "name" and
-        # "path" boxes are each scoped to their OWN column — tracker and category
-        # have dedicated filter chips, so they are intentionally NOT part of
-        # free-text search. Cross-seeds are included (they may carry different
-        # names/paths and the user expects search to find them).
+        # "path" boxes are each scoped to their OWN column — the tracker DOMAIN
+        # and category have dedicated filter chips, so they are intentionally NOT
+        # part of free-text search. The tracker error MESSAGE has no chip (it only
+        # renders as a tooltip), so it stays free-text searchable — folded into the
+        # path box as availability context, matching the original single-blob
+        # behavior. Cross-seeds are included (they may carry different names/paths
+        # and the user expects search to find them).
         name_tokens = [t.get('name', '').lower() for t in torrents_to_list]
         path_tokens = [t.get('content_path', '').lower() for t in torrents_to_list]
+        path_tokens += [(t.get('_tracker_msg') or '').lower() for t in torrents_to_list]
         ext_path_for_search = d['original'].get('_external_path')
         if ext_path_for_search:
             path_tokens.append(ext_path_for_search.lower())
