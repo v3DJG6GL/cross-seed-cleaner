@@ -480,10 +480,12 @@ class QBittorrentClient:
             return None
 
     def get_torrents(self):
-        return self._request('torrents/info') or []
+        r = self._request('torrents/info')
+        return r if isinstance(r, list) else []
 
     def get_torrent_trackers(self, torrent_hash):
-        return self._request('torrents/trackers', params={'hash': torrent_hash}) or []
+        r = self._request('torrents/trackers', params={'hash': torrent_hash})
+        return r if isinstance(r, list) else []
 
     def get_torrents_with_trackers(self, max_workers=8):
         """Fetch all torrents along with their tracker lists.
@@ -500,12 +502,13 @@ class QBittorrentClient:
         bulk_supported = _version_at_least(self.webapi_version(), (2, 11, 0))
         if bulk_supported:
             torrents = self._request('torrents/info', params={'includeTrackers': 'true'})
-            if torrents is not None:
+            if isinstance(torrents, list):
                 for t in torrents:
                     raw = t.get('trackers') or []
                     t['_trackers'] = [tr for tr in raw if not str(tr.get('url', '')).startswith('**')]
                 return torrents
-            # bulk call failed transiently — fall through to per-torrent path
+            # bulk call failed transiently (None) or returned a non-JSON body
+            # (e.g. a proxy/captive-portal 200 → a str) — fall through safely
 
         torrents = self.get_torrents()
         if not torrents:
