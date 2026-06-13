@@ -145,6 +145,20 @@ def test_rejection_icons_only_on_keep_with_reasons(csc, tmp_path):
     assert any("Low seeder count" in a.get("data-tip", "") for _tag, a in icons)
 
 
+def test_unknown_reason_code_renders_neutral_marker(csc, tmp_path):
+    # A reason code added to an evaluator without a matching icon must degrade to
+    # a neutral marker, not abort the whole HTML report with a KeyError. Pre-stamp
+    # a group with an unmapped code and render it as a keep group (empty eligible).
+    std(csc)
+    grp = {"original": t("Keep"), "crossseeds": [],
+           "_evaluation": {"eligible": False, "reasons": ["FUTURE_CODE"]}}
+    html = render_html(csc, [("g0", grp)], set(), tmp_path)   # must not raise
+    icons = ReportHTML(html).with_class("rejection-icon")
+    assert any(a.get("data-tip") == "FUTURE_CODE" for _tag, a in icons), \
+        "unmapped reason code should still render its rejection icon"
+    assert "•" in html, "unmapped reason should fall back to the neutral marker"
+
+
 def test_no_rejection_icons_when_all_eligible(csc, tmp_path):
     std(csc)
     items = [("g0", {"original": t("A"), "crossseeds": [t("B")]})]

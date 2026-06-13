@@ -1538,7 +1538,10 @@ def export_reports(sorted_items, eligible_ids):
         rejection_reasons = []
         if not is_del_group:
             for code in _ensure_evaluation(d)['reasons']:
-                rejection_reasons.append({'code': code, 'icon': _REASON_HTML_ICON[code], 'text': _reason_text(code)})
+                # Degrade to a neutral marker for an unmapped code rather than
+                # aborting the whole HTML report with a KeyError, mirroring the
+                # graceful fallback in _reason_text.
+                rejection_reasons.append({'code': code, 'icon': _REASON_HTML_ICON.get(code, '•'), 'text': _reason_text(code)})
 
         report_rows.append({
             'idx': idx,

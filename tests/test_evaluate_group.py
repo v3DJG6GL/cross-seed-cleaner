@@ -196,6 +196,21 @@ def test_nhl_external_link(nhl):
     assert nhl.evaluate_group(grp(t(_external_hardlink=True)))["reasons"] == ["EXTERNAL_LINK"]
 
 
+def test_reason_icon_and_text_maps_stay_in_sync(csc):
+    # The HTML report degrades gracefully for an unmapped code, but a reason code
+    # added to an evaluator without an icon would then ship a silent neutral
+    # marker. Pin the icon map to the canonical code set and require each to have
+    # a custom _reason_text, so adding a code forces updating all three.
+    expected = {
+        "EXTERNAL_LINK", "PATH_ERROR", "LOW_SEEDS", "SMALL_SIZE", "LOW_TIME",
+        "TOO_MANY", "CATEGORY_FILTER", "TRACKER_ALIVE", "RECENTLY_ADDED",
+        "TRACKER_UPDATING", "NO_REAL_TRACKERS", "NO_ADDED_TIME", "RECENT_ACTIVITY",
+    }
+    assert set(csc._REASON_HTML_ICON) == expected
+    for code in expected:
+        assert csc._reason_text(code) != code, f"{code} missing a custom _reason_text"
+
+
 def test_nhl_multi_reason_order(csc):
     reconfigure(csc, MIN_SEEDERS=MIN_SEEDERS, MAX_TORRENTS_IN_GROUP=MAX_GROUP,
                 MIN_SIZE_GIB=MIN_GIB, MIN_ORIGINAL_SEED_TIME_DAYS=MIN_DAYS,
