@@ -3282,11 +3282,10 @@ def export_reports(sorted_items, eligible_ids):
                     # sort_torrents pins the original first so i==0 stays the original.
                     group_torrents = sort_torrents(d['original'], d['crossseeds'], SORT_BY, SORT_ORDER)
 
-                    external_path = None
-                    for t in group_torrents:
-                         if t.get('_external_path'):
-                             external_path = t['_external_path']
-                             break
+                    # _external_path is stamped identically on every group
+                    # member (standard mode) and on the lone torrent (MHL),
+                    # so read it from the original like the HTML exporter does.
+                    external_path = d['original'].get('_external_path')
 
                     if TRACKER_ERROR_MODE:
                         orig_type = 'DEAD'
