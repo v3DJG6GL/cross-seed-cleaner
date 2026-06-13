@@ -2907,9 +2907,17 @@ def export_reports(sorted_items, eligible_ids):
                         document.querySelectorAll('.filter-row input, .filter-multi-panel input').forEach(i => {{
                             if (i.type === 'checkbox')   i.checked = false;
                             // radios (the Any/Only reason-match toggle) carry a fixed
-                            // value attribute; reset them via .checked, never by wiping
-                            // .value, or the next change feeds an empty mode to the filter.
+                            // value attribute; never wipe .value (that would feed an
+                            // empty mode to the filter). They're reset to default below.
                             else if (i.type !== 'range' && i.type !== 'radio') i.value = '';   // sliders reset via slot._reset()
+                        }});
+                        // Return the Any/Only reason-match toggle to its 'any' default
+                        // and re-sync the green is-on highlight, so "Clear all" actually
+                        // clears it instead of leaving the user's last choice latched.
+                        reasonMatchMode = 'any';
+                        document.querySelectorAll('[data-reason-match]').forEach(r => {{
+                            r.checked = (r.value === 'any');
+                            r.parentElement.classList.toggle('is-on', r.checked);
                         }});
                         statusSet.clear(); reasonsSet.clear();
                         trackersSet.clear(); categoriesSet.clear();

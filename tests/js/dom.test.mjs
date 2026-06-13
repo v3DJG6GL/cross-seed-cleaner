@@ -136,6 +136,43 @@ test('Clear all keeps the Any/Only reason filter working', () => {
   assert.equal(onlyMode[0], 'LOW_SEEDS');
 });
 
+test('Clear all resets the Any/Only reason toggle back to its default', () => {
+  const { window } = load();
+  const doc = window.document;
+
+  function fire(el) {
+    el.dispatchEvent(new window.Event('change', { bubbles: true }));
+  }
+
+  const anyRadio = doc.querySelector('[data-reason-match][value="any"]');
+  const onlyRadio = doc.querySelector('[data-reason-match][value="only"]');
+
+  // User switches to "Only", then clicks "Clear all".
+  onlyRadio.checked = true;
+  fire(onlyRadio);
+  assert.equal(onlyRadio.checked, true);
+  assert.ok(onlyRadio.parentElement.classList.contains('is-on'));
+
+  doc.getElementById('filterClearBtn').click();
+
+  // "Clear all" must return the toggle to its default ("Any"): the Any radio
+  // checked, the Only radio cleared, and the green highlight back on Any.
+  assert.equal(anyRadio.checked, true);
+  assert.equal(onlyRadio.checked, false);
+  assert.ok(anyRadio.parentElement.classList.contains('is-on'));
+  assert.ok(!onlyRadio.parentElement.classList.contains('is-on'));
+
+  // The cleared mode must be "any": ticking one reason now shows both the
+  // single- and multi-reason groups (only-mode would hide the multi one).
+  const deleteCb = doc.querySelector('[data-filter-status][value="delete"]');
+  deleteCb.checked = false;
+  fire(deleteCb);
+  const lowSeeds = doc.querySelector('[data-filter-reason][value="LOW_SEEDS"]');
+  lowSeeds.checked = true;
+  fire(lowSeeds);
+  assert.equal(visibleGroups(doc).length, 2);
+});
+
 test('sortTable(2) orders groups by seeds ascending then descending', () => {
   const { window } = load();
   window.sortTable(2);                 // seeds, first click = ascending
