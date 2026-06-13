@@ -19,11 +19,9 @@ def _load_module():
     saved_argv = sys.argv
     saved_env = {
         k: os.environ.get(k)
-        for k in ("UNRELIABLE_TRACKERS", "CATEGORY_ALLOWLIST", "HTML_EXPORT", "CSV_EXPORT")
+        for k in ("HTML_EXPORT", "CSV_EXPORT")
     }
     sys.argv = ["cross_seed_cleaner.py"]
-    os.environ["UNRELIABLE_TRACKERS"] = '<img src=x onerror=alert("unreliable-env")>'
-    os.environ["CATEGORY_ALLOWLIST"] = '<script>alert("cat-allow")</script>'
     sys.path.insert(0, REPO_ROOT)
     try:
         if "cross_seed_cleaner" in sys.modules:
@@ -51,6 +49,14 @@ class XSSEscapingTest(unittest.TestCase):
     # a data-tip attribute, so attribute-breakout is the main concern.
     XSS_TRACKER_MSG = '" onclick="alert(\'xss-tmsg\')" x="'
 
+    # Config-panel fields rendered into the report's <ul>. UNRELIABLE_TRACKERS is
+    # env-overridable; CATEGORY_ALLOWLIST/BLOCKLIST are config-file lists with no
+    # env path, so set all three directly (like HTML_EXPORT below) to guarantee
+    # the payloads actually reach the rendered config panel.
+    XSS_UNRELIABLE = '<img src=x onerror=alert("xss-unreliable")>'
+    XSS_CAT_ALLOW = '<script>alert("xss-cat-allow")</script>'
+    XSS_CAT_BLOCK = '<img src=x onerror=alert("xss-cat-block")>'
+
     def setUp(self):
         self.csc = _load_module()
         self.tmpdir = tempfile.TemporaryDirectory()
@@ -58,6 +64,9 @@ class XSSEscapingTest(unittest.TestCase):
 
         self.csc.HTML_EXPORT = os.path.join(self.tmpdir.name, "report.html")
         self.csc.CSV_EXPORT = os.path.join(self.tmpdir.name, "report.csv")
+        self.csc.UNRELIABLE_TRACKERS = [self.XSS_UNRELIABLE]
+        self.csc.CATEGORY_ALLOWLIST = [self.XSS_CAT_ALLOW]
+        self.csc.CATEGORY_BLOCKLIST = [self.XSS_CAT_BLOCK]
 
     def _render(self):
         torrent = {
@@ -106,6 +115,17 @@ class XSSEscapingTest(unittest.TestCase):
         # Escaped forms must be present.
         self.assertIn('&lt;script&gt;alert(&quot;xss-name&quot;)', html)
         self.assertIn('&lt;script&gt;alert(&quot;xss-ext&quot;)',  html)
+
+        # Config-panel fields (unreliable trackers, category allow/block lists)
+        # are attacker-influenceable via env/config and rendered into the report.
+        # Without these assertions the payloads above were dead setup: dropping
+        # the _h() wrapper on those config <li> items left every test green.
+        self.assertNotIn('onerror=alert("xss-unreliable")', html, "unreliable-trackers payload survived unescaped")
+        self.assertNotIn('<script>alert("xss-cat-allow")', html, "category-allowlist payload survived unescaped")
+        self.assertNotIn('onerror=alert("xss-cat-block")', html, "category-blocklist payload survived unescaped")
+        self.assertIn('alert(&quot;xss-unreliable&quot;)', html)
+        self.assertIn('&lt;script&gt;alert(&quot;xss-cat-allow&quot;)', html)
+        self.assertIn('alert(&quot;xss-cat-block&quot;)', html)
 
     def test_no_script_breakout_in_inline_js(self):
         html = self._render()
