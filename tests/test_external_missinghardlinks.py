@@ -113,7 +113,7 @@ def test_scan_missing_file_enoent_not_flagged(csc, tmp_path, monkeypatch):
     assert csc.SCAN_STATS['scan_incomplete'] is False
 
 
-def test_finalize_deletion_blocked_on_incomplete_scan(csc, monkeypatch):
+def test_finalize_deletion_blocked_on_incomplete_scan(csc, monkeypatch, capsys):
     # Even in live mode with eligible groups, an incomplete library scan must
     # block deletion entirely (the gate returns before any prompt or API call).
     csc.DRY_RUN = False
@@ -123,6 +123,20 @@ def test_finalize_deletion_blocked_on_incomplete_scan(csc, monkeypatch):
     client = FakeClient()
     csc._finalize_deletion(client, {1: [{"hash": "a"}]})
     assert client.deleted == []                  # nothing deleted
+    assert "DISABLED" in capsys.readouterr().out  # and the user is told why
+
+
+def test_finalize_dry_run_incomplete_scan_no_disabled_warning(csc, capsys):
+    # Dry-run deletes nothing regardless, so an incomplete scan must NOT claim
+    # "Deletion is DISABLED" (a run that was never going to delete). The normal
+    # dry-run notice is shown instead.
+    csc.DRY_RUN = True
+    csc.MANUAL_MODE = False
+    csc.SCAN_STATS['scan_incomplete'] = True
+    csc._finalize_deletion(FakeClient(), {1: [{"hash": "a"}]})
+    out = capsys.readouterr().out
+    assert "DISABLED" not in out
+    assert "DRY RUN" in out
 
 
 def test_scan_brace_expansion(csc, tmp_path):

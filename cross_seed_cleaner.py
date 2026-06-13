@@ -3343,11 +3343,14 @@ def manual_loop(client, emap):
 
 def _finalize_deletion(client, emap):
     """Dispatch to manual loop, live auto-delete with confirm, or dry-run notice."""
-    if SCAN_STATS.get('scan_incomplete'):
+    if SCAN_STATS.get('scan_incomplete') and (MANUAL_MODE or not DRY_RUN):
         # A library scan aborted partway, so "not externally linked" is no longer
         # trustworthy — a protected file could be missing from the inode set and
-        # surface as a deletion candidate. Block deletion; the report is already
-        # written, so the user can review and re-run after resolving the error.
+        # surface as a deletion candidate. Block any path that actually deletes
+        # (manual or live); the report is already written, so the user can review
+        # and re-run after resolving the error. Pure dry-run deletes nothing, so
+        # it falls through to the dry-run notice rather than claiming deletion was
+        # "disabled" for a run that was never going to delete anyway.
         print(f"\n{Colors.BOLD}{Colors.RED}WARNING: an external library scan was incomplete.{Colors.END}")
         print(f"{Colors.RED}Deletion is DISABLED for this run to avoid removing a protected file. "
               f"Resolve the scan error and re-run.{Colors.END}")
