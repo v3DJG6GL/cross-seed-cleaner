@@ -3,6 +3,7 @@ __pycache__/
 
 # Local code-review bookkeeping
 CODE-REVIEW_NOTES.md
+SECURITY-REVIEW_NOTES.md
 
 # Node test deps
 node_modules/
