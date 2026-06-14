@@ -103,6 +103,16 @@ def test_domain_from_tracker_url(csc, url, expected):
     assert csc._domain_from_tracker_url(url) == expected
 
 
+def test_domain_from_tracker_url_bounds_pathological_host(csc):
+    # A crafted announce URL with an absurdly long "www."-repeated host must not
+    # drive the normalize loop into quadratic-time CPU exhaustion. Hosts past the
+    # 253-char DNS limit are returned unprocessed (and instantly) — if the strip
+    # loop ran on this ~80 KB host the test would hang for seconds.
+    host = "www." * 20000 + "x.org"
+    out = csc._domain_from_tracker_url("http://" + host + "/announce")
+    assert out == host
+
+
 # ─── is_unreliable_tracker ───────────────────────────────────────────────────
 
 def test_unreliable_empty_config(csc):

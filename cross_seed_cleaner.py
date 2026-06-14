@@ -778,6 +778,13 @@ def _domain_from_tracker_url(url):
     host = urllib.parse.urlparse(url).hostname
     if not host:
         return None
+    # A valid DNS hostname is at most 253 characters; anything longer cannot
+    # resolve to a real tracker. Bail before the strip loop so a crafted .torrent
+    # announce host (e.g. "www." repeated tens of thousands of times) can't drive
+    # the repeated O(n) slice into quadratic-time CPU exhaustion. No-op on every
+    # real hostname.
+    if len(host) > 253:
+        return host
     # Strip only leading 'www.'/'tracker.' labels (not substrings, so
     # 'my-tracker.org' is left intact), and only while the remainder still has
     # a dot — otherwise 'tracker.org' would collapse to the bare TLD 'org'.
