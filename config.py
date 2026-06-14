@@ -115,6 +115,7 @@ TRACKER_ERROR_MODE_IGNORE_CATEGORY_FILTER = False
 # - Exact match:  "cross-seed-links"
 # - Regex match:  prefix with "r:", e.g. "r:autobrr-.*"
 # - Combined:     "cross-seed-category,r:autobrr-.*"
+# Regex patterns must match the WHOLE category name (both ends are anchored automatically) — use ".*" for any part that varies; a trailing "$" is allowed but redundant.
 # Category names and patterns are compared in lowercase — write yours in lowercase to make sure they match.
 MISSING_HARD_LINKS_MODE = False
 MISSING_HARD_LINKS_CATEGORIES = "cross-seed-category,r:autobrr-.*"

@@ -171,7 +171,7 @@ def get_config():
     parser.add_argument('--csv', type=str, default=env_csv_export, help='Path to save CSV report')
 
     parser.add_argument('--missing-hard-links-mode', action=argparse.BooleanOptionalAction, default=env_missing_hard_links_mode, help='Enable mode to find torrents in selected categories that are missing the expected extra hard-link (orphans from the media library)')
-    parser.add_argument('--missing-hard-links-categories', type=str, default=env_missing_hard_links_cats, help='Comma-separated categories for missing-hard-links mode; prefix "r:" for regex (e.g. "r:autobrr-.*")')
+    parser.add_argument('--missing-hard-links-categories', type=str, default=env_missing_hard_links_cats, help='Comma-separated categories for missing-hard-links mode; prefix "r:" for regex matching the whole name (e.g. "r:autobrr-.*")')
     parser.add_argument('--external-media-paths', type=str, default=env_ext_media_paths,
                         help='Paths to scan for hardlinks. Supports commas, wildcards (*), and braces ({a,b}). E.g., "/mnt/{movies,tv},/mnt/users/*"')
 
