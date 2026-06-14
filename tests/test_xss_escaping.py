@@ -164,6 +164,22 @@ class XSSEscapingTest(unittest.TestCase):
         self.assertIn("new Chart(ctxGroup", inline_js,
                       "inline JS block truncated before chart setup — </script> breakout in chart data")
 
+    def test_js_string_escapes_line_terminators(self):
+        # U+2028 (line separator) and U+2029 (paragraph separator) are valid
+        # JSON but terminate a statement inside an inline <script>, breaking the
+        # script if emitted raw. js_string relies on json.dumps's default
+        # ensure_ascii=True to escape them; a refactor to ensure_ascii=False
+        # (e.g. to keep non-ASCII tracker names readable) would silently
+        # reintroduce the break in the chart `labels`. Pin that they never
+        # survive raw — the </script> case has an end-to-end anchor above, this
+        # locks the sibling line-terminator escape at the source.
+        ls, ps = "\u2028", "\u2029"  # U+2028 line sep, U+2029 paragraph sep
+        out = self.csc.js_string(f"a{ls}b{ps}c")
+        self.assertNotIn(ls, out, "raw U+2028 survived js_string")
+        self.assertNotIn(ps, out, "raw U+2029 survived js_string")
+        self.assertIn("\\u2028", out)
+        self.assertIn("\\u2029", out)
+
     def test_chartjs_is_vendored_not_cdn(self):
         html = self._render()
         self.assertNotIn("cdn.jsdelivr.net", html, "CDN reference leaked into generated report")
