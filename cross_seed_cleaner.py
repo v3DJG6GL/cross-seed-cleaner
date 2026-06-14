@@ -77,7 +77,12 @@ def _validate_config():
 
 
 def _parse_dead_statuses(raw):
-    """Parse a CSV string like '4,5,6' into a frozenset of ints. Empty/invalid returns frozenset()."""
+    """Parse a CSV string like '4,5,6' into a frozenset of ints.
+
+    An empty value yields an empty frozenset; a non-integer entry prints an
+    error and exits (matching the other config validators), it does not
+    silently return an empty set.
+    """
     if not raw:
         return frozenset()
     out = set()
