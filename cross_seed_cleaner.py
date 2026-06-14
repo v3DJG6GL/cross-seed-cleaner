@@ -427,6 +427,16 @@ def _version_at_least(version_str, threshold):
     return tuple(parts[:len(threshold)]) >= tuple(threshold)
 
 
+# Per-socket-operation timeout (seconds) for every WebAPI call. Without it a
+# hung or unreachable qBittorrent (dead TCP connection, captive proxy, MITM that
+# accepts but never replies) makes urlopen block forever and pins the run — the
+# tracker-fetch fallback runs these in a thread pool, so a slow server can stall
+# every worker. Generous enough never to trip a real response (it bounds idle
+# sockets, not total transfer); a timeout is caught and treated as "no data",
+# which the downstream fail-closed gates handle safely.
+REQUEST_TIMEOUT = 60
+
+
 class QBittorrentClient:
     def __init__(self, host, username, password, api_key=None):
         self.host = host.rstrip('/')
@@ -463,7 +473,7 @@ class QBittorrentClient:
         data = urllib.parse.urlencode({'username': username, 'password': password}).encode()
         request = urllib.request.Request(url, data=data)
         try:
-            response = urllib.request.urlopen(request)
+            response = urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT)
             cookie_header = response.headers.get('Set-Cookie')
             if cookie_header:
                 self.cookie = cookie_header.split(';')[0]
@@ -485,7 +495,7 @@ class QBittorrentClient:
             data = urllib.parse.urlencode(data).encode()
             request.data = data
         try:
-            response = urllib.request.urlopen(request)
+            response = urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT)
             content = response.read().decode('utf-8')
             # raw=True for plain-text endpoints (app/webapiVersion): a bare
             # two-component version like "2.20" is valid JSON for a float, so
