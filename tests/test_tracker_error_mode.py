@@ -102,6 +102,17 @@ def test_excluded_when_added_on_zero(csc):
     assert r['reasons'] == ['NO_ADDED_TIME']
 
 
+def test_excluded_when_added_on_negative(csc):
+    """A negative added_on (a bogus/hostile server value) is not a usable
+    timestamp: it must fail closed exactly like 0. Otherwise now_ts - added
+    becomes a large positive and silently slips past the min-age window,
+    letting a freshly-added dead-tracker torrent be deleted on one response."""
+    t = _torrent(trackers=[_tr(status=5)], added=-1)
+    r = _eval(csc, t)
+    assert r['eligible'] is False
+    assert r['reasons'] == ['NO_ADDED_TIME']
+
+
 def test_status_zero_disqualifies(csc):
     """qBittorrent emits status 0 only for sticky entries when disabled, but
     a multi-tier real tracker that fell to status 0 (a defensive case) must

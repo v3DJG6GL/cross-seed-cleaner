@@ -1217,7 +1217,11 @@ def evaluate_dead_trackers(d, now_ts):
         reasons.append("NO_REAL_TRACKERS")
     else:
         added = int(t.get('added_on', 0) or 0)
-        if added == 0:
+        # A non-positive added_on (0, or a bogus negative from the server) is not a
+        # usable timestamp: treat it as "no added time" and fail closed (KEEP). A
+        # negative value must not be allowed to reach the elif, where now_ts - added
+        # becomes a large positive that would silently skip the min-age window.
+        if added <= 0:
             reasons.append("NO_ADDED_TIME")
         elif TRACKER_ERROR_MIN_AGE_DAYS > 0 and (now_ts - added) < TRACKER_ERROR_MIN_AGE_DAYS * 86400:
             reasons.append("RECENTLY_ADDED")
