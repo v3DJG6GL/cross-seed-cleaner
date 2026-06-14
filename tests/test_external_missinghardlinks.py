@@ -38,7 +38,27 @@ def test_scan_ignores_unlinked_file(csc, tmp_path):
 
 
 def test_scan_wildcard_zero_matches(csc, tmp_path):
+    # A configured wildcard that resolves to nothing (the usual symptom of an
+    # unmounted media volume) must fail closed: an empty inode set would make
+    # every torrent look orphaned, so the scan is flagged incomplete to block
+    # deletion downstream.
     assert csc.scan_external_libraries([str(tmp_path / "nope" / "*")]) == {}
+    assert csc.SCAN_STATS['scan_incomplete'] is True
+
+
+def test_scan_partial_wildcard_zero_match_flags_incomplete(csc, tmp_path):
+    # One good library plus a zero-match wildcard: real inodes are still found
+    # (final_paths is non-empty, so the "no valid paths" guard never fires), but
+    # the missing wildcard location alone must still flag the scan incomplete,
+    # exactly as a literal missing path does via os.walk's error handler.
+    lib = tmp_path / "lib"
+    lib.mkdir()
+    f = lib / "movie.mkv"
+    f.write_bytes(b"x" * 100)
+    os.link(str(f), str(lib / "movie.hardlink.mkv"))
+    result = csc.scan_external_libraries([str(lib), str(tmp_path / "gone" / "*")])
+    assert _inode(str(f)) in result            # the good library was scanned
+    assert csc.SCAN_STATS['scan_incomplete'] is True
 
 
 def test_scan_clean_walk_not_flagged_incomplete(csc, tmp_path):

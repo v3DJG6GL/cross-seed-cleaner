@@ -3476,6 +3476,14 @@ def scan_external_libraries(paths):
                 if matches:
                     final_paths.extend(matches)
                 else:
+                    # A configured wildcard matching nothing usually means the media
+                    # volume is unmounted/unavailable, not that the library is empty.
+                    # We scanned none of its inodes, so "not externally linked" is no
+                    # longer trustworthy — fail closed exactly as a literal missing
+                    # path already does (os.walk routes it to _on_walk_error below).
+                    # Otherwise every torrent looks orphaned and becomes a live-
+                    # deletion candidate.
+                    SCAN_STATS['scan_incomplete'] = True
                     print(f"{Colors.YELLOW}  ! Wildcard warning: '{bp}' matched 0 paths{Colors.END}")
             else:
                 final_paths.append(bp)
@@ -3483,6 +3491,10 @@ def scan_external_libraries(paths):
     final_paths = sorted(set(final_paths))
 
     if not final_paths:
+        # Non-empty config (we passed `if not paths` above) that expands to zero
+        # scannable paths: the user asked for external-library protection but we
+        # scanned nothing. Fail closed so deletion is blocked downstream.
+        SCAN_STATS['scan_incomplete'] = True
         print(f"{Colors.RED}  ! No valid paths found after expansion.{Colors.END}")
         return inodes
 
