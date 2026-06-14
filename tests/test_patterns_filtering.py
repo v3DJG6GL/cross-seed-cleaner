@@ -143,6 +143,26 @@ def test_seeder_count_unreliable_adds_incomplete(csc):
     assert csc.get_seeder_count(FakeClient(), tor) == 15
 
 
+def test_seeder_count_unreliable_preserves_unscraped_sentinel(csc):
+    # qBittorrent reports -1 for an unscraped (unknown) seeder count. On an
+    # unreliable tracker, a server-supplied leecher total must NOT wash that -1
+    # into a positive sum — doing so would silently defeat the LOW_SEEDS deletion
+    # guard for a torrent whose seeders were never scraped. The unknown sentinel
+    # is preserved (like the reliable branch) so LOW_SEEDS fails closed.
+    reconfigure(csc, UNRELIABLE_TRACKERS=["unreliable.com"])
+    tor = {"tracker": "http://unreliable.com/announce", "num_complete": -1, "num_incomplete": 99}
+    assert csc.get_seeder_count(FakeClient(), tor) == -1
+
+
+def test_seeder_count_unreliable_known_zero_still_recovers(csc):
+    # No-op on real scraped data: num_complete == 0 means "scraped, zero seeders"
+    # (NOT unknown), so the unreliable-tracker recovery from leechers must still
+    # apply. Guards against an over-eager fix that blocks the legitimate case.
+    reconfigure(csc, UNRELIABLE_TRACKERS=["unreliable.com"])
+    tor = {"tracker": "http://unreliable.com/announce", "num_complete": 0, "num_incomplete": 8}
+    assert csc.get_seeder_count(FakeClient(), tor) == 8
+
+
 def test_seeder_count_missing_fields(csc):
     reconfigure(csc, UNRELIABLE_TRACKERS=[])
     assert csc.get_seeder_count(FakeClient(), {"tracker": "http://x.com/a"}) == 0

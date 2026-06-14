@@ -851,6 +851,17 @@ def get_seeder_count(client, torrent):
     name = torrent.get('name', 'Unknown')
 
     if is_unreliable_tracker(tracker_domain):
+        # Unreliable trackers misreport seeders as peers, so we recover the count
+        # from seeders + leechers. But qBittorrent reports -1 for an unscraped
+        # seeder count, and a server-supplied leecher total must not be allowed to
+        # wash that -1 into a positive sum (e.g. -1 + 99 = 98) — that would
+        # silently defeat the LOW_SEEDS deletion guard for a torrent whose seeders
+        # were never actually scraped. When the seeder count is unknown, preserve
+        # the sentinel like the reliable branch below does so LOW_SEEDS fails
+        # closed (KEEP). No-op on real scraped data, where num_complete is >= 0.
+        if num_complete < 0:
+            debug_log(f"[FETCH] '{name}' on {tracker_domain}: Unreliable but seeders unscraped ({num_complete}) -> -1 (unknown)")
+            return -1
         total = num_complete + num_incomplete
         debug_log(f"[FETCH] '{name}' on {tracker_domain}: Unreliable -> {num_complete} + {num_incomplete} = {total} Seeders")
         return total
