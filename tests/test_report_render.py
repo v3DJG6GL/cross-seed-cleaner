@@ -145,6 +145,24 @@ def test_rejection_icons_only_on_keep_with_reasons(csc, tmp_path):
     assert any("Low seeder count" in a.get("data-tip", "") for _tag, a in icons)
 
 
+def test_null_numeric_fields_dont_crash(csc, tmp_path):
+    # A client can report size/seeding_time/ratio/uploaded/added_on as JSON null.
+    # The eligibility decision, the stats accumulation, and all three report
+    # formats must treat a blank numeric as zero instead of crashing.
+    std(csc)
+    null_t = dict(name="N", content_path="/d/N", category="movies",
+                  tracker="http://aither.cc/a", _tracker_domain="aither.cc",
+                  _seeder_count=10, hash="N",
+                  size=None, seeding_time=None, ratio=None, uploaded=None, added_on=None)
+    items = [("g0", {"original": null_t,
+                     "crossseeds": [dict(null_t, name="M", hash="M")]})]
+    elig = evaluate(csc, items)                       # evaluate_group must not crash
+    html = render_html(csc, items, elig, tmp_path)    # stats + display + formatters
+    assert len(html) > 1000
+    csv_text = render_csv(csc, items, elig, tmp_path)  # CSV writer
+    assert "N" in csv_text
+
+
 def test_unknown_reason_code_renders_neutral_marker(csc, tmp_path):
     # A reason code added to an evaluator without a matching icon must degrade to
     # a neutral marker, not abort the whole HTML report with a KeyError. Pre-stamp

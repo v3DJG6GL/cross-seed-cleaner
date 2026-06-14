@@ -395,6 +395,19 @@ def test_print_group_unknown_seeds_shows_na(csc, capsys):
     assert csc.Colors.RED not in seeds_cell
 
 
+def test_print_group_null_numeric_fields_dont_crash(csc, capsys):
+    # A blank size/seed-time/ratio/upload (JSON null) must not crash the CLI
+    # table the way it must not crash the HTML/CSV report.
+    csc.TRACKER_ERROR_MODE = False
+    csc.MISSING_HARD_LINKS_MODE = False
+    orig = _torrent(_seeder_count=5, size=None, seeding_time=None,
+                    ratio=None, uploaded=None, _tracker_cache='t')
+    d = {'original': orig, 'crossseeds': [],
+         '_evaluation': {'eligible': True, 'all_torrents': [orig], 'externally_linked': False}}
+    csc.print_group(FakeClient(), d, 1, 1)            # must not raise
+    assert '[ORIGINAL]' in capsys.readouterr().out
+
+
 # ─── _ensure_evaluation: mode-aware fallback for an unstamped group ──────────
 
 def test_ensure_evaluation_uses_dead_tracker_evaluator_in_tracker_mode(csc):

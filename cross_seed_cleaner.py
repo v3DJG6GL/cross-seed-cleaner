@@ -631,7 +631,7 @@ def get_path_identity(torrent):
     """Generate identity string for grouping torrents by inode match"""
     remote_content_path = torrent.get('content_path', '')
     name = torrent.get('name', 'unknown')
-    size = torrent.get('size', 0)
+    size = torrent.get('size', 0) or 0
 
 
     local_content_path = apply_path_mapping(remote_content_path)
@@ -986,7 +986,8 @@ def category_allowed(cat):
 
 
 def format_size_smart(size_bytes):
-    if size_bytes == 0:
+    # `not` also catches a present-but-null size (some clients send JSON null).
+    if not size_bytes:
         return "0 B"
     units = ("B", "KiB", "MiB", "GiB", "TiB", "PiB")
     i = 0
@@ -1005,6 +1006,7 @@ def format_duration(seconds, fmt="d:hh"):
     zeroes = {"d:hh": "0:00", "d:hh:mm": "0:00:00", "days": "0.0 days"}
     if fmt not in zeroes:
         raise ValueError(f"unknown duration fmt: {fmt!r}")
+    seconds = seconds or 0          # tolerate a present-but-null seeding_time
     if seconds <= 0:
         return zeroes[fmt]
     if fmt == "days":
@@ -1063,8 +1065,8 @@ def evaluate_group(d):
         path_ok = True
         count_ok = len(all_t) < MAX_TORRENTS_IN_GROUP
 
-    size_ok = orig.get('size', 0) >= MIN_SIZE_BYTES
-    time_ok = orig.get('seeding_time', 0) >= MIN_ORIGINAL_SEED_TIME_SECONDS
+    size_ok = (orig.get('size', 0) or 0) >= MIN_SIZE_BYTES
+    time_ok = (orig.get('seeding_time', 0) or 0) >= MIN_ORIGINAL_SEED_TIME_SECONDS
     cat_ok = all(category_allowed(c) for c in {t.get('category', '') for t in all_t})
 
     reasons = []
@@ -1344,8 +1346,8 @@ def print_group(client, d, num, total):
             t['_tracker_cache'] = f"{base} ({msg[:18]})" if msg else base
         is_orig = (t is orig)
         seeders = t.get('_seeder_count', 0)
-        size = t.get('size', 0)
-        seed_time = t.get('seeding_time', 0)
+        size = t.get('size', 0) or 0
+        seed_time = t.get('seeding_time', 0) or 0
         # Tracker-error mode bypasses the MIN_SEEDERS/MIN_SIZE/MIN_TIME limits
         # (eligibility is tracker-death based), so red/green threshold coloring
         # would contradict the green "✓ ELIGIBLE" header — a dead torrent with
@@ -1374,7 +1376,7 @@ def print_group(client, d, num, total):
         rows.append([
             type_label,
             f"{Colors.DIM}N/A{Colors.END}" if seeders < 0 else f"{c_seeds}{seeders}{Colors.END}",
-            f"{t.get('ratio', 0.0):.2f}",
+            f"{t.get('ratio', 0.0) or 0:.2f}",
             f"{c_size}{format_size_smart(size)}{Colors.END}",
             format_size_smart(t.get('uploaded', 0)),
             f"{c_time}{format_duration(seed_time)}{Colors.END}",
@@ -1391,13 +1393,13 @@ def calculate_stats(all_groups, eligible_map):
     s = defaultdict(int)
     s['groups_total'] = len(all_groups)
     for h, g in all_groups.items():
-        s['size_total'] += g['original'].get('size', 0)
+        s['size_total'] += g['original'].get('size', 0) or 0
         s['torrents_orig'] += 1
         s['torrents_xs'] += len(g['crossseeds'])
     s['groups_del'] = len(eligible_map)
     for idx, ts in eligible_map.items():
         s['torrents_del'] += len(ts)
-        if ts: s['size_del'] += ts[0].get('size', 0)
+        if ts: s['size_del'] += ts[0].get('size', 0) or 0
     s['groups_keep'] = s['groups_total'] - s['groups_del']
     s['torrents_total'] = s['torrents_orig'] + s['torrents_xs']
     s['torrents_keep'] = s['torrents_total'] - s['torrents_del']
@@ -1490,7 +1492,7 @@ def export_reports(sorted_items, eligible_ids):
     for idx, (h, d) in enumerate(sorted_items, 1):
         is_del_group = idx in eligible_ids
 
-        g_size = d['original'].get('size', 0)
+        g_size = d['original'].get('size', 0) or 0
         total_size += g_size
         if is_del_group:
             del_size += g_size
@@ -1511,10 +1513,10 @@ def export_reports(sorted_items, eligible_ids):
             keep_torrents += count
 
         for t in group_torrents:
-            ratio = t.get('ratio', 0)
-            time_sec = t.get('seeding_time', 0)
-            up = t.get('uploaded', 0)
-            t_size = t.get('size', 0)
+            ratio = t.get('ratio', 0) or 0
+            time_sec = t.get('seeding_time', 0) or 0
+            up = t.get('uploaded', 0) or 0
+            t_size = t.get('size', 0) or 0
 
             stats_analyzed['ratio'] += ratio
             stats_analyzed['time'] += time_sec
@@ -2273,8 +2275,8 @@ def export_reports(sorted_items, eligible_ids):
             c_size = ""
             c_time = ""
             c_cat = ""
-            t_size = t.get('size', 0)
-            t_time = t.get('seeding_time', 0)
+            t_size = t.get('size', 0) or 0
+            t_time = t.get('seeding_time', 0) or 0
             t_cat = t.get('category', '')
 
             c_cat = "text-success" if category_allowed(t_cat) else "text-danger"
@@ -2321,7 +2323,7 @@ def export_reports(sorted_items, eligible_ids):
                 <div class="cell">{status_cell_content}</div>
                 <div class="cell">{type_badge}</div>
                 <div class="cell"><span class="{seeds_cls}">{seeds_disp}</span></div>
-                <div class="cell">{t.get('ratio', 0):.2f}</div>
+                <div class="cell">{t.get('ratio', 0) or 0:.2f}</div>
                 <div class="cell"><span class="{c_size}">{format_size_smart(t_size)}</span></div>
                 <div class="cell">{format_size_smart(t.get('uploaded', 0))}</div>
                 <div class="cell"><span class="{c_time}">{format_duration(t_time)}</span></div>
@@ -2335,7 +2337,7 @@ def export_reports(sorted_items, eligible_ids):
 
         external_path = d['original'].get('_external_path')
         if external_path:
-            orig_size = d['original'].get('size', 0)
+            orig_size = d['original'].get('size', 0) or 0
             ext_sk = _sort_attrs(
                 'KEEP', 'EXT', 0, 0, orig_size, 0, 0, 0,
                 '', 'external library',
@@ -3316,7 +3318,7 @@ def export_reports(sorted_items, eligible_ids):
                             'Category': csv_safe(t.get('category', '')),
                             'Added': add_date,
                             'Seeding Time': seed_time,
-                            'Ratio': f"{t.get('ratio', 0):.2f}",
+                            'Ratio': f"{t.get('ratio', 0) or 0:.2f}",
                             # Empty (not "N/A") for an unscraped/-1 count so the
                             # column stays numeric-sortable in a spreadsheet.
                             'Seeders': '' if t.get('_seeder_count', 0) < 0 else t.get('_seeder_count', 0),
