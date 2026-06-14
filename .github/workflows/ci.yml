@@ -4,6 +4,12 @@ on:
   push:
   pull_request:
 
+# Least privilege: every job here only checks out and runs the test suites, so a
+# read-only token is enough. Pinning it explicitly stops a fork PR's test code
+# from inheriting a write-scoped token via an over-permissive repo/org default.
+permissions:
+  contents: read
+
 jobs:
   python:
     name: pytest (Python ${{ matrix.python-version }})
