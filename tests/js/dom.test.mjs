@@ -183,6 +183,47 @@ test('sortTable(2) orders groups by seeds ascending then descending', () => {
   assert.deepEqual(desc, [...desc].sort((a, b) => b - a));
 });
 
+test('sortTable orders cross-seeds within a group and pins the EXT row last', () => {
+  const { window } = load();
+  const doc = window.document;
+
+  // g2 is the only fixture group with >1 cross-seed plus an EXT pseudo-row, so
+  // it is the only one that reaches sortTable's per-group `middle.sort` /
+  // trailing-EXT branch (every other group hits the <=2-row early return). Find
+  // it by its EXT trailing row.
+  const g2 = [...doc.querySelectorAll('.group')].find(
+    g => [...g.children].some(r => r.getAttribute && r.getAttribute('data-sk-1') === 'ext'));
+  assert.ok(g2, 'no group with an EXT row in the fixture');
+
+  const rowsOf = () => [...g2.children].filter(c => c.classList && c.classList.contains('grid-row'));
+  const seedsOf = (r) => r.getAttribute('data-sk-2');
+
+  // Sanity: original first, EXT last, two cross-seeds in the middle.
+  const start = rowsOf();
+  assert.equal(start.length, 4, 'expected original + 2 cross-seeds + EXT');
+  assert.equal(start[0].getAttribute('data-sk-1'), 'original');
+  assert.equal(start[start.length - 1].getAttribute('data-sk-1'), 'ext');
+
+  window.sortTable(2);  // seeds ascending
+  let rows = rowsOf();
+  // Original stays pinned at index 0; EXT stays pinned last regardless of its
+  // (zero) seed key; the two middle cross-seeds sort ascending by seeds.
+  assert.equal(rows[0].getAttribute('data-sk-1'), 'original');
+  assert.equal(rows[rows.length - 1].getAttribute('data-sk-1'), 'ext');
+  const midAsc = rows.slice(1, -1).map(seedsOf);
+  assert.deepEqual(midAsc, [...midAsc].sort((a, b) => a - b),
+    'middle cross-seeds not sorted ascending');
+  assert.deepEqual(midAsc, ['10', '60']);
+
+  window.sortTable(2);  // toggle to descending
+  rows = rowsOf();
+  assert.equal(rows[0].getAttribute('data-sk-1'), 'original');
+  assert.equal(rows[rows.length - 1].getAttribute('data-sk-1'), 'ext');
+  const midDesc = rows.slice(1, -1).map(seedsOf);
+  assert.deepEqual(midDesc, ['60', '10'],
+    'middle cross-seeds did not flip to descending (or EXT row escaped the bottom)');
+});
+
 test('name and path search boxes are scoped to their own column', async () => {
   const { window } = load();
   const doc = window.document;

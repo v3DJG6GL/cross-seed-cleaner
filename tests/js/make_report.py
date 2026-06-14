@@ -61,11 +61,19 @@ items = [
     # ExtO has BOTH a low seeder count AND an external hardlink so the group
     # carries two rejection reasons. The Any/Only reason-filter test relies on
     # this multi-reason group to differentiate the two match modes.
+    #
+    # g2 also carries TWO cross-seeds (ExtX, ExtY) plus the EXT pseudo-row, so the
+    # inner cross-seed sort (sortTable's per-group `middle.sort`) and the
+    # trailing-EXT pinning are exercisable: every other group has ≤1 cross-seed,
+    # which hits sortTable's early return and never reaches that branch. ExtX/ExtY
+    # carry distinct seed counts (60/10) so an asc/desc inner sort is observable,
+    # and trackers/categories that no existing dropdown test selects.
     ("g2", {"original": t("ExtO", 1, "ddd.cc", "games",
                           _external_hardlink=True, _external_path="/mnt/lib/ExtO",
                           ratio=3.0, size=20 * GIB, uploaded=10 * GIB,
                           seeding_time=5 * 86400, added_on=1600000000),
-            "crossseeds": [t("ExtX", 60, "eee.cc", "books")]}),
+            "crossseeds": [t("ExtX", 60, "eee.cc", "books"),
+                           t("ExtY", 10, "fff.cc", "comics")]}),
 ]
 
 eligible = set()
