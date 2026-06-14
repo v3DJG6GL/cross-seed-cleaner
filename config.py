@@ -145,7 +145,7 @@ CATEGORY_FILTER_MODE = "block"
 # Examples:
 #   "Movies"       -> Exact match for category "Movies"
 #   "r:.*-4k$"     -> Regex match (matches "Movies-4k", "TV-4k"); also "r:autobrr-.*"
-# Regex patterns match from the start of the category name — add "$" at the end (like in "r:.*-4k$") to require the full name to match.
+# Regex patterns must match the WHOLE category name (both ends are anchored automatically) — use ".*" for any part that varies; a trailing "$" is allowed but redundant.
 # Matching is case-sensitive.
 # These two lists cannot be overridden by environment variable or command-line.
 CATEGORY_ALLOWLIST = ["sonarr-imported", "radarr-imported", "lidarr-imported", "r:.*-allowsuffix$"]
@@ -175,7 +175,7 @@ SORT_ORDER = "asc"
 # Patterns are matched against the tracker's domain, with any leading "tracker." or "www." removed.
 # Comma-separated.
 # Each entry is either a plain domain or a regex prefixed with "r:".
-# Regex patterns match from the start of the domain — add "$" at the end to require a full match.
+# Regex patterns must match the WHOLE domain (both ends are anchored automatically) — use ".*" for any part that varies; a trailing "$" is allowed but redundant.
 UNRELIABLE_TRACKERS = "hdts-announce.ru,hd-space.pw,tfa.tf"
 
 
