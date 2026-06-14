@@ -153,6 +153,40 @@ def test_tracker_error_threshold_inf_accepted(name):
     assert getattr(m, name) == float("inf")
 
 
+# ─── DEAD_TRACKER_STATUSES validation ────────────────────────────────────────
+
+def test_dead_statuses_non_integer_exits(capsys):
+    # A non-integer token is a config typo; _parse_dead_statuses must exit with
+    # a friendly ERROR rather than silently dropping the entry or tracebacking.
+    with pytest.raises(SystemExit):
+        load_module(env={"DEAD_TRACKER_STATUSES": "4,x,6"})
+    err = capsys.readouterr().err
+    assert "non-integer" in err and "DEAD_TRACKER_STATUSES" in err
+
+
+def test_dead_statuses_out_of_range_exits(capsys):
+    # 3 is not a real qBittorrent tracker status; the set must be a subset of
+    # {0,1,2,4,5,6} or the mode would key off a code qBittorrent never emits.
+    with pytest.raises(SystemExit):
+        load_module(env={"DEAD_TRACKER_STATUSES": "3"})
+    err = capsys.readouterr().err
+    assert "DEAD_TRACKER_STATUSES" in err and "invalid" in err
+
+
+def test_dead_statuses_empty_exits(capsys):
+    # An empty set makes NO tracker count as dead — every torrent kept, the
+    # whole mode a silent no-op; reject it as invalid.
+    with pytest.raises(SystemExit):
+        load_module(env={"DEAD_TRACKER_STATUSES": ""})
+    err = capsys.readouterr().err
+    assert "DEAD_TRACKER_STATUSES" in err
+
+
+def test_dead_statuses_valid_parses_to_frozenset():
+    m = load_module(env={"DEAD_TRACKER_STATUSES": "4, 5 ,6"})
+    assert m.DEAD_TRACKER_STATUSES == frozenset({4, 5, 6})
+
+
 # ─── dry-run resolution matrix ───────────────────────────────────────────────
 
 def test_dry_run_default_true(csc):
