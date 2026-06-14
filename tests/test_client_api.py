@@ -91,5 +91,32 @@ class SeederCountNullGuardTest(unittest.TestCase):
         self.assertEqual(self._count(num_complete=7), 7)
 
 
+class VersionAtLeastTest(unittest.TestCase):
+    """_version_at_least gates the bulk-trackers endpoint. It must compare clean
+    dotted versions correctly and read only the leading digits of a suffixed
+    token rather than merging digits across non-digit characters."""
+
+    def setUp(self):
+        self.csc = _load_module()
+
+    def test_clean_versions(self):
+        f = self.csc._version_at_least
+        self.assertTrue(f("2.11.0", (2, 11, 0)))
+        self.assertFalse(f("2.10.5", (2, 11, 0)))
+        self.assertTrue(f("2.11", (2, 11, 0)))      # missing patch pads to 0
+        self.assertTrue(f("3.0.0", (2, 11, 0)))
+
+    def test_missing_or_malformed_is_false(self):
+        f = self.csc._version_at_least
+        self.assertFalse(f("", (2, 11, 0)))
+        self.assertFalse(f(None, (2, 11, 0)))
+        self.assertFalse(f("2.x.0", (2, 0, 0)))     # non-numeric token -> safe False
+
+    def test_suffixed_token_reads_leading_digits_only(self):
+        # "9z2" must read as 9, not 92 (digit-merge). 1.9 < 1.10, so this is False;
+        # the old join-all-digits behavior read 1.92 and wrongly returned True.
+        self.assertFalse(self.csc._version_at_least("1.9z2", (1, 10)))
+
+
 if __name__ == "__main__":
     unittest.main()

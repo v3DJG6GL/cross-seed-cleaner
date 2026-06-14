@@ -402,10 +402,13 @@ def _version_at_least(version_str, threshold):
         return False
     parts = []
     for tok in str(version_str).split('.'):
-        digits = ''.join(ch for ch in tok if ch.isdigit())
-        if not digits:
+        # Leading run of digits only — a suffixed token like "9rc1" reads as 9,
+        # not 91 (joining all digits would fabricate a wrong component). A token
+        # with no leading digit is malformed -> safe-False per the docstring.
+        m = re.match(r'\d+', tok)
+        if not m:
             return False
-        parts.append(int(digits))
+        parts.append(int(m.group()))
     while len(parts) < len(threshold):
         parts.append(0)
     return tuple(parts[:len(threshold)]) >= tuple(threshold)
