@@ -118,5 +118,39 @@ class VersionAtLeastTest(unittest.TestCase):
         self.assertFalse(self.csc._version_at_least("1.9z2", (1, 10)))
 
 
+class VersionRawReadTest(unittest.TestCase):
+    """app/webapiVersion is plain text, not JSON. _request must read it raw so a
+    two-component version like '2.20' isn't coerced to the float 2.2 (dropping
+    the trailing zero), which would mis-route the bulk-trackers version check."""
+
+    def setUp(self):
+        self.csc = _load_module()
+        self.client = self.csc.QBittorrentClient.__new__(self.csc.QBittorrentClient)
+        self.client.host = "http://localhost"
+        self.client.cookie = None
+        self.client.api_key = None
+        self.client._webapi_version = None
+
+    def _stub_urlopen(self, body):
+        import urllib.request
+
+        class _Resp:
+            def read(self_inner):
+                return body.encode("utf-8")
+
+        saved = urllib.request.urlopen
+        urllib.request.urlopen = lambda *a, **k: _Resp()
+        self.addCleanup(lambda: setattr(urllib.request, "urlopen", saved))
+
+    def test_two_component_version_not_float_coerced(self):
+        # Without raw=True, json.loads("2.20") -> 2.2 -> "2.2".
+        self._stub_urlopen("2.20")
+        self.assertEqual(self.client.webapi_version(), "2.20")
+
+    def test_three_component_version_verbatim(self):
+        self._stub_urlopen("2.11.4")
+        self.assertEqual(self.client.webapi_version(), "2.11.4")
+
+
 if __name__ == "__main__":
     unittest.main()

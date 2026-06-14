@@ -440,7 +440,7 @@ class QBittorrentClient:
 
     def _verify_api_key(self):
         # API keys can't hit auth/login; probe a lightweight endpoint to fail fast.
-        version = self._request('app/webapiVersion')
+        version = self._request('app/webapiVersion', raw=True)
         if version is None:
             raise Exception(
                 "API key authentication failed (check the key and that "
@@ -454,7 +454,7 @@ class QBittorrentClient:
         Returns "" when the server doesn't respond (treat as legacy).
         """
         if self._webapi_version is None:
-            v = self._request('app/webapiVersion')
+            v = self._request('app/webapiVersion', raw=True)
             self._webapi_version = str(v).strip() if v is not None else ""
         return self._webapi_version
 
@@ -472,7 +472,7 @@ class QBittorrentClient:
         except Exception as e:
             raise Exception(f"Connection failed: {e}")
 
-    def _request(self, endpoint, params=None, data=None):
+    def _request(self, endpoint, params=None, data=None, raw=False):
         url = f"{self.host}/api/v2/{endpoint}"
         if params:
             url += '?' + urllib.parse.urlencode(params)
@@ -487,6 +487,12 @@ class QBittorrentClient:
         try:
             response = urllib.request.urlopen(request)
             content = response.read().decode('utf-8')
+            # raw=True for plain-text endpoints (app/webapiVersion): a bare
+            # two-component version like "2.20" is valid JSON for a float, so
+            # json.loads would coerce it to 2.2 and drop the trailing zero,
+            # mis-routing the bulk-trackers version check. Return the text as-is.
+            if raw:
+                return content
             try:
                 return json.loads(content)
             except json.JSONDecodeError:
