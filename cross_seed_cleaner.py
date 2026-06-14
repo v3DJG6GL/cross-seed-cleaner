@@ -9,6 +9,8 @@ import json
 import sys
 import re
 import os
+import ipaddress
+import socket
 import argparse
 import csv
 import errno
@@ -427,6 +429,62 @@ def _version_at_least(version_str, threshold):
     return tuple(parts[:len(threshold)]) >= tuple(threshold)
 
 
+def _ip_is_local(ip):
+    """True for loopback / private-LAN / link-local addresses — networks where
+    sending credentials over plain http is low risk."""
+    return ip.is_loopback or ip.is_private or ip.is_link_local
+
+
+def _is_local_host(hostname):
+    """Best-effort: is `hostname` on a trusted local network?
+
+    IP literals are classified directly. 'localhost' and *.local (mDNS) names
+    are treated as local. Any other hostname is resolved ONCE and its
+    address(es) classified; an unresolvable name is treated as non-local (warn)
+    rather than assumed safe.
+    """
+    if not hostname:
+        return True  # nothing to classify -> nothing to warn about
+    host = hostname.strip("[]")  # tolerate a bracketed IPv6 literal
+    if host == "localhost" or host.endswith(".local"):
+        return True
+    try:
+        return _ip_is_local(ipaddress.ip_address(host))
+    except ValueError:
+        pass  # not an IP literal -> resolve it
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror:
+        return False  # can't resolve -> can't confirm local
+    addrs = {ai[4][0] for ai in infos}
+    return bool(addrs) and all(
+        _ip_is_local(ipaddress.ip_address(a)) for a in addrs
+    )
+
+
+def _insecure_transport_warning(host):
+    """Return a warning string if `host` would transmit credentials over an
+    unencrypted (http) connection to a NON-local server, else None.
+
+    https is encrypted, and loopback / private-LAN / link-local hosts keep the
+    traffic on a trusted network, so those return None. The warning only fires
+    when the password / API key / session cookie would cross an untrusted
+    network in clear text. We warn, never refuse — a trusted LAN over http is a
+    legitimate choice.
+    """
+    parsed = urllib.parse.urlparse(host)
+    if parsed.scheme != "http":
+        return None  # https is encrypted; an unrecognized scheme fails loudly elsewhere
+    if _is_local_host(parsed.hostname):
+        return None
+    return (
+        f"WARNING: connecting to qBittorrent at {host} over an unencrypted http "
+        f"connection to a non-local host. Your username, password or API key and "
+        f"the session cookie are sent in clear text and can be read by anyone on "
+        f"the network path. Use https:// for remote access."
+    )
+
+
 # Per-socket-operation timeout (seconds) for every WebAPI call. Without it a
 # hung or unreachable qBittorrent (dead TCP connection, captive proxy, MITM that
 # accepts but never replies) makes urlopen block forever and pins the run — the
@@ -440,6 +498,9 @@ REQUEST_TIMEOUT = 60
 class QBittorrentClient:
     def __init__(self, host, username, password, api_key=None):
         self.host = host.rstrip('/')
+        warning = _insecure_transport_warning(self.host)
+        if warning:
+            print(f"{Colors.BOLD}{Colors.YELLOW}{warning}{Colors.END}")
         self.cookie = None
         self.api_key = (api_key or "").strip() or None
         self._webapi_version = None

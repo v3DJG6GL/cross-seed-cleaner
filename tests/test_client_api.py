@@ -6,9 +6,11 @@ _request returns the raw decoded string when a 200 response body isn't JSON
 page). Callers that blindly iterate the result would crash with AttributeError
 ('str' has no attribute 'get') instead of falling back safely.
 """
+import io
 import os
 import sys
 import unittest
+from unittest import mock
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -150,6 +152,80 @@ class VersionRawReadTest(unittest.TestCase):
     def test_three_component_version_verbatim(self):
         self._stub_urlopen("2.11.4")
         self.assertEqual(self.client.webapi_version(), "2.11.4")
+
+
+class InsecureTransportWarningTest(unittest.TestCase):
+    """The client warns (never refuses) when credentials would cross a non-local
+    network in clear text. https and loopback / private-LAN / link-local hosts
+    stay silent."""
+
+    def setUp(self):
+        self.csc = _load_module()
+
+    # ── pure decision function: IP literals & known-local names ──
+    def test_https_is_silent(self):
+        self.assertIsNone(self.csc._insecure_transport_warning("https://pub.example.com:8080"))
+
+    def test_localhost_http_silent(self):
+        self.assertIsNone(self.csc._insecure_transport_warning("http://localhost:8080"))
+
+    def test_loopback_ip_silent(self):
+        self.assertIsNone(self.csc._insecure_transport_warning("http://127.0.0.1:8080"))
+        self.assertIsNone(self.csc._insecure_transport_warning("http://[::1]:8080"))
+
+    def test_private_lan_silent(self):
+        for h in ("http://192.168.1.5:8080", "http://10.0.0.4:8080", "http://172.16.5.9"):
+            self.assertIsNone(self.csc._insecure_transport_warning(h), h)
+
+    def test_link_local_silent(self):
+        self.assertIsNone(self.csc._insecure_transport_warning("http://169.254.1.2"))
+
+    def test_mdns_local_suffix_silent(self):
+        self.assertIsNone(self.csc._insecure_transport_warning("http://nas.local:8080"))
+
+    def test_public_ip_warns(self):
+        # 8.8.8.8 is genuinely global. (Note: documentation ranges like
+        # 203.0.113.0/24 are classified non-global by ipaddress, so they stay
+        # silent — fine, they're never a real qBittorrent host.)
+        msg = self.csc._insecure_transport_warning("http://8.8.8.8:8080")
+        self.assertIsNotNone(msg)
+        self.assertIn("clear text", msg)
+
+    def test_public_dns_ip_warns(self):
+        self.assertIsNotNone(self.csc._insecure_transport_warning("http://1.1.1.1"))
+
+    # ── hostname resolution path (mocked, no real network) ──
+    def test_hostname_resolving_to_private_is_silent(self):
+        with mock.patch.object(self.csc.socket, "getaddrinfo",
+                               return_value=[(2, 1, 6, "", ("192.168.0.50", 0))]):
+            self.assertIsNone(self.csc._insecure_transport_warning("http://myserver:8080"))
+
+    def test_hostname_resolving_to_public_warns(self):
+        with mock.patch.object(self.csc.socket, "getaddrinfo",
+                               return_value=[(2, 1, 6, "", ("93.184.216.34", 0))]):
+            self.assertIsNotNone(self.csc._insecure_transport_warning("http://pub.example:8080"))
+
+    def test_unresolvable_hostname_warns(self):
+        with mock.patch.object(self.csc.socket, "getaddrinfo",
+                               side_effect=self.csc.socket.gaierror("nope")):
+            self.assertIsNotNone(self.csc._insecure_transport_warning("http://nope.invalid:8080"))
+
+    # ── integration: __init__ prints the warning but still connects ──
+    def _init_capture(self, host):
+        with mock.patch.object(self.csc.QBittorrentClient, "login", lambda *a, **k: None), \
+             mock.patch("sys.stdout", new_callable=io.StringIO) as out:
+            client = self.csc.QBittorrentClient(host, "user", "pass")
+        return client, out.getvalue()
+
+    def test_init_prints_warning_for_public_http(self):
+        client, output = self._init_capture("http://8.8.8.8:8080")
+        self.assertIn("clear text", output)
+        # warn, not refuse: the client is still constructed and keeps its host.
+        self.assertEqual(client.host, "http://8.8.8.8:8080")
+
+    def test_init_silent_for_localhost(self):
+        _, output = self._init_capture("http://localhost:8080")
+        self.assertNotIn("WARNING", output)
 
 
 if __name__ == "__main__":
