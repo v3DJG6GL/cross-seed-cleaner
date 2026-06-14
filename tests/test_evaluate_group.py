@@ -154,6 +154,42 @@ def test_multi_reason_order_normal(csc):
     assert r["eligible"] is False
 
 
+# ─── unverified (name+size-only) identity never deletable, standard mode ─────
+
+def test_unverified_identity_blocks_eligibility(ev):
+    # When the files could not be read to get an inode, the group is matched by
+    # name+size ALONE (heuristic identity). It must never be eligible, even when
+    # every other threshold passes — we don't delete data we couldn't confirm is
+    # a real duplicate.
+    g = grp(t(), [t()])
+    g["_unverified_identity"] = True
+    r = ev.evaluate_group(g)
+    assert r["eligible"] is False
+    assert "UNVERIFIED" in r["reasons"]
+
+
+def test_unverified_orders_after_external_link(ev):
+    g = grp(t(_external_hardlink=True))
+    g["_unverified_identity"] = True
+    assert ev.evaluate_group(g)["reasons"] == ["EXTERNAL_LINK", "UNVERIFIED"]
+
+
+def test_inode_verified_group_unaffected(ev):
+    # Flag absent (a normal inode-verified group) -> eligibility is unchanged.
+    g = grp(t(), [t()])
+    r = ev.evaluate_group(g)
+    assert r["eligible"] is True
+    assert "UNVERIFIED" not in r["reasons"]
+
+
+def test_unverified_falsey_flag_does_not_block(ev):
+    # An inode-verified group is stamped _unverified_identity=False, which must
+    # behave exactly like the flag being absent.
+    g = grp(t(), [t()])
+    g["_unverified_identity"] = False
+    assert ev.evaluate_group(g)["eligible"] is True
+
+
 # ─── missing-hard-links mode ─────────────────────────────────────────────────
 
 @pytest.fixture
@@ -202,8 +238,8 @@ def test_reason_icon_and_text_maps_stay_in_sync(csc):
     # marker. Pin the icon map to the canonical code set and require each to have
     # a custom _reason_text, so adding a code forces updating all three.
     expected = {
-        "EXTERNAL_LINK", "PATH_ERROR", "LOW_SEEDS", "SMALL_SIZE", "LOW_TIME",
-        "TOO_MANY", "CATEGORY_FILTER", "TRACKER_ALIVE", "RECENTLY_ADDED",
+        "EXTERNAL_LINK", "UNVERIFIED", "PATH_ERROR", "LOW_SEEDS", "SMALL_SIZE",
+        "LOW_TIME", "TOO_MANY", "CATEGORY_FILTER", "TRACKER_ALIVE", "RECENTLY_ADDED",
         "TRACKER_UPDATING", "NO_REAL_TRACKERS", "NO_ADDED_TIME", "RECENT_ACTIVITY",
     }
     assert set(csc._REASON_HTML_ICON) == expected

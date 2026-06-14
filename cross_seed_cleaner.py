@@ -967,7 +967,15 @@ def load_and_group_torrents(client):
         final_groups[original['hash']] = {
             'original': original,
             'crossseeds': crossseeds,
-            'name': original['name']
+            'name': original['name'],
+            # A "heuristic:" identity means get_representative_inode could not read
+            # the files on disk (unmounted volume, bad PATH_MAPPINGS, I/O error), so
+            # this group was matched by name + size ALONE — never inode-verified to
+            # be the same data. evaluate_group blocks deletion on this flag so we
+            # never delete files we couldn't confirm are real cross-seed duplicates.
+            # (MHL mode covers the same case via _path_error; tracker-error mode
+            # does no inode grouping.)
+            '_unverified_identity': identity.startswith("heuristic:"),
         }
 
 
@@ -1072,8 +1080,8 @@ def evaluate_group(d):
 
     Returns a dict with:
       - eligible: bool
-      - reasons: list[str] of semantic codes (EXTERNAL_LINK, PATH_ERROR,
-        LOW_SEEDS, SMALL_SIZE, LOW_TIME, TOO_MANY, CATEGORY_FILTER)
+      - reasons: list[str] of semantic codes (EXTERNAL_LINK, UNVERIFIED,
+        PATH_ERROR, LOW_SEEDS, SMALL_SIZE, LOW_TIME, TOO_MANY, CATEGORY_FILTER)
       - all_torrents: torrents treated as the eligibility unit (what gets
         deleted if eligible)
       - externally_linked: bool
@@ -1100,6 +1108,10 @@ def evaluate_group(d):
 
     reasons = []
     if externally_linked: reasons.append("EXTERNAL_LINK")
+    # Files couldn't be read to confirm an inode match — matched by name+size
+    # only. Never eligible: we don't delete data we couldn't verify is a real
+    # duplicate. Set only by load_and_group_torrents (standard mode).
+    if d.get('_unverified_identity'): reasons.append("UNVERIFIED")
     if MISSING_HARD_LINKS_MODE and not path_ok: reasons.append("PATH_ERROR")
     if not seeds_ok: reasons.append("LOW_SEEDS")
     if not size_ok: reasons.append("SMALL_SIZE")
@@ -1190,6 +1202,7 @@ def _ensure_evaluation(d):
 
 def _reason_text(code):
     if code == "EXTERNAL_LINK": return "Hardlinked to external library"
+    if code == "UNVERIFIED": return "Matched by name + size only — files on disk could not be read to confirm a real duplicate"
     if code == "PATH_ERROR": return "Path error — could not verify hardlinks"
     if code == "LOW_SEEDS": return f"Low seeder count (< {MIN_SEEDERS})"
     if code == "SMALL_SIZE": return f"Small size (< {MIN_SIZE_GIB} GiB)"
@@ -1207,6 +1220,7 @@ def _reason_text(code):
 
 _REASON_HTML_ICON = {
     "EXTERNAL_LINK": "🔗",
+    "UNVERIFIED": "🛡️",
     "PATH_ERROR": "⚠️",
     "LOW_SEEDS": "🌱",
     "SMALL_SIZE": "💾",
@@ -2090,6 +2104,7 @@ def export_reports(sorted_items, eligible_ids):
                                 <label><input type="checkbox" value="LOW_TIME" data-filter-reason>⏳ Short seed time</label>
                                 <label><input type="checkbox" value="TOO_MANY" data-filter-reason>📦 Large group</label>
                                 <label><input type="checkbox" value="EXTERNAL_LINK" data-filter-reason>🔗 External hardlink</label>
+                                <label><input type="checkbox" value="UNVERIFIED" data-filter-reason>🛡️ Unverified (name+size only)</label>
                                 <label><input type="checkbox" value="PATH_ERROR" data-filter-reason>⚠️ Path error</label>
                                 <label><input type="checkbox" value="CATEGORY_FILTER" data-filter-reason>🏷️ Category filter</label>
                                 <label><input type="checkbox" value="TRACKER_ALIVE" data-filter-reason>✅ Tracker still alive</label>

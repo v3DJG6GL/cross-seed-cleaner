@@ -210,3 +210,26 @@ def test_external_self_match_not_linked(csc, monkeypatch):
     groups = csc.load_and_group_torrents(FakeClient())
     g = next(iter(groups.values()))
     assert g["original"]["_external_hardlink"] is False
+
+
+def test_grouping_flags_heuristic_identity_as_unverified(csc, monkeypatch):
+    # Two torrents sharing a heuristic (name+size) identity — inode unreadable —
+    # group together, and the group is flagged unverified so evaluate_group
+    # refuses to delete it. This is the full chain: get_representative_inode None
+    # -> get_path_identity "heuristic:" -> _unverified_identity True -> not eligible.
+    tors = [_tor("heuristic:100:Movie", "a", 100),
+            _tor("heuristic:100:Movie", "b", 200)]
+    _wire(csc, monkeypatch, tors)
+    groups = csc.load_and_group_torrents(FakeClient())
+    g = next(iter(groups.values()))
+    assert g["_unverified_identity"] is True
+
+
+def test_grouping_flags_inode_identity_as_verified(csc, monkeypatch):
+    # A normal inode-matched group is explicitly stamped verified (False), so the
+    # deletion gate stays open for genuinely confirmed duplicates.
+    tors = [_tor("inode:1:1", "a", 100), _tor("inode:1:1", "b", 200)]
+    _wire(csc, monkeypatch, tors)
+    groups = csc.load_and_group_torrents(FakeClient())
+    g = next(iter(groups.values()))
+    assert g["_unverified_identity"] is False
