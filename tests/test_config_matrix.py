@@ -26,6 +26,30 @@ def test_str2bool_passthrough(csc):
     assert csc.str2bool(False) is False
 
 
+# ─── str2bool_safe (DRY_RUN safety switch — fails SAFE) ───────────────────────
+
+@pytest.mark.parametrize("val,expected", [
+    # Explicit off tokens disable dry-run (arm live) — the documented triggers.
+    ("no", False), ("false", False), ("f", False), ("n", False), ("0", False),
+    ("off", False), ("disable", False), ("disabled", False),
+    ("FALSE", False), (" off ", False),         # case + whitespace tolerant
+    # Recognized true tokens stay simulated.
+    ("yes", True), ("true", True), ("1", True), ("y", True),
+    # The dangerous gap str2bool got wrong: unrecognized / empty / padded values
+    # must NOT silently arm live deletion — they stay simulated (True), unlike
+    # plain str2bool which returns False here.
+    ("on", True), ("enabled", True), ("2", True), ("maybe", True),
+    ("", True), (" true ", True), ("True ", True),
+])
+def test_str2bool_safe(csc, val, expected):
+    assert csc.str2bool_safe(val) is expected
+
+
+def test_str2bool_safe_passthrough(csc):
+    assert csc.str2bool_safe(True) is True
+    assert csc.str2bool_safe(False) is False
+
+
 # ─── smart_split_paths ───────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("raw,expected", [
@@ -204,6 +228,21 @@ def test_delete_flag_overrides_env_true():
 
 def test_dry_run_flag_overrides_env_false():
     assert load_module(env={"DRY_RUN": "false"}, argv=["x", "--dry-run"]).DRY_RUN is True
+
+
+@pytest.mark.parametrize("val", ["on", "enabled", "2", "maybe", "", "true ", "True "])
+def test_dry_run_unrecognized_env_stays_simulated(val):
+    # A non-canonical / typo'd DRY_RUN value must fail SAFE: the run stays in
+    # dry-run (simulated) mode rather than silently arming live deletion. Plain
+    # str2bool would read all of these as False (live) — str2bool_safe keeps them
+    # simulated.
+    assert load_module(env={"DRY_RUN": val}).DRY_RUN is True
+
+
+@pytest.mark.parametrize("val", ["off", "disabled", "no", "0"])
+def test_dry_run_explicit_off_still_goes_live(val):
+    # The documented ways to request live mode via DRY_RUN must keep working.
+    assert load_module(env={"DRY_RUN": val}).DRY_RUN is False
 
 
 def test_dry_run_and_delete_mutually_exclusive():

@@ -32,6 +32,28 @@ def str2bool(v):
     return v.lower() in ('yes', 'true', 't', 'y', '1')
 
 
+# Explicit "off" tokens that disable dry-run (arm live deletion). Anything NOT in
+# this set — including a typo, a stray space, or an empty value — is treated as
+# "stay simulated" by str2bool_safe below.
+_DRY_RUN_OFF_TOKENS = ('no', 'false', 'f', 'n', '0', 'off', 'disable', 'disabled')
+
+
+def str2bool_safe(v):
+    """Parse the DRY_RUN deletion safety switch, failing SAFE on anything unclear.
+
+    str2bool is a truthy allowlist that returns False for every value it does not
+    recognize. That is fine for feature toggles (unknown -> feature off), but
+    DANGEROUS for DRY_RUN, where False arms LIVE deletion: a typo like DRY_RUN=on,
+    a stray trailing space ("true "), or an empty value would all silently switch
+    off the simulation. Here an UNRECOGNIZED value returns True (stay simulated);
+    only an explicit, recognized off token disables dry-run. The documented
+    live-mode triggers (DRY_RUN=false / 0 / no / off, and the --delete flag) are
+    preserved.
+    """
+    if isinstance(v, bool): return v
+    return v.strip().lower() not in _DRY_RUN_OFF_TOKENS
+
+
 def _validate_config():
     valid_category_filter_modes = {"none", "allow", "block", "both"}
     valid_sort_by = {"seeders", "seeds", "ratio", "size", "uploaded", "added", "name", "time"}
@@ -147,7 +169,7 @@ def get_config():
     env_min_days = _env_num("MIN_ORIGINAL_SEED_TIME_DAYS", MIN_ORIGINAL_SEED_TIME_DAYS, float)
     env_min_size_gib = _env_num("MIN_SIZE_GIB", MIN_SIZE_GIB, float)
     env_debug = str2bool(os.environ.get("DEBUG_MODE", str(DEBUG_MODE)))
-    env_dry_run = str2bool(os.environ.get("DRY_RUN", str(DRY_RUN)))
+    env_dry_run = str2bool_safe(os.environ.get("DRY_RUN", str(DRY_RUN)))
     env_html_export = os.environ.get("HTML_EXPORT", HTML_EXPORT)
     env_csv_export = os.environ.get("CSV_EXPORT", CSV_EXPORT)
     env_missing_hard_links_mode = str2bool(os.environ.get("MISSING_HARD_LINKS_MODE", str(MISSING_HARD_LINKS_MODE)))
