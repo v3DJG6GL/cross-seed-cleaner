@@ -216,7 +216,10 @@ def smart_split_paths(raw_str):
             depth += 1
             current.append(char)
         elif char == '}':
-            depth -= 1
+            # Clamp at 0: a stray/unbalanced `}` must not drive depth negative,
+            # or the `depth == 0` guard below never re-matches and every later
+            # top-level comma stops splitting (e.g. "/a}b,/c" -> one path).
+            depth = max(0, depth - 1)
             current.append(char)
         elif char == ',' and depth == 0:
             paths.append("".join(current).strip())

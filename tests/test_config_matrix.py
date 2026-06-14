@@ -36,7 +36,8 @@ def test_str2bool_passthrough(csc):
     ("/m/{a,b},/n", ["/m/{a,b}", "/n"]),
     ("/a,", ["/a"]),                           # trailing comma dropped
     ("   ", []),                               # whitespace-only dropped
-    ("/m/{a,b", ["/m/{a,b"]),                  # unbalanced: never returns to depth 0
+    ("/m/{a,b", ["/m/{a,b"]),                  # unbalanced open: never returns to depth 0
+    ("/a}b,/c", ["/a}b", "/c"]),               # stray close-brace must not swallow next comma
 ])
 def test_smart_split_paths(csc, raw, expected):
     assert csc.smart_split_paths(raw) == expected
