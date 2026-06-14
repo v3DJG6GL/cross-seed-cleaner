@@ -115,6 +115,44 @@ def test_float_inf_accepted():
     assert m.MIN_SIZE_GIB == float("inf")
 
 
+# ─── tracker-error threshold validation ──────────────────────────────────────
+
+@pytest.mark.parametrize("name", [
+    "TRACKER_ERROR_MIN_AGE_DAYS",
+    "TRACKER_ERROR_MIN_INACTIVITY_DAYS",
+])
+def test_tracker_error_threshold_rejects_nan(name, capsys):
+    # NaN parses via float() but slips past the old `< 0` check, then the
+    # eligibility gate `THRESHOLD > 0` is also False — silently DISABLING the
+    # recently-added / recent-activity protection (fail-OPEN: a freshly-added
+    # dead-tracker torrent would become deletion-eligible). Validation must
+    # reject it like a negative.
+    with pytest.raises(SystemExit):
+        load_module(env={name: "nan"})
+    err = capsys.readouterr().err
+    assert "ERROR" in err and name in err
+
+
+@pytest.mark.parametrize("name", [
+    "TRACKER_ERROR_MIN_AGE_DAYS",
+    "TRACKER_ERROR_MIN_INACTIVITY_DAYS",
+])
+def test_tracker_error_threshold_rejects_negative(name):
+    with pytest.raises(SystemExit):
+        load_module(env={name: "-1"})
+
+
+@pytest.mark.parametrize("name", [
+    "TRACKER_ERROR_MIN_AGE_DAYS",
+    "TRACKER_ERROR_MIN_INACTIVITY_DAYS",
+])
+def test_tracker_error_threshold_inf_accepted(name):
+    # inf is over-protective (every torrent looks recently-added/active), so it
+    # fails SAFE and stays accepted — only NaN and negatives are rejected.
+    m = load_module(env={name: "inf"})
+    assert getattr(m, name) == float("inf")
+
+
 # ─── dry-run resolution matrix ───────────────────────────────────────────────
 
 def test_dry_run_default_true(csc):

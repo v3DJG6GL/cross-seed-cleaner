@@ -59,14 +59,19 @@ def _validate_config():
             f"Each entry must be one of {sorted(valid_statuses)}; the set must be non-empty.\n"
         )
         sys.exit(1)
-    if TRACKER_ERROR_MIN_AGE_DAYS < 0:
+    # `not (x >= 0)` rather than `x < 0` so a NaN threshold is rejected too: NaN
+    # passes `< 0`, but then the eligibility gate `THRESHOLD > 0` is ALSO False,
+    # silently disabling the recently-added / recent-activity protection — a
+    # fail-OPEN where a freshly-added dead-tracker torrent becomes deletion-
+    # eligible. inf stays accepted (over-protective = fail-SAFE).
+    if not (TRACKER_ERROR_MIN_AGE_DAYS >= 0):
         sys.stderr.write(
-            f"ERROR: TRACKER_ERROR_MIN_AGE_DAYS={TRACKER_ERROR_MIN_AGE_DAYS!r} must be >= 0.\n"
+            f"ERROR: TRACKER_ERROR_MIN_AGE_DAYS={TRACKER_ERROR_MIN_AGE_DAYS!r} must be >= 0 (NaN is rejected).\n"
         )
         sys.exit(1)
-    if TRACKER_ERROR_MIN_INACTIVITY_DAYS < 0:
+    if not (TRACKER_ERROR_MIN_INACTIVITY_DAYS >= 0):
         sys.stderr.write(
-            f"ERROR: TRACKER_ERROR_MIN_INACTIVITY_DAYS={TRACKER_ERROR_MIN_INACTIVITY_DAYS!r} must be >= 0.\n"
+            f"ERROR: TRACKER_ERROR_MIN_INACTIVITY_DAYS={TRACKER_ERROR_MIN_INACTIVITY_DAYS!r} must be >= 0 (NaN is rejected).\n"
         )
         sys.exit(1)
     if TRACKER_ERROR_MODE and MISSING_HARD_LINKS_MODE:
