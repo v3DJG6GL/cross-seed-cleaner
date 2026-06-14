@@ -316,3 +316,22 @@ def test_mhl_plain_orphan(csc, monkeypatch):
     orig = cap["a"]["original"]
     assert orig["_external_hardlink"] is False
     assert "_path_error" not in orig
+
+
+def test_mhl_warns_when_no_external_paths(csc, monkeypatch, capsys):
+    # No media library configured: the mode still runs (torrent-to-torrent /
+    # cross-seed links are detected) but warns that media-library-only links
+    # won't be protected.
+    tors = [_tor("a", "inode:9:9", "cross-seed")]
+    _setup_mhl(csc, monkeypatch, tors, ["cross-seed"])
+    reconfigure(csc, EXTERNAL_MEDIA_PATHS=[])
+    csc.check_missing_hard_links(FakeClient())
+    assert "cross-seed) hard-links only" in capsys.readouterr().out
+
+
+def test_mhl_no_warning_when_external_paths_set(csc, monkeypatch, capsys):
+    tors = [_tor("a", "inode:9:9", "cross-seed")]
+    _setup_mhl(csc, monkeypatch, tors, ["cross-seed"])
+    reconfigure(csc, EXTERNAL_MEDIA_PATHS=["/mnt/lib"])
+    csc.check_missing_hard_links(FakeClient())
+    assert "cross-seed) hard-links only" not in capsys.readouterr().out

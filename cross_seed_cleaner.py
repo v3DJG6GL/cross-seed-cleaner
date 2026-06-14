@@ -3574,6 +3574,12 @@ def check_missing_hard_links(client):
     torrents = _fetch_and_filter_torrents(client)
     external_inodes = _scan_external_libs_phase()
 
+    if not EXTERNAL_MEDIA_PATHS:
+        print(f"{Colors.YELLOW}  ⚠ No external media library configured (EXTERNAL_MEDIA_PATHS "
+              f"empty): matching torrent-to-torrent (cross-seed) hard-links only. A torrent "
+              f"hard-linked ONLY into your media library — not to another torrent — will be "
+              f"flagged as an orphan.{Colors.END}")
+
     def is_target_category(cat):
         if not cat: return False
         cat = cat.lower()
