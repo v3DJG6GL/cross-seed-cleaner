@@ -186,6 +186,25 @@ SORT_ORDER = "asc"
 UNRELIABLE_TRACKERS = "hdts-announce.ru,hd-space.pw,tfa.tf"
 
 
+# ─── EXCLUDED TRACKERS ─────────────────────────────────────────────────────
+# Torrents on these trackers are NEVER deleted, in EVERY mode (default
+# cross-seed cleanup, missing-hard-links mode, and tracker-error mode). They
+# still appear in the reports — as kept rows carrying an "excluded tracker"
+# reason — so nothing silently vanishes.
+# A torrent is protected if ANY of its trackers is on an excluded domain.
+# In default mode, if any member of a hardlink group is protected, the whole
+# group is kept (the same protective rule the category filter uses).
+# Patterns are matched against the tracker's domain, with any leading
+# "tracker." or "www." removed.
+# Comma-separated. Each entry is either a plain domain or a regex prefixed
+# with "r:". Regex patterns must match the WHOLE domain (both ends are
+# anchored automatically) — use ".*" for any part that varies; a trailing "$"
+# is allowed but redundant. Matching is case-insensitive.
+# Leave empty to disable (no torrents are protected by tracker). Example:
+#   EXCLUDED_TRACKERS = "private-tracker.org,r:.*\.example\.net"
+EXCLUDED_TRACKERS = ""
+
+
 # ─── PATH MAPPINGS (hardcoded) ─────────────────────────────────────────────
 # Remap internal qBittorrent (container) paths to host paths so the script can check files on disk.
 # Format: {"Internal Container Path": "Host Path"}

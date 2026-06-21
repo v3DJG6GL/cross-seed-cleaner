@@ -138,6 +138,66 @@ def test_unreliable_regex_fullmatch(csc):
     assert csc.is_unreliable_tracker("x.ru.com") is False
 
 
+# ─── is_excluded_tracker / torrent_on_excluded_tracker ───────────────────────
+
+def test_excluded_empty_config(csc):
+    reconfigure(csc, EXCLUDED_TRACKERS=[])
+    assert csc.is_excluded_tracker("anything.com") is False
+
+
+def test_excluded_empty_domain(csc):
+    reconfigure(csc, EXCLUDED_TRACKERS=["x.com"])
+    assert csc.is_excluded_tracker(None) is False
+    assert csc.is_excluded_tracker("") is False
+
+
+def test_excluded_literal_case_insensitive(csc):
+    reconfigure(csc, EXCLUDED_TRACKERS=["MyTracker.org"])
+    assert csc.is_excluded_tracker("mytracker.org") is True
+    assert csc.is_excluded_tracker("other.com") is False
+
+
+def test_excluded_regex_fullmatch(csc):
+    reconfigure(csc, EXCLUDED_TRACKERS=[r"r:.*\.example\.net"])
+    assert csc.is_excluded_tracker("a.example.net") is True
+    assert csc.is_excluded_tracker("a.example.net.evil.com") is False
+
+
+def test_torrent_on_excluded_tracker_no_config(csc):
+    reconfigure(csc, EXCLUDED_TRACKERS=[])
+    tor = {"tracker": "http://protected.org/announce", "_trackers": []}
+    assert csc.torrent_on_excluded_tracker(tor) is False
+
+
+def test_torrent_on_excluded_tracker_primary(csc):
+    reconfigure(csc, EXCLUDED_TRACKERS=["protected.org"])
+    tor = {"tracker": "http://protected.org/announce", "_trackers": []}
+    assert csc.torrent_on_excluded_tracker(tor) is True
+
+
+def test_torrent_on_excluded_tracker_secondary_only(csc):
+    # "Any tracker" scope: a torrent whose PRIMARY announce is a non-excluded
+    # domain must still be protected when a SECONDARY tracker is excluded.
+    reconfigure(csc, EXCLUDED_TRACKERS=["protected.org"])
+    tor = {
+        "tracker": "http://public.example/announce",
+        "_trackers": [
+            {"url": "http://public.example/announce"},
+            {"url": "http://tracker.protected.org:8080/announce"},  # leading tracker. stripped
+        ],
+    }
+    assert csc.torrent_on_excluded_tracker(tor) is True
+
+
+def test_torrent_on_excluded_tracker_no_match(csc):
+    reconfigure(csc, EXCLUDED_TRACKERS=["protected.org"])
+    tor = {
+        "tracker": "http://public.example/announce",
+        "_trackers": [{"url": "http://another.example/announce"}],
+    }
+    assert csc.torrent_on_excluded_tracker(tor) is False
+
+
 # ─── get_seeder_count ────────────────────────────────────────────────────────
 
 def test_seeder_count_reliable(csc):

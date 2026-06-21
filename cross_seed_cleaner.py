@@ -181,6 +181,7 @@ def get_config():
     env_min_age_days = _env_num("TRACKER_ERROR_MIN_AGE_DAYS", TRACKER_ERROR_MIN_AGE_DAYS, float)
     env_min_inactivity_days = _env_num("TRACKER_ERROR_MIN_INACTIVITY_DAYS", TRACKER_ERROR_MIN_INACTIVITY_DAYS, float)
     env_ignore_category_filter = str2bool(os.environ.get("TRACKER_ERROR_MODE_IGNORE_CATEGORY_FILTER", str(TRACKER_ERROR_MODE_IGNORE_CATEGORY_FILTER)))
+    env_excluded_trackers = os.environ.get("EXCLUDED_TRACKERS", EXCLUDED_TRACKERS)
 
     parser = argparse.ArgumentParser(
         description='Cross-Seed Cleaner: Deduplicate and cleanup torrents.',
@@ -209,6 +210,8 @@ def get_config():
     parser.add_argument('--tracker-error-min-age-days', type=float, default=env_min_age_days, help='Min days since added before a torrent is eligible in tracker-error mode. Decimals supported (e.g. 0.0417 = 1h). Default 1; 0 disables.')
     parser.add_argument('--tracker-error-min-inactivity-days', type=float, default=env_min_inactivity_days, help='Skip torrents whose last peer activity is less than this many days ago in tracker-error mode (default 30; 0 disables)')
     parser.add_argument('--tracker-error-mode-ignore-category-filter', action=argparse.BooleanOptionalAction, default=env_ignore_category_filter, help='In tracker-error mode, ignore CATEGORY_FILTER_MODE / ALLOWLIST / BLOCKLIST and scan every torrent regardless of category')
+
+    parser.add_argument('--excluded-trackers', type=str, default=env_excluded_trackers, help='Comma-separated tracker domains whose torrents are never deleted in any mode; prefix "r:" for regex matching the whole domain (e.g. "r:.*\\.example\\.net")')
 
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--dry-run', action='store_true', help='Force Dry Run')
@@ -386,6 +389,7 @@ CATEGORY_FILTER_MODE = os.environ.get("CATEGORY_FILTER_MODE", CATEGORY_FILTER_MO
 SORT_BY = os.environ.get("SORT_BY", SORT_BY)
 SORT_ORDER = os.environ.get("SORT_ORDER", SORT_ORDER)
 UNRELIABLE_TRACKERS = [t.strip() for t in os.environ.get("UNRELIABLE_TRACKERS", UNRELIABLE_TRACKERS).split(",") if t.strip()]
+EXCLUDED_TRACKERS = [t.strip() for t in ARGS.excluded_trackers.split(",") if t.strip()] if ARGS.excluded_trackers else []
 
 _validate_config()
 
@@ -789,6 +793,7 @@ def matches_pattern(text, spec):
 _CATEGORY_ALLOWLIST_SPECS = _compile_specs(CATEGORY_ALLOWLIST, "CATEGORY_ALLOWLIST")
 _CATEGORY_BLOCKLIST_SPECS = _compile_specs(CATEGORY_BLOCKLIST, "CATEGORY_BLOCKLIST")
 _UNRELIABLE_TRACKERS_SPECS = _compile_specs(UNRELIABLE_TRACKERS, "UNRELIABLE_TRACKERS", lower=True)
+_EXCLUDED_TRACKERS_SPECS = _compile_specs(EXCLUDED_TRACKERS, "EXCLUDED_TRACKERS", lower=True)
 _MISSING_HARD_LINKS_CATEGORY_SPECS = _compile_specs(MISSING_HARD_LINKS_CATEGORIES, "MISSING_HARD_LINKS_CATEGORIES", lower=True)
 _CATEGORY_FILTER_MODE_LC = CATEGORY_FILTER_MODE.lower()
 
@@ -865,6 +870,43 @@ def is_unreliable_tracker(tracker_domain):
             debug_log(f"[FETCH] Tracker '{tracker_domain}' matches unreliable pattern")
             return True
     return False
+
+def _torrent_tracker_domains(torrent):
+    """Every resolvable tracker domain for a torrent.
+
+    Combines the primary announce URL (torrent['tracker']) with every entry in
+    the pre-fetched _trackers list, so a torrent that announces on multiple
+    domains is fully covered. Returns a set of normalized domains (DHT/PeX/LSD
+    pseudo-trackers and unresolvable URLs map to None and are dropped).
+    """
+    domains = set()
+    primary = _domain_from_tracker_url(torrent.get('tracker', ''))
+    if primary:
+        domains.add(primary)
+    for tracker in torrent.get('_trackers') or []:
+        domain = _domain_from_tracker_url(tracker.get('url', ''))
+        if domain:
+            domains.add(domain)
+    return domains
+
+def is_excluded_tracker(tracker_domain):
+    """Check if a domain is on the user's exclusion (protect-from-deletion) list."""
+    if not tracker_domain or not EXCLUDED_TRACKERS:
+        return False
+    # _EXCLUDED_TRACKERS_SPECS were compiled with lower=True; lowercase the
+    # input so a domain from any source matches consistently (mirrors
+    # is_unreliable_tracker).
+    tracker_domain = tracker_domain.lower()
+    for spec in _EXCLUDED_TRACKERS_SPECS:
+        if matches_pattern(tracker_domain, spec):
+            return True
+    return False
+
+def torrent_on_excluded_tracker(torrent):
+    """True if ANY of the torrent's trackers is on the exclusion list."""
+    if not EXCLUDED_TRACKERS:
+        return False
+    return any(is_excluded_tracker(d) for d in _torrent_tracker_domains(torrent))
 
 def get_seeder_count(client, torrent):
 
@@ -1206,6 +1248,10 @@ def evaluate_group(d):
     size_ok = (orig.get('size', 0) or 0) >= MIN_SIZE_BYTES
     time_ok = (orig.get('seeding_time', 0) or 0) >= MIN_ORIGINAL_SEED_TIME_SECONDS
     cat_ok = all(category_allowed(c) for c in {t.get('category', '') for t in all_t})
+    # Protective like cat_ok: if ANY member sits on an excluded tracker, the
+    # whole group is kept (mirrors the "any blocked member keeps the group"
+    # rule used for the category filter).
+    tracker_ok = not any(torrent_on_excluded_tracker(t) for t in all_t)
 
     reasons = []
     if externally_linked: reasons.append("EXTERNAL_LINK")
@@ -1219,6 +1265,7 @@ def evaluate_group(d):
     if not time_ok: reasons.append("LOW_TIME")
     if not count_ok: reasons.append("TOO_MANY")
     if not cat_ok: reasons.append("CATEGORY_FILTER")
+    if not tracker_ok: reasons.append("EXCLUDED_TRACKER")
 
     return {
         "eligible": not reasons,
@@ -1278,6 +1325,11 @@ def evaluate_dead_trackers(d, now_ts):
     # of which evaluator produced the row.
     if not TRACKER_ERROR_MODE_IGNORE_CATEGORY_FILTER and not category_allowed(t.get('category', '')):
         reasons.append("CATEGORY_FILTER")
+    # Tracker exclusions are an explicit protection — applied unconditionally,
+    # regardless of TRACKER_ERROR_MODE_IGNORE_CATEGORY_FILTER. Appended last so
+    # the reason ordering matches evaluate_group's.
+    if torrent_on_excluded_tracker(t):
+        reasons.append("EXCLUDED_TRACKER")
 
     return {
         "eligible": not reasons,
@@ -1314,6 +1366,7 @@ def _reason_text(code):
     if code == "LOW_TIME": return f"Short seed time (< {MIN_ORIGINAL_SEED_TIME_DAYS} days)"
     if code == "TOO_MANY": return f"Large group (≥ {MAX_TORRENTS_IN_GROUP} items)"
     if code == "CATEGORY_FILTER": return "Category not in cleanup allowlist"
+    if code == "EXCLUDED_TRACKER": return "On an excluded tracker (protected from deletion)"
     if code == "TRACKER_ALIVE": return "At least one real tracker is still working or not yet contacted"
     if code == "RECENTLY_ADDED": return f"Recently added (less than {TRACKER_ERROR_MIN_AGE_DAYS} days ago) — may not have announced yet"
     if code == "TRACKER_UPDATING": return "A tracker is currently updating — outcome unknown"
@@ -1338,6 +1391,7 @@ _REASON_HTML_ICON = {
     "NO_REAL_TRACKERS": "🚫",
     "NO_ADDED_TIME": "❓",
     "RECENT_ACTIVITY": "📡",
+    "EXCLUDED_TRACKER": "⛔",
 }
 
 _SORT_KEY_MAP = {
@@ -1396,6 +1450,7 @@ def print_config():
     mode_text, mode_color = _mode_label_and_color()
 
     unreliable_str = ', '.join(UNRELIABLE_TRACKERS) if UNRELIABLE_TRACKERS else 'None'
+    excluded_str = ', '.join(EXCLUDED_TRACKERS) if EXCLUDED_TRACKERS else 'None'
     missing_hard_links_cat = ', '.join(MISSING_HARD_LINKS_CATEGORIES) if MISSING_HARD_LINKS_CATEGORIES else 'None'
     cat_allow_str = ', '.join(CATEGORY_ALLOWLIST) if CATEGORY_ALLOWLIST else 'None'
     cat_block_str = ', '.join(CATEGORY_BLOCKLIST) if CATEGORY_BLOCKLIST else 'None'
@@ -1421,6 +1476,7 @@ def print_config():
         [bold("Cat Allowlist"), cat_allow_str],
         [bold("Cat Blocklist"), cat_block_str],
         [bold("Unreliable Trackers"), unreliable_str],
+        [bold("Excluded Trackers"), c(excluded_str)],
         [bold("Dry Run"), c(DRY_RUN)],
         [bold("Debug Mode"), c(DEBUG_MODE)],
         [bold("Missing Hard Links Mode"), c(MISSING_HARD_LINKS_MODE)],
@@ -1764,6 +1820,7 @@ def export_reports(sorted_items, eligible_ids):
         filtering_orphans_grouping_torrents_label = "Grouping torrents & hardlinks"
 
     unreliable_str = _h(', '.join(UNRELIABLE_TRACKERS)) if UNRELIABLE_TRACKERS else 'None'
+    excluded_str = _h(', '.join(EXCLUDED_TRACKERS)) if EXCLUDED_TRACKERS else 'None'
     missing_hard_links_cat = _h(', '.join(MISSING_HARD_LINKS_CATEGORIES)) if MISSING_HARD_LINKS_CATEGORIES else 'None'
     cat_allow_str = _h(', '.join(CATEGORY_ALLOWLIST)) if CATEGORY_ALLOWLIST else 'None'
     cat_block_str = _h(', '.join(CATEGORY_BLOCKLIST)) if CATEGORY_BLOCKLIST else 'None'
@@ -1782,6 +1839,7 @@ def export_reports(sorted_items, eligible_ids):
         f"<b>Cat Allowlist:</b> {cat_allow_str}",
         f"<b>Cat Blocklist:</b> {cat_block_str}",
         f"<b>Unreliable Trackers:</b> {unreliable_str}",
+        f"<b>Excluded Trackers:</b> {excluded_str}",
         f"<b>Dry Run:</b> {DRY_RUN}",
         f"<b>Debug Mode:</b> {DEBUG_MODE}",
         f"<b>Missing Hard Links Mode:</b> {MISSING_HARD_LINKS_MODE}",
@@ -2218,6 +2276,7 @@ def export_reports(sorted_items, eligible_ids):
                                 <label><input type="checkbox" value="NO_REAL_TRACKERS" data-filter-reason>🚫 No real trackers</label>
                                 <label><input type="checkbox" value="NO_ADDED_TIME" data-filter-reason>❓ No added_on timestamp</label>
                                 <label><input type="checkbox" value="RECENT_ACTIVITY" data-filter-reason>📡 Recent peer activity</label>
+                                <label><input type="checkbox" value="EXCLUDED_TRACKER" data-filter-reason>⛔ Excluded tracker</label>
                                 <div class="filter-group-label">Match</div>
                                 <div class="reason-match-toggle">
                                     <label class="is-on"><input type="radio" name="reason-match" value="any" data-reason-match checked>Any</label>

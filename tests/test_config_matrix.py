@@ -97,6 +97,30 @@ def test_precedence_cli_overrides_env():
     assert m.MIN_SEEDERS == 9
 
 
+# ─── EXCLUDED_TRACKERS precedence (list option) ──────────────────────────────
+
+def test_excluded_trackers_config_default_empty(csc):
+    assert csc.EXCLUDED_TRACKERS == []        # config.py default "" -> []
+
+
+def test_excluded_trackers_env_splits_to_list():
+    m = load_module(env={"EXCLUDED_TRACKERS": "a.org, b.org"})
+    assert m.EXCLUDED_TRACKERS == ["a.org", "b.org"]
+
+
+def test_excluded_trackers_cli_overrides_env():
+    m = load_module(env={"EXCLUDED_TRACKERS": "a.org"},
+                    argv=["x", "--excluded-trackers", "c.org,d.org"])
+    assert m.EXCLUDED_TRACKERS == ["c.org", "d.org"]
+
+
+def test_excluded_trackers_bad_regex_exits():
+    # A malformed r: pattern must fail at import (via _compile_specs), exactly
+    # like every other r:-backed list option — not silently ignore the entry.
+    with pytest.raises(SystemExit):
+        load_module(env={"EXCLUDED_TRACKERS": "r:["})
+
+
 # ─── validation exits (import-time) ──────────────────────────────────────────
 
 @pytest.mark.parametrize("env", [

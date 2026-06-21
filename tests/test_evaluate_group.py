@@ -241,6 +241,7 @@ def test_reason_icon_and_text_maps_stay_in_sync(csc):
         "EXTERNAL_LINK", "UNVERIFIED", "PATH_ERROR", "LOW_SEEDS", "SMALL_SIZE",
         "LOW_TIME", "TOO_MANY", "CATEGORY_FILTER", "TRACKER_ALIVE", "RECENTLY_ADDED",
         "TRACKER_UPDATING", "NO_REAL_TRACKERS", "NO_ADDED_TIME", "RECENT_ACTIVITY",
+        "EXCLUDED_TRACKER",
     }
     assert set(csc._REASON_HTML_ICON) == expected
     for code in expected:
@@ -258,3 +259,59 @@ def test_nhl_multi_reason_order(csc):
     assert r["reasons"] == [
         "EXTERNAL_LINK", "PATH_ERROR", "LOW_SEEDS", "SMALL_SIZE", "LOW_TIME", "CATEGORY_FILTER",
     ]
+
+
+# ─── EXCLUDED_TRACKER (protect-from-deletion) ────────────────────────────────
+
+def _excl(csc, **extra):
+    opts = dict(MIN_SEEDERS=MIN_SEEDERS, MAX_TORRENTS_IN_GROUP=MAX_GROUP,
+                MIN_SIZE_GIB=MIN_GIB, MIN_ORIGINAL_SEED_TIME_DAYS=MIN_DAYS,
+                CATEGORY_FILTER_MODE="none", MISSING_HARD_LINKS_MODE=False,
+                EXCLUDED_TRACKERS=["protected.org"])
+    opts.update(extra)
+    return reconfigure(csc, **opts)
+
+
+def test_excluded_tracker_keeps_group(csc):
+    # An otherwise-eligible group with one member on an excluded tracker is kept.
+    _excl(csc)
+    on_excluded = t(tracker="http://protected.org/announce")
+    r = csc.evaluate_group(grp(t(), [on_excluded]))
+    assert r["eligible"] is False
+    assert r["reasons"] == ["EXCLUDED_TRACKER"]
+
+
+def test_excluded_tracker_group_protective_via_secondary(csc):
+    # "Any tracker" + group-protective: a member whose excluded tracker is only a
+    # SECONDARY entry still keeps the whole group.
+    _excl(csc)
+    member = t(tracker="http://public.example/announce",
+               _trackers=[{"url": "http://public.example/announce"},
+                          {"url": "http://protected.org/announce"}])
+    r = csc.evaluate_group(grp(t(), [member]))
+    assert r["reasons"] == ["EXCLUDED_TRACKER"]
+
+
+def test_excluded_tracker_order_after_category(csc):
+    # EXCLUDED_TRACKER is appended last, after CATEGORY_FILTER.
+    reconfigure(csc, MIN_SEEDERS=MIN_SEEDERS, MAX_TORRENTS_IN_GROUP=MAX_GROUP,
+                MIN_SIZE_GIB=MIN_GIB, MIN_ORIGINAL_SEED_TIME_DAYS=MIN_DAYS,
+                MISSING_HARD_LINKS_MODE=False,
+                CATEGORY_FILTER_MODE="block", CATEGORY_BLOCKLIST=["games"],
+                EXCLUDED_TRACKERS=["protected.org"])
+    bad = t(seeds=0, category="games", tracker="http://protected.org/announce")
+    r = csc.evaluate_group(grp(bad))
+    assert r["reasons"] == ["LOW_SEEDS", "CATEGORY_FILTER", "EXCLUDED_TRACKER"]
+
+
+def test_excluded_tracker_no_match_still_eligible(csc):
+    _excl(csc)
+    r = csc.evaluate_group(grp(t(tracker="http://public.example/announce"), [t()]))
+    assert r["eligible"] is True
+
+
+def test_excluded_tracker_missing_hard_links_mode(csc):
+    # Single-torrent unit: an orphan on an excluded tracker is kept.
+    _excl(csc, MISSING_HARD_LINKS_MODE=True)
+    r = csc.evaluate_group(grp(t(tracker="http://protected.org/announce")))
+    assert r["reasons"] == ["EXCLUDED_TRACKER"]

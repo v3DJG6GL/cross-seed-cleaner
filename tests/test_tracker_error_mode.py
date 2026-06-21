@@ -78,6 +78,30 @@ def test_excluded_when_only_sticky_trackers(csc):
     assert r['reasons'] == ['NO_REAL_TRACKERS']
 
 
+def test_excluded_tracker_keeps_dead_torrent(csc):
+    """A dead torrent on an excluded tracker is protected — kept with
+    EXCLUDED_TRACKER even though every real tracker is dead."""
+    reconfigure(csc, EXCLUDED_TRACKERS=['protected.org'])
+    t = _torrent(trackers=[_tr(url='http://protected.org/announce', status=5)])
+    r = _eval(csc, t)
+    assert r['eligible'] is False
+    assert r['reasons'] == ['EXCLUDED_TRACKER']
+
+
+def test_excluded_tracker_applies_despite_ignore_category_filter(csc):
+    """Tracker exclusions are an explicit protection: they apply even when
+    TRACKER_ERROR_MODE_IGNORE_CATEGORY_FILTER bypasses the category filter."""
+    reconfigure(csc,
+                EXCLUDED_TRACKERS=['protected.org'],
+                CATEGORY_FILTER_MODE='block',
+                CATEGORY_BLOCKLIST=['games'],
+                TRACKER_ERROR_MODE_IGNORE_CATEGORY_FILTER=True)
+    t = _torrent(category='games',
+                 trackers=[_tr(url='http://protected.org/announce', status=5)])
+    r = _eval(csc, t)
+    assert r['reasons'] == ['EXCLUDED_TRACKER']        # CATEGORY_FILTER bypassed, exclusion still applies
+
+
 def test_excluded_when_added_recently(csc):
     """A torrent added 5 minutes ago is well within the default 1-day min-age."""
     t = _torrent(trackers=[_tr(status=5)], added=NOW - 5 * 60)
