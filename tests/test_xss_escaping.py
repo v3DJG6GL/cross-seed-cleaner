@@ -49,11 +49,12 @@ class XSSEscapingTest(unittest.TestCase):
     # a data-tip attribute, so attribute-breakout is the main concern.
     XSS_TRACKER_MSG = '" onclick="alert(\'xss-tmsg\')" x="'
 
-    # Config-panel fields rendered into the report's <ul>. UNRELIABLE_TRACKERS is
-    # env-overridable; CATEGORY_ALLOWLIST/BLOCKLIST are config-file lists with no
-    # env path, so set all three directly (like HTML_EXPORT below) to guarantee
-    # the payloads actually reach the rendered config panel.
+    # Config-panel fields rendered into the report's <ul>. UNRELIABLE_TRACKERS and
+    # EXCLUDED_TRACKERS are env-overridable; CATEGORY_ALLOWLIST/BLOCKLIST are
+    # config-file lists with no env path, so set them all directly (like
+    # HTML_EXPORT below) to guarantee the payloads reach the rendered config panel.
     XSS_UNRELIABLE = '<img src=x onerror=alert("xss-unreliable")>'
+    XSS_EXCLUDED = '<img src=x onerror=alert("xss-excluded")>'
     XSS_CAT_ALLOW = '<script>alert("xss-cat-allow")</script>'
     XSS_CAT_BLOCK = '<img src=x onerror=alert("xss-cat-block")>'
     XSS_MHL_CAT = '<img src=x onerror=alert("xss-mhl-cat")>'
@@ -72,6 +73,7 @@ class XSSEscapingTest(unittest.TestCase):
         self.csc.HTML_EXPORT = os.path.join(self.tmpdir.name, "report.html")
         self.csc.CSV_EXPORT = os.path.join(self.tmpdir.name, "report.csv")
         self.csc.UNRELIABLE_TRACKERS = [self.XSS_UNRELIABLE]
+        self.csc.EXCLUDED_TRACKERS = [self.XSS_EXCLUDED]
         self.csc.CATEGORY_ALLOWLIST = [self.XSS_CAT_ALLOW]
         self.csc.CATEGORY_BLOCKLIST = [self.XSS_CAT_BLOCK]
         self.csc.MISSING_HARD_LINKS_CATEGORIES = [self.XSS_MHL_CAT]
@@ -131,10 +133,12 @@ class XSSEscapingTest(unittest.TestCase):
         # Without these assertions the payloads above were dead setup: dropping
         # the _h() wrapper on those config <li> items left every test green.
         self.assertNotIn('onerror=alert("xss-unreliable")', html, "unreliable-trackers payload survived unescaped")
+        self.assertNotIn('onerror=alert("xss-excluded")', html, "excluded-trackers payload survived unescaped")
         self.assertNotIn('<script>alert("xss-cat-allow")', html, "category-allowlist payload survived unescaped")
         self.assertNotIn('onerror=alert("xss-cat-block")', html, "category-blocklist payload survived unescaped")
         self.assertNotIn('onerror=alert("xss-mhl-cat")', html, "missing-hard-links category payload survived unescaped")
         self.assertIn('alert(&quot;xss-unreliable&quot;)', html)
+        self.assertIn('alert(&quot;xss-excluded&quot;)', html)
         self.assertIn('&lt;script&gt;alert(&quot;xss-cat-allow&quot;)', html)
         self.assertIn('alert(&quot;xss-cat-block&quot;)', html)
         self.assertIn('alert(&quot;xss-mhl-cat&quot;)', html)
