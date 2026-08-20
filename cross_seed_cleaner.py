@@ -1538,8 +1538,12 @@ def print_group(client, d, num, total):
           f"{Colors.CYAN}{orig.get('name', '')[:140]}{Colors.END} "
           f"({Colors.GREEN}✓ ELIGIBLE{Colors.END})")
 
+    # Tracker-error mode is all about the tracker's error message, so widen the
+    # Tracker column there (taking the room from Name) instead of truncating
+    # the reason to a useless stub.
+    tracker_w, name_w, msg_w = (70, 65, 55) if TRACKER_ERROR_MODE else (30, 105, 18)
     headers = ["Type", "Seeds", "Ratio", "Size", "Uploaded", "Seeded (D:H)", "Added", "Tracker", "Category", "Name"]
-    widths  = [    13,       6,       6,     10,         11,             13,      18,        30,         20,    105]
+    widths  = [    13,       6,       6,     10,         11,             13,      18, tracker_w,         20, name_w]
     aligns  = [   'l',     'r',     'r',    'r',        'r',            'r',     'l',       'l',        'l',    'l']
     rows = []
 
@@ -1547,7 +1551,7 @@ def print_group(client, d, num, total):
         if '_tracker_cache' not in t:
             base = get_tracker_name(client, t)
             msg = t.get('_tracker_msg') or ''
-            t['_tracker_cache'] = f"{base} ({msg[:18]})" if msg else base
+            t['_tracker_cache'] = f"{base} ({msg[:msg_w]})" if msg else base
         is_orig = (t is orig)
         seeders = t.get('_seeder_count', 0)
         size = t.get('size', 0) or 0
@@ -1566,7 +1570,7 @@ def print_group(client, d, num, total):
             c_size = Colors.GREEN if size >= MIN_SIZE_BYTES else Colors.RED
             c_time = Colors.GREEN if seed_time >= MIN_ORIGINAL_SEED_TIME_SECONDS else Colors.RED
 
-        name_str = t.get('name', '')[:105]
+        name_str = t.get('name', '')[:name_w]
 
         if is_orig:
             if TRACKER_ERROR_MODE:
@@ -1585,7 +1589,7 @@ def print_group(client, d, num, total):
             format_size_smart(t.get('uploaded', 0)),
             f"{c_time}{format_duration(seed_time)}{Colors.END}",
             format_timestamp(t.get('added_on', 0)),
-            t['_tracker_cache'][:30],
+            t['_tracker_cache'][:tracker_w],
             f"{c_cat}{t.get('category', '')[:20]}{Colors.END}",
             name_str
         ])
