@@ -1,6 +1,7 @@
 """Configuration surface: str2bool, path splitting/brace expansion, config<env<CLI
 precedence, validation exits, and CLI behavior (cross_seed_cleaner.py: get_config
 / _validate_config / str2bool / smart_split_paths / expand_braces)."""
+import re
 import subprocess
 import sys
 
@@ -330,3 +331,13 @@ def test_cli_bad_flag():
 
 def test_cli_mutually_exclusive():
     assert _run("--dry-run", "--delete").returncode == 2
+
+
+def test_cli_help_bool_flags_have_own_descriptions():
+    out = _run("--help").stdout
+    # Each --no-* form gets its own row and description (not a shared one below).
+    assert re.search(r"^\s+--debug\s{2,}Enable debug logging$", out, re.M)
+    assert re.search(r"^\s+--no-debug\s{2,}Disable debug logging$", out, re.M)
+    assert re.search(r"^\s+--no-tracker-error-mode\s{2,}Disable tracker-error mode$", out, re.M)
+    # A flag too long for the column puts its description on the next line, argparse-style.
+    assert re.search(r"^\s+--no-tracker-error-mode-ignore-category-filter\n\s+In tracker-error mode, honour", out, re.M)
