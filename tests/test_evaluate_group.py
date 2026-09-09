@@ -138,6 +138,17 @@ def test_min_size_zero_is_no_limit(csc):
     assert csc.evaluate_group(grp(t(size=0, seeded=0, seeds=0)))["reasons"] == []
 
 
+def test_max_group_size_zero_is_no_limit(csc):
+    # Regression: with the old strict `len < MAX`, 0 meant "every group is
+    # TOO_MANY" — the opposite of the other thresholds' 0 = disabled.
+    reconfigure(csc, MIN_SEEDERS=0, MAX_TORRENTS_IN_GROUP=0, MIN_SIZE_GIB=0,
+                MIN_ORIGINAL_SEED_TIME_DAYS=0, CATEGORY_FILTER_MODE="none",
+                MISSING_HARD_LINKS_MODE=False)
+    r = csc.evaluate_group(grp(t(), [t() for _ in range(6)]))
+    assert "TOO_MANY" not in r["reasons"]
+    assert r["eligible"] is True
+
+
 # ─── multi-reason ordering (normal mode) ─────────────────────────────────────
 
 def test_multi_reason_order_normal(csc):
