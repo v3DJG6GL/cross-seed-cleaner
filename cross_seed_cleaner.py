@@ -1447,8 +1447,29 @@ def _mode_label_and_color():
     return ("DRY RUN (SAFE)", Colors.GREEN) if DRY_RUN else ("LIVE MODE - WILL DELETE!", Colors.RED)
 
 
+def _inactive_config_labels():
+    """Config-table labels that the CURRENT mode never reads.
+
+    Traced from the evaluators: evaluate_group (standard / missing-hard-links),
+    evaluate_dead_trackers + scan_dead_trackers (tracker-error). Shared by the
+    terminal table and the HTML report so both dim the same rows.
+    """
+    tracker_error_only = {"Dead Statuses", "Min Age", "Min Inactivity", "Ignore Cat Filter"}
+    if TRACKER_ERROR_MODE:
+        inactive = {"Min Seeders", "Min Seed Time", "Min Size", "Max Group Size",
+                    "Missing Hard Links Cat", "External Media Paths", "Path Mappings"}
+        if TRACKER_ERROR_MODE_IGNORE_CATEGORY_FILTER:
+            inactive |= {"Category Mode", "Cat Allowlist", "Cat Blocklist"}
+        return inactive
+    if MISSING_HARD_LINKS_MODE:
+        # count_ok is hard-wired True in evaluate_group for this mode.
+        return tracker_error_only | {"Max Group Size"}
+    return tracker_error_only | {"Missing Hard Links Cat"}
+
+
 def print_config():
     mode_text, mode_color = _mode_label_and_color()
+    inactive = _inactive_config_labels()
 
     unreliable_str = ', '.join(UNRELIABLE_TRACKERS) if UNRELIABLE_TRACKERS else 'None'
     excluded_str = ', '.join(EXCLUDED_TRACKERS) if EXCLUDED_TRACKERS else 'None'
@@ -1466,30 +1487,35 @@ def print_config():
 
     auth_method = "API Key" if (QBITTORRENT_API_KEY or "").strip() else "Username/Password"
 
+    # Rows carry PLAIN labels here; bold/dim styling is applied in one pass at
+    # the end so a row can be dimmed as a whole. A continuation row (empty
+    # label, e.g. the 2nd external media path) inherits its group's label for
+    # the dim decision via `group`.
     rows = [
-        [bold("Execution Mode"), f"{mode_color}{mode_text}{Colors.END}"],
-        [bold("Auth Method"), auth_method],
-        [bold("Min Seeders"), str(MIN_SEEDERS)],
-        [bold("Min Seed Time"), f"{MIN_ORIGINAL_SEED_TIME_DAYS} days"],
-        [bold("Min Size"), f"{MIN_SIZE_GIB} GiB" + (" (no limit)" if MIN_SIZE_GIB == 0 else "")],
-        [bold("Max Group Size"), str(MAX_TORRENTS_IN_GROUP) + (" (no limit)" if MAX_TORRENTS_IN_GROUP <= 0 else "")],
-        [bold("Category Mode"), CATEGORY_FILTER_MODE],
-        [bold("Cat Allowlist"), cat_allow_str],
-        [bold("Cat Blocklist"), cat_block_str],
-        [bold("Unreliable Trackers"), unreliable_str],
-        [bold("Excluded Trackers"), c(excluded_str)],
-        [bold("Dry Run"), c(DRY_RUN)],
-        [bold("Debug Mode"), c(DEBUG_MODE)],
-        [bold("Missing Hard Links Mode"), c(MISSING_HARD_LINKS_MODE)],
-        [bold("Missing Hard Links Cat"), missing_hard_links_cat if MISSING_HARD_LINKS_CATEGORIES else c("None")],
-        [bold("Tracker Error Mode"), c(TRACKER_ERROR_MODE)],
-        [bold("Dead Statuses"), ','.join(str(s) for s in sorted(DEAD_TRACKER_STATUSES))],
-        [bold("Min Age"), f"{TRACKER_ERROR_MIN_AGE_DAYS} days"],
-        [bold("Min Inactivity"), f"{TRACKER_ERROR_MIN_INACTIVITY_DAYS} days"],
-        [bold("Ignore Cat Filter"), c(TRACKER_ERROR_MODE_IGNORE_CATEGORY_FILTER)],
-        [bold("HTML Export"), c(HTML_EXPORT or "Disabled")],
-        [bold("CSV Export"), c(CSV_EXPORT or "Disabled")],
+        ["Execution Mode", f"{mode_color}{mode_text}{Colors.END}"],
+        ["Auth Method", auth_method],
+        ["Min Seeders", str(MIN_SEEDERS)],
+        ["Min Seed Time", f"{MIN_ORIGINAL_SEED_TIME_DAYS} days"],
+        ["Min Size", f"{MIN_SIZE_GIB} GiB" + (" (no limit)" if MIN_SIZE_GIB == 0 else "")],
+        ["Max Group Size", str(MAX_TORRENTS_IN_GROUP) + (" (no limit)" if MAX_TORRENTS_IN_GROUP <= 0 else "")],
+        ["Category Mode", CATEGORY_FILTER_MODE],
+        ["Cat Allowlist", cat_allow_str],
+        ["Cat Blocklist", cat_block_str],
+        ["Unreliable Trackers", unreliable_str],
+        ["Excluded Trackers", c(excluded_str)],
+        ["Dry Run", c(DRY_RUN)],
+        ["Debug Mode", c(DEBUG_MODE)],
+        ["Missing Hard Links Mode", c(MISSING_HARD_LINKS_MODE)],
+        ["Missing Hard Links Cat", missing_hard_links_cat if MISSING_HARD_LINKS_CATEGORIES else c("None")],
+        ["Tracker Error Mode", c(TRACKER_ERROR_MODE)],
+        ["Dead Statuses", ','.join(str(s) for s in sorted(DEAD_TRACKER_STATUSES))],
+        ["Min Age", f"{TRACKER_ERROR_MIN_AGE_DAYS} days"],
+        ["Min Inactivity", f"{TRACKER_ERROR_MIN_INACTIVITY_DAYS} days"],
+        ["Ignore Cat Filter", c(TRACKER_ERROR_MODE_IGNORE_CATEGORY_FILTER)],
+        ["HTML Export", c(HTML_EXPORT or "Disabled")],
+        ["CSV Export", c(CSV_EXPORT or "Disabled")],
     ]
+    groups = [label for label, _ in rows]
 
     if EXTERNAL_MEDIA_PATHS:
         first = True
@@ -1497,29 +1523,43 @@ def print_config():
             while len(path) > 118:
                 chunk = path[:118]
                 path = path[118:]
-                label = bold("External Media Paths") if first else ""
-                rows.append([label, chunk])
+                rows.append(["External Media Paths" if first else "", chunk])
+                groups.append("External Media Paths")
                 first = False
 
             if path:
-                label = bold("External Media Paths") if first else ""
-                rows.append([label, path])
+                rows.append(["External Media Paths" if first else "", path])
+                groups.append("External Media Paths")
                 first = False
     else:
-        rows.append([bold("External Media Paths"), c("None")])
+        rows.append(["External Media Paths", c("None")])
+        groups.append("External Media Paths")
 
 
     if PATH_MAPPINGS:
         first = True
         for k, v in PATH_MAPPINGS.items():
-            label = bold("Path Mappings") if first else ""
-            rows.append([label, f"{k} -> {v}"])
+            rows.append(["Path Mappings" if first else "", f"{k} -> {v}"])
+            groups.append("Path Mappings")
             first = False
     else:
-        rows.append([bold("Path Mappings"), c("None")])
+        rows.append(["Path Mappings", c("None")])
+        groups.append("Path Mappings")
+
+    def style_row(label, value, group):
+        if group in inactive:
+            # Strip the value's own colors first: an embedded GREEN...END would
+            # otherwise cancel the DIM mid-cell.
+            return [f"{Colors.DIM}{label}{Colors.END}" if label else "",
+                    f"{Colors.DIM}{strip_colors(value)}{Colors.END}"]
+        return [bold(label) if label else "", value]
+
+    styled = [style_row(label, value, group) for (label, value), group in zip(rows, groups)]
 
     print(f"\n{Colors.BOLD}CONFIGURATION:{Colors.END}")
-    Table.render([f"{Colors.BOLD}Setting{Colors.END}", f"{Colors.BOLD}Value{Colors.END}"], rows, [25, 120])
+    Table.render([f"{Colors.BOLD}Setting{Colors.END}", f"{Colors.BOLD}Value{Colors.END}"], styled, [25, 120])
+    if inactive:
+        print(f"{Colors.DIM}  dimmed = not applied in the current mode{Colors.END}")
     print()
 
 
@@ -1835,32 +1875,39 @@ def export_reports(sorted_items, eligible_ids):
     external_media_paths_html = _mono_block([_h(path) for path in EXTERNAL_MEDIA_PATHS]) if EXTERNAL_MEDIA_PATHS else "None"
     mappings_html = _mono_block([f"{_h(k)} → {_h(v)}" for k, v in PATH_MAPPINGS.items()]) if PATH_MAPPINGS else "None"
 
+    # (label, value) pairs; labels match _inactive_config_labels() so the
+    # report dims exactly the rows the terminal table dims.
     config_items = [
-        f"<b>Min Seeders:</b> {MIN_SEEDERS}",
-        f"<b>Min Seed Time:</b> {MIN_ORIGINAL_SEED_TIME_DAYS} days",
-        f"<b>Min Size:</b> {MIN_SIZE_GIB} GiB" + (" (no limit)" if MIN_SIZE_GIB == 0 else ""),
-        f"<b>Max Group Size:</b> {MAX_TORRENTS_IN_GROUP}" + (" (no limit)" if MAX_TORRENTS_IN_GROUP <= 0 else ""),
-        f"<b>Category Mode:</b> {CATEGORY_FILTER_MODE}",
-        f"<b>Cat Allowlist:</b> {cat_allow_str}",
-        f"<b>Cat Blocklist:</b> {cat_block_str}",
-        f"<b>Unreliable Trackers:</b> {unreliable_str}",
-        f"<b>Excluded Trackers:</b> {excluded_str}",
-        f"<b>Dry Run:</b> {DRY_RUN}",
-        f"<b>Debug Mode:</b> {DEBUG_MODE}",
-        f"<b>Missing Hard Links Mode:</b> {MISSING_HARD_LINKS_MODE}",
-        f"<b>Missing Hard Links Cat:</b> {missing_hard_links_cat}",
-        f"<b>Tracker Error Mode:</b> {TRACKER_ERROR_MODE}",
-        f"<b>Dead Statuses:</b> {','.join(str(s) for s in sorted(DEAD_TRACKER_STATUSES))}",
-        f"<b>Min Age:</b> {TRACKER_ERROR_MIN_AGE_DAYS} days",
-        f"<b>Min Inactivity:</b> {TRACKER_ERROR_MIN_INACTIVITY_DAYS} days",
-        f"<b>Ignore Cat Filter:</b> {TRACKER_ERROR_MODE_IGNORE_CATEGORY_FILTER}",
-        f"<b>HTML Export:</b> {html_out_str}",
-        f"<b>CSV Export:</b> {csv_out_str}",
-        f"<b>External Media Paths:</b> {external_media_paths_html}",
-        f"<b>Path Mappings:</b> {mappings_html}",
+        ("Min Seeders", f"{MIN_SEEDERS}"),
+        ("Min Seed Time", f"{MIN_ORIGINAL_SEED_TIME_DAYS} days"),
+        ("Min Size", f"{MIN_SIZE_GIB} GiB" + (" (no limit)" if MIN_SIZE_GIB == 0 else "")),
+        ("Max Group Size", f"{MAX_TORRENTS_IN_GROUP}" + (" (no limit)" if MAX_TORRENTS_IN_GROUP <= 0 else "")),
+        ("Category Mode", f"{CATEGORY_FILTER_MODE}"),
+        ("Cat Allowlist", cat_allow_str),
+        ("Cat Blocklist", cat_block_str),
+        ("Unreliable Trackers", unreliable_str),
+        ("Excluded Trackers", excluded_str),
+        ("Dry Run", f"{DRY_RUN}"),
+        ("Debug Mode", f"{DEBUG_MODE}"),
+        ("Missing Hard Links Mode", f"{MISSING_HARD_LINKS_MODE}"),
+        ("Missing Hard Links Cat", missing_hard_links_cat),
+        ("Tracker Error Mode", f"{TRACKER_ERROR_MODE}"),
+        ("Dead Statuses", ','.join(str(s) for s in sorted(DEAD_TRACKER_STATUSES))),
+        ("Min Age", f"{TRACKER_ERROR_MIN_AGE_DAYS} days"),
+        ("Min Inactivity", f"{TRACKER_ERROR_MIN_INACTIVITY_DAYS} days"),
+        ("Ignore Cat Filter", f"{TRACKER_ERROR_MODE_IGNORE_CATEGORY_FILTER}"),
+        ("HTML Export", html_out_str),
+        ("CSV Export", csv_out_str),
+        ("External Media Paths", external_media_paths_html),
+        ("Path Mappings", mappings_html),
     ]
 
-    config_html = "<ul class='config-ul'>" + "".join([f"<li>{item}</li>" for item in config_items]) + "</ul>"
+    inactive_labels = _inactive_config_labels()
+    inactive_attr = " class='config-inactive' title='Not applied in the current mode'"
+    config_html = "<ul class='config-ul'>" + "".join(
+        f"<li{inactive_attr if label in inactive_labels else ''}><b>{label}:</b> {value}</li>"
+        for label, value in config_items
+    ) + "</ul>"
 
 
 
@@ -1903,6 +1950,7 @@ def export_reports(sorted_items, eligible_ids):
         }
         .config-ul li { margin-bottom: 2px; }
         .config-ul b { color: #888; font-weight: 600; }
+        .config-ul li.config-inactive { opacity: 0.45; }
 
         .charts-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 20px; }
         .chart-col { background: #1e1e1e; padding: 15px; border-radius: 6px; border: 1px solid #333; }

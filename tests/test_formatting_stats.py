@@ -145,3 +145,77 @@ def test_calculate_stats_empty_eligible(csc):
     assert s["groups_del"] == 0
     assert s["size_del"] == 0
     assert s["groups_keep"] == 1
+
+
+# ─── print_config: mode-irrelevant rows are dimmed ───────────────────────────
+
+TE_ONLY = {"Dead Statuses", "Min Age", "Min Inactivity", "Ignore Cat Filter"}
+CAT_ROWS = {"Category Mode", "Cat Allowlist", "Cat Blocklist"}
+
+
+def _set_mode(monkeypatch, csc, tracker_error=False, missing_hl=False, ignore_cat=False):
+    monkeypatch.setattr(csc, "TRACKER_ERROR_MODE", tracker_error)
+    monkeypatch.setattr(csc, "MISSING_HARD_LINKS_MODE", missing_hl)
+    monkeypatch.setattr(csc, "TRACKER_ERROR_MODE_IGNORE_CATEGORY_FILTER", ignore_cat)
+
+
+def test_inactive_labels_standard_mode(csc, monkeypatch):
+    _set_mode(monkeypatch, csc)
+    assert csc._inactive_config_labels() == TE_ONLY | {"Missing Hard Links Cat"}
+
+
+def test_inactive_labels_missing_hardlinks_mode(csc, monkeypatch):
+    _set_mode(monkeypatch, csc, missing_hl=True)
+    inactive = csc._inactive_config_labels()
+    assert inactive == TE_ONLY | {"Max Group Size"}
+    # Seeder/size/time limits and category filter are still live here.
+    assert not inactive & {"Min Seeders", "Min Size", "Min Seed Time", "External Media Paths", "Path Mappings"} | (inactive & CAT_ROWS)
+
+
+def test_inactive_labels_tracker_error_mode(csc, monkeypatch):
+    _set_mode(monkeypatch, csc, tracker_error=True)
+    inactive = csc._inactive_config_labels()
+    assert inactive == {"Min Seeders", "Min Seed Time", "Min Size", "Max Group Size",
+                        "Missing Hard Links Cat", "External Media Paths", "Path Mappings"}
+    # Category filter is honored unless the ignore modifier is set; exclusions always apply.
+    assert not inactive & (CAT_ROWS | {"Excluded Trackers", "Unreliable Trackers"})
+
+
+def test_inactive_labels_tracker_error_ignore_category(csc, monkeypatch):
+    _set_mode(monkeypatch, csc, tracker_error=True, ignore_cat=True)
+    inactive = csc._inactive_config_labels()
+    assert CAT_ROWS <= inactive
+    assert "Excluded Trackers" not in inactive
+
+
+def _config_row(csc, out, label):
+    """Return the raw (ANSI-bearing) table line for `label`, or None."""
+    for line in out.splitlines():
+        if csc.strip_colors(line).startswith(f"│ {label} "):
+            return line
+    return None
+
+
+def test_print_config_dims_rows_and_keeps_alignment(csc, monkeypatch, capsys):
+    _set_mode(monkeypatch, csc, tracker_error=True)
+    monkeypatch.setattr(csc, "EXTERNAL_MEDIA_PATHS", ["/media/a", "/media/b"])
+    csc.print_config()
+    out = capsys.readouterr().out
+
+    # Dimmed: label wrapped in DIM, not bold.
+    seeders = _config_row(csc, out, "Min Seeders")
+    assert seeders is not None and csc.Colors.DIM in seeders and csc.Colors.BOLD not in seeders
+    # Continuation row of a dimmed multi-line group is dimmed too.
+    cont = next(l for l in out.splitlines() if "/media/b" in l)
+    assert csc.Colors.DIM in cont
+    # Live row keeps its bold label and its value's own color (not dimmed).
+    dry = _config_row(csc, out, "Dry Run")
+    assert dry is not None and csc.Colors.BOLD in dry and csc.Colors.DIM not in dry
+    # Dimmed row's value has its GREEN/RED stripped (would cancel DIM mid-cell).
+    ignore = _config_row(csc, out, "Missing Hard Links Cat")
+    assert ignore is not None and csc.Colors.GREEN not in ignore and csc.Colors.RED not in ignore
+    # Legend printed when something is dimmed.
+    assert "dimmed = not applied in the current mode" in out
+    # Every table line has identical visible width (dim codes must not skew padding).
+    widths = {len(csc.strip_colors(l)) for l in out.splitlines() if l.startswith(("│", "┌", "├", "└"))}
+    assert len(widths) == 1

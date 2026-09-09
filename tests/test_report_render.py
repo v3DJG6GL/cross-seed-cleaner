@@ -397,3 +397,17 @@ def test_tracker_message_is_path_searchable(csc, tmp_path):
     grp = next(a for (_tag, a) in ReportHTML(html).tags if "data-search-path" in a)
     assert "not registered" in grp["data-search-path"]      # findable via the path box
     assert "not registered" not in grp["data-search-name"]  # name box stays scoped to names
+
+
+def test_config_list_marks_mode_inactive_items(csc, tmp_path):
+    std(csc)
+    reconfigure(csc, TRACKER_ERROR_MODE=True)
+    items = [("g0", {"original": t("A"), "crossseeds": []})]
+    html = render_html(csc, items, evaluate(csc, items), tmp_path)
+    lis = re.findall(r"<li([^>]*)><b>([^<]+):</b>", html)
+    by_label = {label: attrs for attrs, label in lis}
+    assert "config-inactive" in by_label["Min Seeders"]
+    assert "config-inactive" in by_label["Path Mappings"]
+    assert "config-inactive" not in by_label["Excluded Trackers"]
+    assert "config-inactive" not in by_label["Dead Statuses"]
+    assert ".config-ul li.config-inactive" in html
