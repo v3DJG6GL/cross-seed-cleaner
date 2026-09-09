@@ -1,6 +1,8 @@
 """Formatting helpers, sort_torrents, and calculate_stats (cross_seed_cleaner.py:
 format_size_smart / format_duration / format_timestamp / sort_torrents /
 calculate_stats)."""
+import re
+
 import pytest
 
 
@@ -191,9 +193,31 @@ def test_inactive_labels_tracker_error_ignore_category(csc, monkeypatch):
 def _config_row(csc, out, label):
     """Return the raw (ANSI-bearing) table line for `label`, or None."""
     for line in out.splitlines():
-        if csc.strip_colors(line).startswith(f"│ {label} "):
+        plain = csc.strip_colors(line)
+        if plain.startswith(f"│ {label} ") or re.match(rf"│   [├└] {re.escape(label)} ", plain):
             return line
     return None
+
+
+def test_config_tree_glyphs_mark_last_child(csc):
+    labels = ["Category Mode", "Cat Allowlist", "Cat Blocklist", "Dry Run",
+              "Tracker Error Mode", "Dead Statuses", "Min Age", "Ignore Cat Filter"]
+    assert csc._config_tree_glyphs(labels) == {"Cat Allowlist": "├", "Cat Blocklist": "└",
+                                               "Dead Statuses": "├", "Min Age": "├", "Ignore Cat Filter": "└"}
+
+
+def test_print_config_nests_children_under_parent(csc, monkeypatch, capsys):
+    _set_mode(monkeypatch, csc)
+    csc.print_config()
+    out = [csc.strip_colors(l) for l in capsys.readouterr().out.splitlines()]
+    labels = [l[2:29].rstrip() for l in out if l.startswith("│ ") and "│" in l[3:]]
+    # Children directly follow their parent, indented, last one closed with └.
+    i = labels.index("Tracker Error Mode")
+    assert labels[i + 1:i + 5] == ["  ├ Dead Statuses", "  ├ Min Age", "  ├ Min Inactivity", "  └ Ignore Cat Filter"]
+    i = labels.index("Missing Hard Links Mode")
+    assert labels[i + 1] == "  └ Missing Hard Links Cat"
+    i = labels.index("Category Mode")
+    assert labels[i + 1:i + 3] == ["  ├ Cat Allowlist", "  └ Cat Blocklist"]
 
 
 def test_print_config_dims_rows_and_keeps_alignment(csc, monkeypatch, capsys):

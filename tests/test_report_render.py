@@ -411,3 +411,23 @@ def test_config_list_marks_mode_inactive_items(csc, tmp_path):
     assert "config-inactive" not in by_label["Excluded Trackers"]
     assert "config-inactive" not in by_label["Dead Statuses"]
     assert ".config-ul li.config-inactive" in html
+
+
+def test_config_list_nests_children_under_parent(csc, tmp_path):
+    std(csc)
+    items = [("g0", {"original": t("A"), "crossseeds": []})]
+    html = render_html(csc, items, evaluate(csc, items), tmp_path)
+    lis = re.findall(r"<li([^>]*)><b>([^<]+):</b>", html)
+    labels = [label for _attrs, label in lis]
+    by_label = {label: attrs for attrs, label in lis}
+    # Children carry the tree class + glyph and sit right after their parent.
+    i = labels.index("Tracker Error Mode")
+    assert labels[i + 1:i + 5] == ["Dead Statuses", "Min Age", "Min Inactivity", "Ignore Cat Filter"]
+    assert "config-child" in by_label["Dead Statuses"] and "data-tree='├'" in by_label["Dead Statuses"]
+    assert "data-tree='└'" in by_label["Ignore Cat Filter"]
+    assert "data-tree='└'" in by_label["Missing Hard Links Cat"]
+    assert "data-tree='└'" in by_label["Cat Blocklist"]
+    # Both classes combine on a dimmed child; parents are never children.
+    assert "config-child config-inactive" in by_label["Dead Statuses"]
+    assert "config-child" not in by_label["Tracker Error Mode"]
+    assert ".config-ul li.config-child::before" in html

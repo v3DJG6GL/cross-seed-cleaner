@@ -1467,6 +1467,35 @@ def _inactive_config_labels():
     return tracker_error_only | {"Missing Hard Links Cat"}
 
 
+# Config-table rows that only mean something under a parent switch. Both the
+# terminal table and the HTML report draw them indented under that parent with
+# a tree glyph (├ / └) so the dependency is visible even where dimming is not.
+_CONFIG_PARENTS = {
+    "Cat Allowlist": "Category Mode",
+    "Cat Blocklist": "Category Mode",
+    "Missing Hard Links Cat": "Missing Hard Links Mode",
+    "Dead Statuses": "Tracker Error Mode",
+    "Min Age": "Tracker Error Mode",
+    "Min Inactivity": "Tracker Error Mode",
+    "Ignore Cat Filter": "Tracker Error Mode",
+}
+
+
+def _config_tree_glyphs(labels):
+    """Map each child label in `labels` (in display order) to '├' or '└'.
+
+    The last child of a parent gets '└'; earlier siblings get '├'. Labels
+    without a parent are absent from the result.
+    """
+    last_child = {}
+    for label in labels:
+        parent = _CONFIG_PARENTS.get(label)
+        if parent:
+            last_child[parent] = label
+    return {label: ("└" if last_child[_CONFIG_PARENTS[label]] == label else "├")
+            for label in labels if label in _CONFIG_PARENTS}
+
+
 def print_config():
     mode_text, mode_color = _mode_label_and_color()
     inactive = _inactive_config_labels()
@@ -1546,7 +1575,13 @@ def print_config():
         rows.append(["Path Mappings", c("None")])
         groups.append("Path Mappings")
 
+    glyphs = _config_tree_glyphs(groups)
+
     def style_row(label, value, group):
+        # Child rows are drawn indented under their parent switch. The glyph is
+        # part of the label cell so the column stays aligned.
+        if label and label in glyphs:
+            label = f"  {glyphs[label]} {label}"
         if group in inactive:
             # Strip the value's own colors first: an embedded GREEN...END would
             # otherwise cancel the DIM mid-cell.
@@ -1557,7 +1592,7 @@ def print_config():
     styled = [style_row(label, value, group) for (label, value), group in zip(rows, groups)]
 
     print(f"\n{Colors.BOLD}CONFIGURATION:{Colors.END}")
-    Table.render([f"{Colors.BOLD}Setting{Colors.END}", f"{Colors.BOLD}Value{Colors.END}"], styled, [25, 120])
+    Table.render([f"{Colors.BOLD}Setting{Colors.END}", f"{Colors.BOLD}Value{Colors.END}"], styled, [27, 120])
     if inactive:
         print(f"{Colors.DIM}  dimmed = not applied in the current mode{Colors.END}")
     print()
@@ -1903,9 +1938,21 @@ def export_reports(sorted_items, eligible_ids):
     ]
 
     inactive_labels = _inactive_config_labels()
-    inactive_attr = " class='config-inactive' title='Not applied in the current mode'"
+    glyphs = _config_tree_glyphs([label for label, _ in config_items])
+
+    def li_attrs(label):
+        classes = []
+        attrs = ""
+        if label in glyphs:
+            classes.append("config-child")
+            attrs += f" data-tree='{glyphs[label]}'"
+        if label in inactive_labels:
+            classes.append("config-inactive")
+            attrs += " title='Not applied in the current mode'"
+        return (f" class='{' '.join(classes)}'" if classes else "") + attrs
+
     config_html = "<ul class='config-ul'>" + "".join(
-        f"<li{inactive_attr if label in inactive_labels else ''}><b>{label}:</b> {value}</li>"
+        f"<li{li_attrs(label)}><b>{label}:</b> {value}</li>"
         for label, value in config_items
     ) + "</ul>"
 
@@ -1951,6 +1998,10 @@ def export_reports(sorted_items, eligible_ids):
         .config-ul li { margin-bottom: 2px; }
         .config-ul b { color: #888; font-weight: 600; }
         .config-ul li.config-inactive { opacity: 0.45; }
+        /* Child settings sit indented under their parent switch; the ├ / └ glyph
+           is drawn here (not in the label text) so the label stays searchable. */
+        .config-ul li.config-child { list-style-type: none; margin-left: 4px; }
+        .config-ul li.config-child::before { content: attr(data-tree) ' '; color: #888; }
 
         .charts-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 20px; }
         .chart-col { background: #1e1e1e; padding: 15px; border-radius: 6px; border: 1px solid #333; }
