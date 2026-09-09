@@ -211,7 +211,14 @@ class _SplitBoolHelpFormatter(argparse.HelpFormatter):
     """Render `--foo` and `--no-foo` as two independent help rows, each with
     its own description, laid out exactly like argparse lays out any other
     option (description beside the flag when it fits, on the next line when
-    it does not)."""
+    it does not). The gap between the longest flag and its description is
+    widened from argparse's 2 spaces to 4 so the columns read as columns."""
+    def add_argument(self, action):
+        before = self._action_max_length
+        super().add_argument(action)
+        if self._action_max_length > before:   # this action is the new longest
+            self._action_max_length += 2
+
     def _format_action(self, action):
         if not isinstance(action, argparse.BooleanOptionalAction):
             return super()._format_action(action)
@@ -280,33 +287,33 @@ def get_config():
 
     parser = argparse.ArgumentParser(
         description='Cross-Seed Cleaner: Deduplicate and cleanup torrents.',
-        formatter_class=lambda prog: _SplitBoolHelpFormatter(prog, max_help_position=32),
+        formatter_class=lambda prog: _SplitBoolHelpFormatter(prog, max_help_position=52),
     )
-    parser.add_argument('--host', default=env_host, help='qBittorrent Host')
-    parser.add_argument('--user', default=env_user, help='qBittorrent User')
-    parser.add_argument('--password', default=env_pass, help='qBittorrent Password')
-    parser.add_argument('--api-key', default=env_api_key, help='qBittorrent API key (v5.2.0+); overrides user/password when set')
-    parser.add_argument('--min-seeders', type=int, default=env_min_seeders, help='Minimum seeders required')
-    parser.add_argument('--max-group-size', type=int, default=env_max_group, help='Max torrents in group (0=no limit)')
-    parser.add_argument('--min-days', type=float, default=env_min_days, help='Min seed time in DAYS')
-    parser.add_argument('--min-size-gib', type=float, default=env_min_size_gib, help='Min torrent size in GiB (0=no limit)')
+    parser.add_argument('--host', metavar='URL', default=env_host, help='qBittorrent Host')
+    parser.add_argument('--user', metavar='NAME', default=env_user, help='qBittorrent User')
+    parser.add_argument('--password', metavar='PASS', default=env_pass, help='qBittorrent Password')
+    parser.add_argument('--api-key', metavar='KEY', default=env_api_key, help='qBittorrent API key (v5.2.0+); overrides user/password when set')
+    parser.add_argument('--min-seeders', metavar='N', type=int, default=env_min_seeders, help='Minimum seeders required')
+    parser.add_argument('--max-group-size', metavar='N', type=int, default=env_max_group, help='Max torrents in group (0=no limit)')
+    parser.add_argument('--min-days', metavar='DAYS', type=float, default=env_min_days, help='Min seed time in DAYS')
+    parser.add_argument('--min-size-gib', metavar='GIB', type=float, default=env_min_size_gib, help='Min torrent size in GiB (0=no limit)')
     parser.add_argument('--debug', action=_BoolFlag, default=env_debug, help='Enable debug logging', no_help='Disable debug logging')
     parser.add_argument('--manual', action='store_true', help='Enable Interactive Manual Deletion Mode')
-    parser.add_argument('--html', type=str, default=env_html_export, help='Path to save HTML report; placeholders {mode}, {run}, {datetime} are filled in (empty string disables)')
-    parser.add_argument('--csv', type=str, default=env_csv_export, help='Path to save CSV report; placeholders {mode}, {run}, {datetime} are filled in (empty string disables)')
+    parser.add_argument('--html', metavar='PATH', type=str, default=env_html_export, help='Path to save HTML report; placeholders {mode}, {run}, {datetime} are filled in (empty string disables)')
+    parser.add_argument('--csv', metavar='PATH', type=str, default=env_csv_export, help='Path to save CSV report; placeholders {mode}, {run}, {datetime} are filled in (empty string disables)')
 
     parser.add_argument('--missing-hard-links-mode', action=_BoolFlag, default=env_missing_hard_links_mode, help='Enable mode to find torrents in selected categories that are missing the expected extra hard-link (orphans from the media library)', no_help='Disable missing-hard-links mode')
-    parser.add_argument('--missing-hard-links-categories', type=str, default=env_missing_hard_links_cats, help='Comma-separated categories for missing-hard-links mode; prefix "r:" for regex matching the whole name (e.g. "r:autobrr-.*")')
-    parser.add_argument('--external-media-paths', type=str, default=env_ext_media_paths,
+    parser.add_argument('--missing-hard-links-categories', metavar='LIST', type=str, default=env_missing_hard_links_cats, help='Comma-separated categories for missing-hard-links mode; prefix "r:" for regex matching the whole name (e.g. "r:autobrr-.*")')
+    parser.add_argument('--external-media-paths', metavar='PATHS', type=str, default=env_ext_media_paths,
                         help='Paths to scan for hardlinks. Supports commas, wildcards (*), and braces ({a,b}). E.g., "/mnt/{movies,tv},/mnt/users/*"')
 
     parser.add_argument('--tracker-error-mode', action=_BoolFlag, default=env_tracker_error_mode, help='Enable mode that selects torrents whose every real tracker reports an error', no_help='Disable tracker-error mode')
-    parser.add_argument('--dead-tracker-statuses', type=str, default=env_dead_statuses, help='Comma-separated tracker status codes that count as "dead" (default "4,5,6"). Valid: 0,1,2,4,5,6')
-    parser.add_argument('--tracker-error-min-age-days', type=float, default=env_min_age_days, help='Min days since added before a torrent is eligible in tracker-error mode. Decimals supported (e.g. 0.0417 = 1h). Default 1; 0 disables.')
-    parser.add_argument('--tracker-error-min-inactivity-days', type=float, default=env_min_inactivity_days, help='Skip torrents whose last peer activity is less than this many days ago in tracker-error mode (default 30; 0 disables)')
+    parser.add_argument('--dead-tracker-statuses', metavar='CODES', type=str, default=env_dead_statuses, help='Comma-separated tracker status codes that count as "dead" (default "4,5,6"). Valid: 0,1,2,4,5,6')
+    parser.add_argument('--tracker-error-min-age-days', metavar='DAYS', type=float, default=env_min_age_days, help='Min days since added before a torrent is eligible in tracker-error mode. Decimals supported (e.g. 0.0417 = 1h). Default 1; 0 disables.')
+    parser.add_argument('--tracker-error-min-inactivity-days', metavar='DAYS', type=float, default=env_min_inactivity_days, help='Skip torrents whose last peer activity is less than this many days ago in tracker-error mode (default 30; 0 disables)')
     parser.add_argument('--tracker-error-mode-ignore-category-filter', action=_BoolFlag, default=env_ignore_category_filter, help='In tracker-error mode, ignore CATEGORY_FILTER_MODE / ALLOWLIST / BLOCKLIST and scan every torrent regardless of category', no_help='In tracker-error mode, honour the category filter')
 
-    parser.add_argument('--excluded-trackers', type=str, default=env_excluded_trackers, help='Comma-separated tracker domains whose torrents are never deleted in any mode; prefix "r:" for regex matching the whole domain (e.g. "r:.*\\.example\\.net")')
+    parser.add_argument('--excluded-trackers', metavar='LIST', type=str, default=env_excluded_trackers, help='Comma-separated tracker domains whose torrents are never deleted in any mode; prefix "r:" for regex matching the whole domain (e.g. "r:.*\\.example\\.net")')
 
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--dry-run', action='store_true', help='Force Dry Run')

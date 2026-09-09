@@ -340,8 +340,11 @@ def test_cli_help_bool_flags_have_own_descriptions():
     assert re.search(r"^\s+--debug\s{2,}Enable debug logging$", out, re.M)
     assert re.search(r"^\s+--no-debug\s{2,}Disable debug logging$", out, re.M)
     assert re.search(r"^\s+--no-tracker-error-mode\s{2,}Disable tracker-error mode$", out, re.M)
-    # A flag too long for the column puts its description on the next line, argparse-style.
-    assert re.search(r"^\s+--no-tracker-error-mode-ignore-category-filter\n\s+In tracker-error mode, honour", out, re.M)
+    # Every flag fits the column (short metavars + wide column): no row wraps its
+    # description onto the next line, and the longest flag still has a 4-space gap.
+    assert re.search(r"^\s+--no-tracker-error-mode-ignore-category-filter\s{4}In tracker-error mode,", out, re.M)
+    assert re.search(r"^\s+--tracker-error-min-inactivity-days DAYS\s{2,}Skip torrents", out, re.M)
+    assert not re.search(r"^\s+--[a-z-]+( [A-Z]+)?\n", out, re.M), "a flag row without a description"
 
 
 # ─── config.local.py overlay ─────────────────────────────────────────────────
