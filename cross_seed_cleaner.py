@@ -192,7 +192,7 @@ def get_config():
     parser.add_argument('--password', default=env_pass, help='qBittorrent Password')
     parser.add_argument('--api-key', default=env_api_key, help='qBittorrent API key (v5.2.0+); overrides user/password when set')
     parser.add_argument('--min-seeders', type=int, default=env_min_seeders, help='Minimum seeders required')
-    parser.add_argument('--max-group-size', type=int, default=env_max_group, help='Max torrents in group')
+    parser.add_argument('--max-group-size', type=int, default=env_max_group, help='Max torrents in group (0=no limit)')
     parser.add_argument('--min-days', type=float, default=env_min_days, help='Min seed time in DAYS')
     parser.add_argument('--min-size-gib', type=float, default=env_min_size_gib, help='Min torrent size in GiB (0=no limit)')
     parser.add_argument('--debug', action=argparse.BooleanOptionalAction, default=env_debug, help='Enable debug logging')
@@ -1243,7 +1243,8 @@ def evaluate_group(d):
         externally_linked = any(t.get('_external_hardlink') for t in all_t)
         seeds_ok = all(t.get('_seeder_count', 0) >= MIN_SEEDERS for t in all_t)
         path_ok = True
-        count_ok = len(all_t) < MAX_TORRENTS_IN_GROUP
+        # 0 disables the rule, mirroring MIN_SIZE_GIB / MIN_SEEDERS / MIN_DAYS = 0.
+        count_ok = MAX_TORRENTS_IN_GROUP <= 0 or len(all_t) < MAX_TORRENTS_IN_GROUP
 
     size_ok = (orig.get('size', 0) or 0) >= MIN_SIZE_BYTES
     time_ok = (orig.get('seeding_time', 0) or 0) >= MIN_ORIGINAL_SEED_TIME_SECONDS
@@ -1471,7 +1472,7 @@ def print_config():
         [bold("Min Seeders"), str(MIN_SEEDERS)],
         [bold("Min Seed Time"), f"{MIN_ORIGINAL_SEED_TIME_DAYS} days"],
         [bold("Min Size"), f"{MIN_SIZE_GIB} GiB" + (" (no limit)" if MIN_SIZE_GIB == 0 else "")],
-        [bold("Max Group Size"), str(MAX_TORRENTS_IN_GROUP)],
+        [bold("Max Group Size"), str(MAX_TORRENTS_IN_GROUP) + (" (no limit)" if MAX_TORRENTS_IN_GROUP <= 0 else "")],
         [bold("Category Mode"), CATEGORY_FILTER_MODE],
         [bold("Cat Allowlist"), cat_allow_str],
         [bold("Cat Blocklist"), cat_block_str],
@@ -1837,8 +1838,8 @@ def export_reports(sorted_items, eligible_ids):
     config_items = [
         f"<b>Min Seeders:</b> {MIN_SEEDERS}",
         f"<b>Min Seed Time:</b> {MIN_ORIGINAL_SEED_TIME_DAYS} days",
-        f"<b>Min Size:</b> {MIN_SIZE_GIB} GiB",
-        f"<b>Max Group Size:</b> {MAX_TORRENTS_IN_GROUP}",
+        f"<b>Min Size:</b> {MIN_SIZE_GIB} GiB" + (" (no limit)" if MIN_SIZE_GIB == 0 else ""),
+        f"<b>Max Group Size:</b> {MAX_TORRENTS_IN_GROUP}" + (" (no limit)" if MAX_TORRENTS_IN_GROUP <= 0 else ""),
         f"<b>Category Mode:</b> {CATEGORY_FILTER_MODE}",
         f"<b>Cat Allowlist:</b> {cat_allow_str}",
         f"<b>Cat Blocklist:</b> {cat_block_str}",
