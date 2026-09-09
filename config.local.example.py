@@ -55,8 +55,9 @@ or LOCAL_CONFIG="" to skip them entirely.
 # e.g. output_{mode}_{run}_{datetime}.html -> output_default_dry-run_2026.04.21_14.30.00.html
 # A path without {datetime} is overwritten on every run. Write a literal brace as {{ or }}.
 # Leave empty (or pass an empty string via environment variable / command-line) to turn the export off.
-# HTML_EXPORT = "output_{mode}_{run}_{datetime}.html"
-# CSV_EXPORT = "output_{mode}_{run}_{datetime}.csv"
+# Directories in the path are created automatically (relative paths resolve against the working directory).
+# HTML_EXPORT = "reports/output_{mode}_{run}_{datetime}.html"
+# CSV_EXPORT = "reports/output_{mode}_{run}_{datetime}.csv"
 
 
 # ─── RUN MODES ─────────────────────────────────────────────────────────────

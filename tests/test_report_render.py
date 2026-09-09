@@ -467,3 +467,29 @@ def test_export_writes_resolved_path_and_names_it_in_config(csc, tmp_path):
     # Config panel shows the file actually written, not the template.
     assert f"<b>HTML Export:</b> {os.path.join(str(tmp_path), html_name)}" in html
     assert "{mode}" not in html
+
+
+def test_export_creates_missing_directories(csc, tmp_path, capsys):
+    import os
+    std(csc)
+    csc.HTML_EXPORT = os.path.join(str(tmp_path), "sub", "deeper", "r_{run}.html")
+    csc.CSV_EXPORT = os.path.join(str(tmp_path), "other", "r_{run}.csv")
+    items = [("g0", {"original": t("A"), "crossseeds": []})]
+    csc.export_reports(sorted_items=items, eligible_ids=evaluate(csc, items))
+    assert os.path.isfile(os.path.join(str(tmp_path), "sub", "deeper", "r_dry-run.html"))
+    assert os.path.isfile(os.path.join(str(tmp_path), "other", "r_dry-run.csv"))
+    assert "Error exporting" not in capsys.readouterr().out
+
+
+def test_export_unwritable_html_dir_does_not_block_csv(csc, tmp_path, capsys):
+    import os
+    std(csc)
+    blocker = tmp_path / "blocker"
+    blocker.write_text("a regular file, not a directory")
+    csc.HTML_EXPORT = os.path.join(str(blocker), "r_{run}.html")   # parent is a file
+    csc.CSV_EXPORT = os.path.join(str(tmp_path), "ok", "r_{run}.csv")
+    items = [("g0", {"original": t("A"), "crossseeds": []})]
+    csc.export_reports(sorted_items=items, eligible_ids=evaluate(csc, items))  # no exception
+    out = capsys.readouterr().out
+    assert "Error exporting HTML" in out
+    assert os.path.isfile(os.path.join(str(tmp_path), "ok", "r_dry-run.csv"))

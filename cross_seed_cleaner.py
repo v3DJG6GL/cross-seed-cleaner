@@ -3672,6 +3672,7 @@ def export_reports(sorted_items, eligible_ids):
 
     if html_path:
         try:
+            os.makedirs(os.path.dirname(html_path) or ".", exist_ok=True)
             with open(html_path, "w", encoding="utf-8") as f:
                 f.write(full_html)
             print(f"{Colors.GREEN}Successfully exported HTML report to: {html_path}{Colors.END}")
@@ -3683,6 +3684,7 @@ def export_reports(sorted_items, eligible_ids):
 
         print(f"{Colors.BOLD}[INFO]{Colors.END} Exporting CSV report to {csv_filename}...")
         try:
+            os.makedirs(os.path.dirname(csv_filename) or ".", exist_ok=True)
             with open(csv_filename, 'w', newline='', encoding='utf-8') as csvfile:
                 fieldnames = ['Group ID', 'Status', 'Type', 'Name', 'Size', 'Tracker', 'Category', 'Added', 'Seeding Time', 'Ratio', 'Seeders', 'Reasons', 'Path']
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
