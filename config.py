@@ -1,9 +1,10 @@
 """
 Cross-Seed Cleaner — user-editable settings.
 
-Edit this file to configure cross-seed-cleaner. Environment variables and
-CLI flags override these values at runtime (see get_config() in
-cross_seed_cleaner.py for the full precedence chain).
+These are the tracked defaults. Put machine-specific values in config.local.py
+(gitignored, same directory; see config.local.example.py) so a git pull never
+conflicts with your edits. Environment variables and CLI flags override both at
+runtime (see get_config() in cross_seed_cleaner.py for the full precedence chain).
 
 Two sections are NOT overridable and live here as the sole source of truth:
 CATEGORY_ALLOWLIST / CATEGORY_BLOCKLIST, and PATH_MAPPINGS.

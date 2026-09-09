@@ -31,6 +31,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # argparse import-time behaviour from blowing up.
 _USER_ARGS = sys.argv[1:]
 sys.argv = ["render_smoke.py"]
+os.environ["LOCAL_CONFIG"] = ""  # deterministic: ignore a developer's config.local.py
 
 import cross_seed_cleaner as csc  # noqa: E402
 from fixtures import gen_group  # noqa: E402

@@ -15,6 +15,7 @@ import argparse
 import csv
 import errno
 import glob
+import importlib.util
 import html
 import threading
 import concurrent.futures
@@ -22,9 +23,33 @@ from collections import defaultdict
 from datetime import datetime
 from functools import lru_cache
 
-# User-editable settings live in config.py. Env vars and CLI flags override
-# these defaults at runtime (see get_config() below for the precedence chain).
+# Defaults live in config.py (tracked). Machine-specific overrides go in
+# config.local.py (gitignored) next to this script, so a git pull never
+# collides with operator edits. Env vars and CLI flags override both at
+# runtime (see get_config() below). Precedence: config.py < config.local.py
+# < env < CLI.
 from config import *
+
+
+def _load_local_config():
+    """Overlay config.local.py onto the config.py defaults.
+
+    LOCAL_CONFIG env var points at a different file; LOCAL_CONFIG="" disables
+    the overlay (the test-suite uses that so a developer's local file never
+    leaks into tests). A syntax or import error inside the file propagates
+    unchanged: a broken override must not silently fall back to defaults.
+    """
+    default_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.local.py")
+    path = os.environ.get("LOCAL_CONFIG", default_path)
+    if not path or not os.path.isfile(path):
+        return
+    spec = importlib.util.spec_from_file_location("config_local", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    globals().update({k: v for k, v in vars(mod).items() if not k.startswith("_")})
+
+
+_load_local_config()
 
 
 def str2bool(v):

@@ -31,7 +31,9 @@ def load_module(env=None, argv=None):
     SystemExit/validation tests.
     """
     saved_argv = sys.argv
-    env = env or {}
+    # LOCAL_CONFIG="" keeps a developer's real config.local.py out of the suite;
+    # a caller that wants an overlay passes its own LOCAL_CONFIG path.
+    env = {"LOCAL_CONFIG": "", **(env or {})}
     saved_env = {k: os.environ.get(k) for k in env}
     sys.argv = list(argv) if argv is not None else ["cross_seed_cleaner.py"]
     for k, v in env.items():

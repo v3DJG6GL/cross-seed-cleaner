@@ -19,8 +19,9 @@ def _load_module():
     saved_argv = sys.argv
     saved_env = {
         k: os.environ.get(k)
-        for k in ("HTML_EXPORT", "CSV_EXPORT")
+        for k in ("HTML_EXPORT", "CSV_EXPORT", "LOCAL_CONFIG")
     }
+    os.environ["LOCAL_CONFIG"] = ""   # keep a developer's config.local.py out
     sys.argv = ["cross_seed_cleaner.py"]
     sys.path.insert(0, REPO_ROOT)
     try:

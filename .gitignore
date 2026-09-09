@@ -7,3 +7,6 @@ SECURITY-REVIEW_NOTES.md
 
 # Node test deps
 node_modules/
+
+# Operator overrides (see config.local.example.py)
+config.local.py

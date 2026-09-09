@@ -14,6 +14,7 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fi
 sys.path.insert(0, REPO_ROOT)
 OUT = sys.argv[1]
 sys.argv = ["make_report.py"]
+os.environ["LOCAL_CONFIG"] = ""  # deterministic: ignore a developer's config.local.py
 
 import cross_seed_cleaner as csc  # noqa: E402
 

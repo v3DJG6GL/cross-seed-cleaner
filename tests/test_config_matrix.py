@@ -341,3 +341,28 @@ def test_cli_help_bool_flags_have_own_descriptions():
     assert re.search(r"^\s+--no-tracker-error-mode\s{2,}Disable tracker-error mode$", out, re.M)
     # A flag too long for the column puts its description on the next line, argparse-style.
     assert re.search(r"^\s+--no-tracker-error-mode-ignore-category-filter\n\s+In tracker-error mode, honour", out, re.M)
+
+
+# ─── config.local.py overlay ─────────────────────────────────────────────────
+
+def test_local_config_overrides_defaults_but_not_env(tmp_path):
+    local = tmp_path / "config.local.py"
+    local.write_text("MIN_SEEDERS = 77\nHTML_EXPORT = 'local_{run}.html'\n")
+    m = load_module(env={"LOCAL_CONFIG": str(local)})
+    assert m.MIN_SEEDERS == 77
+    assert m.HTML_EXPORT == "local_{run}.html"
+    # Env still beats the overlay.
+    m = load_module(env={"LOCAL_CONFIG": str(local), "MIN_SEEDERS": "5"})
+    assert m.MIN_SEEDERS == 5
+
+
+def test_local_config_missing_or_disabled_is_ignored(tmp_path):
+    assert load_module(env={"LOCAL_CONFIG": str(tmp_path / "nope.py")}).MIN_SEEDERS == 4
+    assert load_module(env={"LOCAL_CONFIG": ""}).MIN_SEEDERS == 4
+
+
+def test_local_config_syntax_error_fails_loud(tmp_path):
+    local = tmp_path / "config.local.py"
+    local.write_text("MIN_SEEDERS = \n")
+    with pytest.raises(SyntaxError):
+        load_module(env={"LOCAL_CONFIG": str(local)})
