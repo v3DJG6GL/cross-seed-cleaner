@@ -30,6 +30,7 @@ MIN_SEEDERS = 4
 
 # If a group is made up of X or more torrents in total (Original plus Cross-Seeds), it is kept.
 # E.g. X=6 means groups of 6+ torrents are protected from deletion.
+# Set to 0 to turn off the group-size check.
 # This check is skipped in No-Hard-Links mode.
 MAX_TORRENTS_IN_GROUP = 6
 
