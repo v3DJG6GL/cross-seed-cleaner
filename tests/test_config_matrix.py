@@ -1,6 +1,7 @@
 """Configuration surface: str2bool, path splitting/brace expansion, config<env<CLI
 precedence, validation exits, and CLI behavior (cross_seed_cleaner.py: get_config
 / _validate_config / str2bool / smart_split_paths / expand_braces)."""
+import os
 import re
 import subprocess
 import sys
@@ -366,3 +367,15 @@ def test_local_config_syntax_error_fails_loud(tmp_path):
     local.write_text("MIN_SEEDERS = \n")
     with pytest.raises(SyntaxError):
         load_module(env={"LOCAL_CONFIG": str(local)})
+
+
+def test_local_config_example_mirrors_every_config_setting():
+    """config.local.example.py must list every config.py setting (commented out)
+    and must not activate any of them."""
+    cfg = open(os.path.join(REPO_ROOT, "config.py"), encoding="utf-8").read()
+    example = open(os.path.join(REPO_ROOT, "config.local.example.py"), encoding="utf-8").read()
+    names = re.findall(r"^([A-Z_]+)\s*=", cfg, re.M)
+    assert names
+    for name in names:
+        assert re.search(rf"^# {name}\s*=", example, re.M), f"{name} missing from example"
+    assert not re.search(r"^[A-Z_]+\s*=", example, re.M), "example must not set anything"
