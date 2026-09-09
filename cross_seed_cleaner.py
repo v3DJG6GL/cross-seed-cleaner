@@ -54,7 +54,55 @@ def str2bool_safe(v):
     return v.strip().lower() not in _DRY_RUN_OFF_TOKENS
 
 
+# ─── export filename placeholders ───────────────────────────────────────────
+# HTML_EXPORT / CSV_EXPORT are str.format templates; the resolved path is used
+# verbatim (no implicit timestamp). Valid placeholders: {mode}, {run}, {datetime}.
+
+EXPORT_DATETIME_FORMAT = "%Y.%m.%d_%H.%M.%S"
+EXPORT_PLACEHOLDERS = "{mode} (default | missing-hard-links | tracker-error), {run} (dry-run | delete), {datetime} (strftime spec optional, e.g. {datetime:%Y%m%d})"
+
+
+class _FilenameStamp:
+    """datetime wrapper so `{datetime}` renders EXPORT_DATETIME_FORMAT while
+    `{datetime:%Y-%m}` still honours a user-supplied strftime spec."""
+    def __init__(self, dt):
+        self.dt = dt
+
+    def __format__(self, spec):
+        return self.dt.strftime(spec or EXPORT_DATETIME_FORMAT)
+
+
+def _export_mode_token():
+    if TRACKER_ERROR_MODE:
+        return "tracker-error"
+    if MISSING_HARD_LINKS_MODE:
+        return "missing-hard-links"
+    return "default"
+
+
+def resolve_export_path(template, ts_now):
+    """Fill the {mode} / {run} / {datetime} placeholders of an export path.
+
+    Raises KeyError / IndexError / ValueError on an unknown or malformed
+    placeholder; _validate_config turns that into a startup error.
+    """
+    return template.format(mode=_export_mode_token(),
+                           run="dry-run" if DRY_RUN else "delete",
+                           datetime=_FilenameStamp(ts_now))
+
+
 def _validate_config():
+    for setting, template in (("HTML_EXPORT", HTML_EXPORT), ("CSV_EXPORT", CSV_EXPORT)):
+        if not template:
+            continue
+        try:
+            resolve_export_path(template, datetime.now())
+        except (KeyError, IndexError, ValueError) as e:
+            sys.stderr.write(
+                f"ERROR: {setting}={template!r} has an invalid placeholder ({e!r}).\n"
+                f"Valid placeholders: {EXPORT_PLACEHOLDERS}. Write a literal brace as {{{{ or }}}}.\n"
+            )
+            sys.exit(1)
     valid_category_filter_modes = {"none", "allow", "block", "both"}
     valid_sort_by = {"seeders", "seeds", "ratio", "size", "uploaded", "added", "name", "time"}
     valid_sort_order = {"asc", "desc"}
@@ -197,8 +245,8 @@ def get_config():
     parser.add_argument('--min-size-gib', type=float, default=env_min_size_gib, help='Min torrent size in GiB (0=no limit)')
     parser.add_argument('--debug', action=argparse.BooleanOptionalAction, default=env_debug, help='Enable debug logging')
     parser.add_argument('--manual', action='store_true', help='Enable Interactive Manual Deletion Mode')
-    parser.add_argument('--html', type=str, default=env_html_export, help='Path to save HTML report')
-    parser.add_argument('--csv', type=str, default=env_csv_export, help='Path to save CSV report')
+    parser.add_argument('--html', type=str, default=env_html_export, help='Path to save HTML report; placeholders {mode}, {run}, {datetime} are filled in (empty string disables)')
+    parser.add_argument('--csv', type=str, default=env_csv_export, help='Path to save CSV report; placeholders {mode}, {run}, {datetime} are filled in (empty string disables)')
 
     parser.add_argument('--missing-hard-links-mode', action=argparse.BooleanOptionalAction, default=env_missing_hard_links_mode, help='Enable mode to find torrents in selected categories that are missing the expected extra hard-link (orphans from the media library)')
     parser.add_argument('--missing-hard-links-categories', type=str, default=env_missing_hard_links_cats, help='Comma-separated categories for missing-hard-links mode; prefix "r:" for regex matching the whole name (e.g. "r:autobrr-.*")')
@@ -1872,8 +1920,10 @@ def export_reports(sorted_items, eligible_ids):
 
 
     ts_now = datetime.now()
-    ts_str = ts_now.strftime("%Y.%m.%d_%H.%M.%S")
     ts_display = ts_now.strftime("%Y.%m.%d %H:%M:%S")
+    # Resolved once so the config panel names the very file it is written to.
+    html_path = resolve_export_path(HTML_EXPORT, ts_now) if HTML_EXPORT else ""
+    csv_path = resolve_export_path(CSV_EXPORT, ts_now) if CSV_EXPORT else ""
 
     if TRACKER_ERROR_MODE:
         mode_str = "DEAD TRACKERS"
@@ -1904,8 +1954,8 @@ def export_reports(sorted_items, eligible_ids):
     missing_hard_links_cat = _h(', '.join(MISSING_HARD_LINKS_CATEGORIES)) if MISSING_HARD_LINKS_CATEGORIES else 'None'
     cat_allow_str = _h(', '.join(CATEGORY_ALLOWLIST)) if CATEGORY_ALLOWLIST else 'None'
     cat_block_str = _h(', '.join(CATEGORY_BLOCKLIST)) if CATEGORY_BLOCKLIST else 'None'
-    html_out_str = _h(HTML_EXPORT) if HTML_EXPORT else 'Disabled'
-    csv_out_str = _h(CSV_EXPORT) if CSV_EXPORT else 'Disabled'
+    html_out_str = _h(html_path) if html_path else 'Disabled'
+    csv_out_str = _h(csv_path) if csv_path else 'Disabled'
 
     external_media_paths_html = _mono_block([_h(path) for path in EXTERNAL_MEDIA_PATHS]) if EXTERNAL_MEDIA_PATHS else "None"
     mappings_html = _mono_block([f"{_h(k)} → {_h(v)}" for k, v in PATH_MAPPINGS.items()]) if PATH_MAPPINGS else "None"
@@ -3573,19 +3623,16 @@ def export_reports(sorted_items, eligible_ids):
     """
 
 
-    if HTML_EXPORT:
+    if html_path:
         try:
-            base, ext = os.path.splitext(HTML_EXPORT)
-            final_html_path = f"{base}_{ts_str}{ext}"
-            with open(final_html_path, "w", encoding="utf-8") as f:
+            with open(html_path, "w", encoding="utf-8") as f:
                 f.write(full_html)
-            print(f"{Colors.GREEN}Successfully exported HTML report to: {final_html_path}{Colors.END}")
+            print(f"{Colors.GREEN}Successfully exported HTML report to: {html_path}{Colors.END}")
         except Exception as e:
             print(f"{Colors.RED}Error exporting HTML: {e}{Colors.END}")
 
-    if CSV_EXPORT:
-        base, ext = os.path.splitext(CSV_EXPORT)
-        csv_filename = f"{base}_{ts_str}{ext or '.csv'}"
+    if csv_path:
+        csv_filename = csv_path
 
         print(f"{Colors.BOLD}[INFO]{Colors.END} Exporting CSV report to {csv_filename}...")
         try:

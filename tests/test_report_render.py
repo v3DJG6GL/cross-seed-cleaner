@@ -431,3 +431,39 @@ def test_config_list_nests_children_under_parent(csc, tmp_path):
     assert "config-child config-inactive" in by_label["Dead Statuses"]
     assert "config-child" not in by_label["Tracker Error Mode"]
     assert ".config-ul li.config-child::before" in html
+
+
+# ─── export filename placeholders ───────────────────────────────────────────
+
+def test_resolve_export_path_placeholders(csc):
+    from datetime import datetime as _dt
+    ts = _dt(2026, 9, 9, 16, 36, 26)
+    reconfigure(csc, TRACKER_ERROR_MODE=False, MISSING_HARD_LINKS_MODE=False, DRY_RUN=True)
+    assert csc.resolve_export_path("out_{mode}_{run}_{datetime}.html", ts) == "out_default_dry-run_2026.09.09_16.36.26.html"
+    assert csc.resolve_export_path("out_{datetime:%Y%m%d-%H%M}.csv", ts) == "out_20260909-1636.csv"
+    assert csc.resolve_export_path("lit{{eral}}_{run}.html", ts) == "lit{eral}_dry-run.html"
+    assert csc.resolve_export_path("plain.html", ts) == "plain.html"
+    reconfigure(csc, TRACKER_ERROR_MODE=True, DRY_RUN=False)
+    assert csc.resolve_export_path("{mode}/{run}", ts) == "tracker-error/delete"
+    reconfigure(csc, TRACKER_ERROR_MODE=False, MISSING_HARD_LINKS_MODE=True)
+    assert csc.resolve_export_path("{mode}", ts) == "missing-hard-links"
+    for bad in ("x_{bogus}.html", "x_{}.html", "x_{.html"):
+        with pytest.raises((KeyError, IndexError, ValueError)):
+            csc.resolve_export_path(bad, ts)
+
+
+def test_export_writes_resolved_path_and_names_it_in_config(csc, tmp_path):
+    import os
+    std(csc)
+    reconfigure(csc, TRACKER_ERROR_MODE=True, DRY_RUN=False)
+    csc.HTML_EXPORT = os.path.join(str(tmp_path), "r_{mode}_{run}_{datetime:%Y}.html")
+    csc.CSV_EXPORT = os.path.join(str(tmp_path), "r_{mode}_{run}.csv")
+    items = [("g0", {"original": t("A"), "crossseeds": []})]
+    csc.export_reports(sorted_items=items, eligible_ids=evaluate(csc, items))
+    from datetime import datetime as _dt
+    html_name = f"r_tracker-error_delete_{_dt.now():%Y}.html"
+    assert set(os.listdir(str(tmp_path))) == {html_name, "r_tracker-error_delete.csv"}
+    html = open(os.path.join(str(tmp_path), html_name), encoding="utf-8").read()
+    # Config panel shows the file actually written, not the template.
+    assert f"<b>HTML Export:</b> {os.path.join(str(tmp_path), html_name)}" in html
+    assert "{mode}" not in html

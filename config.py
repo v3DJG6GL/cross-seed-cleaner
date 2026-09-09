@@ -45,10 +45,15 @@ MIN_SIZE_GIB = 15
 
 
 # ─── REPORT EXPORTS ────────────────────────────────────────────────────────
-# A timestamp is added to each export filename before the extension (e.g. output.html -> output_2026.04.21_14.30.00.html).
+# The path is used verbatim after these placeholders are filled in:
+#   {mode}      default | missing-hard-links | tracker-error
+#   {run}       dry-run | delete
+#   {datetime}  2026.04.21_14.30.00   (custom strftime: {datetime:%Y%m%d-%H%M})
+# e.g. output_{mode}_{run}_{datetime}.html -> output_default_dry-run_2026.04.21_14.30.00.html
+# A path without {datetime} is overwritten on every run. Write a literal brace as {{ or }}.
 # Leave empty (or pass an empty string via environment variable / command-line) to turn the export off.
-HTML_EXPORT = "output.html"
-CSV_EXPORT = "output.csv"
+HTML_EXPORT = "output_{mode}_{run}_{datetime}.html"
+CSV_EXPORT = "output_{mode}_{run}_{datetime}.csv"
 
 
 # ─── RUN MODES ─────────────────────────────────────────────────────────────
